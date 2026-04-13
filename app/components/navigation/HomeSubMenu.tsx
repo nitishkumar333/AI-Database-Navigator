@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useContext } from "react";
-import { FaCircle } from "react-icons/fa";
 
 import { ConversationContext } from "../contexts/ConversationContext";
 
@@ -33,32 +32,15 @@ const HomeSubMenu: React.FC = () => {
     currentConversation,
     removeConversation,
     selectConversation,
-    conversationPreviews,
-    loadingConversations,
+    conversations,
     creatingNewConversation,
-    loadingConversation,
   } = useContext(ConversationContext);
 
   return (
     <SidebarGroup>
       <div className="flex items-center justify-between">
         <SidebarGroupLabel className="flex items-center">
-          <div
-            className={`flex items-center ${loadingConversations || creatingNewConversation || loadingConversation ? "shine" : ""}`}
-          >
-            {creatingNewConversation && (
-              <FaCircle className="text-secondary pulsing mr-2" />
-            )}
-            {loadingConversations ||
-              (loadingConversation && <p>Loading conversations...</p>)}
-            {!loadingConversations && !loadingConversation && (
-              <p>
-                {creatingNewConversation
-                  ? "Initializing conversation..."
-                  : "Conversations"}
-              </p>
-            )}
-          </div>
+          <p>Conversations</p>
         </SidebarGroupLabel>
         <SidebarGroupAction
           title="Add Conversation"
@@ -69,20 +51,21 @@ const HomeSubMenu: React.FC = () => {
         </SidebarGroupAction>
       </div>
       <SidebarGroupContent>
-        {/* TODO Add Timestamp Sorting when backend supports it */}
-        {Object.entries(conversationPreviews)
-          ?.sort(
-            ([, a], [, b]) =>
-              new Date(b.last_update_time).getTime() -
-              new Date(a.last_update_time).getTime()
+        {conversations
+          .sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() -
+              new Date(a.timestamp).getTime()
           )
-          .map(([key, value]) => (
-            <SidebarMenuItem className="list-none fade-in" key={key}>
+          .map((conv) => (
+            <SidebarMenuItem className="list-none fade-in" key={conv.id}>
               <SidebarMenuButton
-                variant={currentConversation === key ? "active" : "default"}
-                onClick={() => selectConversation(key)}
+                variant={
+                  currentConversation === conv.id ? "active" : "default"
+                }
+                onClick={() => selectConversation(conv.id)}
               >
-                <p className="truncate max-w-[13rem]">{value.title}</p>
+                <p className="truncate max-w-[13rem]">{conv.name}</p>
               </SidebarMenuButton>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -91,7 +74,9 @@ const HomeSubMenu: React.FC = () => {
                   </SidebarMenuAction>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start">
-                  <DropdownMenuItem onClick={() => removeConversation(key)}>
+                  <DropdownMenuItem
+                    onClick={() => removeConversation(conv.id)}
+                  >
                     <GoTrash className="text-error" />
                     <span className="text-error">Delete</span>
                   </DropdownMenuItem>

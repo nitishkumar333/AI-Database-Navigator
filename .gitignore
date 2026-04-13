@@ -41,4 +41,8 @@ next-env.d.ts
 
 .vscode
 
+venv/
+.venv/
+.env
+
 

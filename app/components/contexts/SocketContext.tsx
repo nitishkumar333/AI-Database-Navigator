@@ -1,152 +1,134 @@
 "use client";
 
-import { createContext, useEffect, useState } from "react";
-import { Message } from "@/app/types/chat";
-import { getWebsocketHost } from "../host";
-import { useContext, useRef } from "react";
-import { ConversationContext } from "./ConversationContext";
-import { ToastContext } from "./ToastContext";
+import { createContext, useEffect, useState, useCallback } from "react";
+import { host } from "../host";
 
-export const SocketContext = createContext<{
-  socketOnline: boolean;
+export const QueryContext = createContext<{
+  backendOnline: boolean;
   sendQuery: (
-    user_id: string,
-    query: string,
-    conversation_id: string,
-    query_id: string,
-    route?: string,
-    mimick?: boolean
-  ) => Promise<boolean>;
+    question: string,
+    connection_id?: number | null
+  ) => Promise<any | null>;
+  getToken: () => string;
 }>({
-  socketOnline: false,
-  sendQuery: async () => false,
+  backendOnline: false,
+  sendQuery: async () => null,
+  getToken: () => "",
 });
 
-export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
-  const {
-    setConversationStatus,
-    setAllConversationStatuses,
-    handleAllConversationsError,
-    getAllEnabledCollections,
-    handleWebsocketMessage,
-  } = useContext(ConversationContext);
+export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [token, setToken] = useState<string>("");
 
-  const { showErrorToast, showSuccessToast } = useContext(ToastContext);
-
-  const [socketOnline, setSocketOnline] = useState(false);
-  const [socket, setSocket] = useState<WebSocket>();
-  const [reconnect, setReconnect] = useState(false);
-  const initialRef = useRef(false);
-
+  // Auto-auth on mount
   useEffect(() => {
-    setReconnect(true);
+    const stored = localStorage.getItem("auth_token");
+    if (stored) {
+      setToken(stored);
+      checkHealth();
+    } else {
+      autoAuth();
+    }
   }, []);
 
+  // Health check polling
   useEffect(() => {
-    if (!initialRef.current) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      if (!socketOnline || socket?.readyState === WebSocket.CLOSED || !socket) {
-        console.log("Elysia not online, trying to reconnect...");
-        initialRef.current = false;
-        setReconnect((prev) => !prev);
-      }
-    }, 5000);
-
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
     return () => clearInterval(interval);
-  }, [socketOnline, socket]);
+  }, []);
 
-  useEffect(() => {
-    if (initialRef.current) {
-      return;
+  const checkHealth = async () => {
+    try {
+      const response = await fetch(`${host}/health`);
+      setBackendOnline(response.ok);
+    } catch {
+      setBackendOnline(false);
     }
+  };
 
-    initialRef.current = true;
+  const autoAuth = async () => {
+    try {
+      // Try to register
+      let response = await fetch(`${host}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "admin@dataanalyst.local",
+          username: "admin",
+          password: "admin123",
+        }),
+      });
 
-    const socketHost = getWebsocketHost() + "query";
-    const localSocket = new WebSocket(socketHost);
+      // Whether registration succeeded or not, try to login
+      response = await fetch(`${host}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "admin@dataanalyst.local",
+          password: "admin123",
+        }),
+      });
 
-    localSocket.onopen = () => {
-      setSocketOnline(true);
-      showSuccessToast("Connected to Elysia");
-      if (process.env.NODE_ENV === "development") {
-        console.log("Socket opened");
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("auth_token", data.access_token);
+        setToken(data.access_token);
       }
-    };
+    } catch (e) {
+      console.error("Auto-auth failed:", e);
+    }
+  };
 
-    localSocket.onmessage = (event) => {
-      try {
-        const message: Message = JSON.parse(event.data);
-        handleWebsocketMessage(message);
-      } catch (error) {
-        if (process.env.NODE_ENV === "development") {
-          console.error(error);
-        }
-      }
-    };
-
-    localSocket.onerror = (error) => {
-      if (process.env.NODE_ENV === "development") {
-        console.log(error);
-      }
-      setSocketOnline(false);
-      setSocket(undefined);
-      setAllConversationStatuses("");
-      handleAllConversationsError();
-      showErrorToast("Connection to Elysia lost");
-    };
-
-    localSocket.onclose = () => {
-      setSocketOnline(false);
-      setAllConversationStatuses("");
-      setSocket(undefined);
-      handleAllConversationsError();
-      showErrorToast("Connection to Elysia lost");
-      if (process.env.NODE_ENV === "development") {
-        console.log("Socket closed");
-      }
-    };
-
-    setSocket(localSocket);
-  }, [reconnect]);
+  const getToken = useCallback(() => {
+    return token || localStorage.getItem("auth_token") || "";
+  }, [token]);
 
   const sendQuery = async (
-    user_id: string,
-    query: string,
-    conversation_id: string,
-    query_id: string,
-    route: string = "",
-    mimick: boolean = false
-  ) => {
-    setConversationStatus("Thinking...", conversation_id);
-    const enabled_collections = getAllEnabledCollections();
-
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `Sending query with enabled collections: ${enabled_collections} to conversation ${conversation_id}`
-      );
+    question: string,
+    connection_id?: number | null
+  ): Promise<any | null> => {
+    const authToken = getToken();
+    if (!authToken) {
+      await autoAuth();
     }
+    const currentToken = getToken();
 
-    socket?.send(
-      JSON.stringify({
-        user_id,
-        query,
-        query_id,
-        conversation_id,
-        collection_names: enabled_collections,
-        route,
-        mimick,
-      })
-    );
+    try {
+      const response = await fetch(`${host}/api/query/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({
+          question,
+          connection_id: connection_id || null,
+        }),
+      });
 
-    return Promise.resolve(true);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.detail || `HTTP ${response.status}`,
+          response_text: `**Error:** ${errorData.detail || `Request failed with status ${response.status}`}`,
+        };
+      }
+
+      return await response.json();
+    } catch (e) {
+      return {
+        success: false,
+        error: String(e),
+        response_text: `**Error:** Failed to connect to backend. ${String(e)}`,
+      };
+    }
   };
 
   return (
-    <SocketContext.Provider value={{ socketOnline, sendQuery }}>
+    <QueryContext.Provider value={{ backendOnline, sendQuery, getToken }}>
       {children}
-    </SocketContext.Provider>
+    </QueryContext.Provider>
   );
 };

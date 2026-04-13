@@ -24,7 +24,7 @@ import CodeDisplay from "./components/ViewCodeButton";
 import FeedbackButtons from "./components/FeedbackButtons";
 import InfoMessageDisplay from "./displays/SystemMessages/InfoMessageDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SocketContext } from "../contexts/SocketContext";
+import { QueryContext } from "../contexts/SocketContext";
 import RateLimitMessageDisplay from "./displays/SystemMessages/RateLimitMessageDisplay";
 import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
 import RenderDisplay from "./RenderDisplay";
@@ -54,7 +54,7 @@ interface RenderChatProps {
   ) => void;
   addDisplacement: (value: number) => void;
   addDistortion: (value: number) => void;
-  handleSendQuery: (query: string, route?: string, mimick?: boolean) => void;
+  handleSendQuery: (query: string) => void;
   isLastQuery: boolean;
 }
 
@@ -77,7 +77,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
 }) => {
   const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
   const [collapsed, setCollapsed] = useState<boolean>(_collapsed);
-  const { socketOnline } = useContext(SocketContext);
+  const { backendOnline } = useContext(QueryContext);
   const {
     buildRefMap,
     currentView,
@@ -292,7 +292,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
             ))}
           {!collapsed &&
             displayMessages.length < 2 &&
-            socketOnline &&
+            backendOnline &&
             !finished && (
               <div className="w-full flex-col flex gap-2 justify-start items-start fade-in">
                 <Skeleton className="w-full h-[1rem]" />
@@ -466,7 +466,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
             </div>
           )}
           {!collapsed && <div ref={messagesEndRef} />}
-          {!socketOnline && (
+          {!backendOnline && (
             <div className="w-full flex justify-center items-center">
               <p className="text-primary text-sm shine">
                 Connection lost. Reconnecting...

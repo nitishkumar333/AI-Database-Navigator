@@ -6,18 +6,13 @@ import { SessionProvider } from "./components/contexts/SessionContext";
 import SidebarComponent from "./components/navigation/SidebarComponent";
 import { CollectionProvider } from "./components/contexts/CollectionContext";
 import { ConversationProvider } from "./components/contexts/ConversationContext";
-import { SocketProvider } from "./components/contexts/SocketContext";
-import { EvaluationProvider } from "./components/contexts/EvaluationContext";
-import StartDialog from "./components/dialog/StartDialog";
+import { QueryProvider } from "./components/contexts/SocketContext";
 import { ToastProvider } from "./components/contexts/ToastContext";
 
 import { Toaster } from "@/components/ui/toaster";
 
-import { GoogleAnalytics } from "@next/third-parties/google";
-
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { RouterProvider } from "./components/contexts/RouterContext";
-import { ProcessingProvider } from "./components/contexts/ProcessingContext";
 
 const space_grotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -34,8 +29,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Elysia",
-  description: "Your AI Platform",
+  title: "AI Data Analyst",
+  description: "Natural Language → SQL Platform",
 };
 
 export default function RootLayout({
@@ -45,39 +40,28 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_G_KEY || ""} />
       <body
         className={`bg-background h-screen w-screen overflow-hidden ${space_grotesk.variable} ${manrope.variable} font-text antialiased flex`}
       >
         <Suspense fallback={<div>Loading...</div>}>
           <ToastProvider>
             <RouterProvider>
-              <SessionProvider>
-                <CollectionProvider>
-                  <ConversationProvider>
-                    <SocketProvider>
-                      <EvaluationProvider>
-                        <ProcessingProvider>
-                          <SidebarProvider>
-                            <SidebarComponent />
-                            <main className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
-                              {/* <img
-                              referrerPolicy="no-referrer-when-downgrade"
-                              className="absolute bottom-0 right-0"
-                              src="https://pixel.weaviate.cloud/a.png?x-pxid=32943cfc-5ae4-4f43-9f12-0c057a0b0df9"
-                            /> */}
-                              <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt z-50" />
-                              <StartDialog />
-                              {children}
-                            </main>
-                          </SidebarProvider>
-                        </ProcessingProvider>
-                        <Toaster />
-                      </EvaluationProvider>
-                    </SocketProvider>
-                  </ConversationProvider>
-                </CollectionProvider>
-              </SessionProvider>
+              <QueryProvider>
+                <SessionProvider>
+                  <CollectionProvider>
+                    <ConversationProvider>
+                      <SidebarProvider>
+                        <SidebarComponent />
+                        <main className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
+                          <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt z-50" />
+                          {children}
+                        </main>
+                      </SidebarProvider>
+                      <Toaster />
+                    </ConversationProvider>
+                  </CollectionProvider>
+                </SessionProvider>
+              </QueryProvider>
             </RouterProvider>
           </ToastProvider>
         </Suspense>

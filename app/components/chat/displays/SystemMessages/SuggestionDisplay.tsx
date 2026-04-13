@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 
 interface SuggestionDisplayProps {
   payload: SuggestionPayload;
-  handleSendQuery: (query: string, route?: string, mimick?: boolean) => void;
+  handleSendQuery: (query: string) => void;
 }
 
 const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
@@ -34,7 +34,7 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
             key={suggestion}
             onClick={() => {
               setClickedSuggestion(suggestion);
-              handleSendQuery(suggestion, "", false);
+              handleSendQuery(suggestion);
             }}
             className={`rounded-lg flex flex-col gap-3 w-full cursor-pointer transition-all duration-300 
             ${

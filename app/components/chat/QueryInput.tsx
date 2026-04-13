@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { TbSettings } from "react-icons/tb";
 
 interface QueryInputProps {
-  handleSendQuery: (query: string, route?: string, mimick?: boolean) => void;
+  handleSendQuery: (query: string) => void;
   query_length: number;
   currentStatus: string;
   addDisplacement: (value: number) => void;
@@ -34,7 +34,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   const triggerQuery = (_query: string) => {
     if (_query.trim() === "" || currentStatus !== "") return;
-    handleSendQuery(_query, route, mimick);
+    handleSendQuery(_query);
     setQuery("");
   };
 
