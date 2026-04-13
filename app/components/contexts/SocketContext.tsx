@@ -8,7 +8,7 @@ export const QueryContext = createContext<{
   sendQuery: (
     question: string,
     connection_id?: number | null,
-    knowledge_base_ids?: number[] | null
+    knowledge_base_id?: number | null
   ) => Promise<any | null>;
   getToken: () => string;
   clearAuth: () => void;
@@ -96,7 +96,7 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   const sendQuery = async (
     question: string,
     connection_id?: number | null,
-    knowledge_base_ids?: number[] | null
+    knowledge_base_id?: number | null
   ): Promise<any | null> => {
     const authToken = getToken();
     if (!authToken) {
@@ -114,7 +114,7 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify({
           question,
           connection_id: connection_id || null,
-          knowledge_base_ids: knowledge_base_ids || null,
+          knowledge_base_id: knowledge_base_id || null,
         }),
       });
 

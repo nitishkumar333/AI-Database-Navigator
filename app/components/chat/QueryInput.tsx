@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { FaCircle } from "react-icons/fa";
 import { IoArrowUpCircleSharp, IoClose } from "react-icons/io5";
 import { RiFlowChart } from "react-icons/ri";
@@ -9,12 +9,22 @@ import CollectionSelection from "./components/CollectionSelection";
 import KnowledgeBaseSelection from "./components/KnowledgeBaseSelection";
 import { Button } from "@/components/ui/button";
 import { TbSettings } from "react-icons/tb";
+import { QueryContext } from "../contexts/SocketContext";
+import { host } from "../host";
 
 interface KnowledgeBaseEntry {
   id: number;
   connection_id: number;
   table_name: string;
   table_description: string;
+}
+
+interface KnowledgeBaseGroup {
+  id: number;
+  connection_id: number;
+  name: string;
+  tables: KnowledgeBaseEntry[];
+  created_at: string;
 }
 
 interface QueryInputProps {
@@ -26,8 +36,8 @@ interface QueryInputProps {
   selectSettings: () => void;
   selectedConnectionId: number | null;
   onConnectionChange: (connectionId: number | null) => void;
-  selectedKnowledgeBases: KnowledgeBaseEntry[];
-  onKnowledgeBaseChange: (kbs: KnowledgeBaseEntry[]) => void;
+  selectedKnowledgeBaseId: number | null;
+  onKnowledgeBaseChange: (kbId: number | null) => void;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({
@@ -39,10 +49,12 @@ const QueryInput: React.FC<QueryInputProps> = ({
   selectSettings,
   selectedConnectionId,
   onConnectionChange,
-  selectedKnowledgeBases,
+  selectedKnowledgeBaseId,
   onKnowledgeBaseChange,
 }) => {
   const [query, setQuery] = useState("");
+  const { getToken, clearAuth } = useContext(QueryContext);
+  const [groupDetails, setGroupDetails] = useState<KnowledgeBaseGroup | null>(null);
 
   const [route, setRoute] = useState<string>("");
   const [mimick, setMimick] = useState<boolean>(false);
@@ -53,6 +65,38 @@ const QueryInput: React.FC<QueryInputProps> = ({
     handleSendQuery(_query);
     setQuery("");
   };
+
+  useEffect(() => {
+    const fetchGroup = async () => {
+      if (!selectedKnowledgeBaseId) {
+        setGroupDetails(null);
+        return;
+      }
+      const token = getToken();
+      if (!token) return;
+      try {
+        const url = selectedConnectionId
+          ? `${host}/api/knowledge/${selectedConnectionId}/groups`
+          : `${host}/api/knowledge/user/groups/all`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (response.ok) {
+          const data: KnowledgeBaseGroup[] = await response.json();
+          const target = data.find(g => g.id === selectedKnowledgeBaseId);
+          setGroupDetails(target || null);
+        } else if (response.status === 401) {
+          clearAuth();
+        }
+      } catch (e) {
+        console.error("Failed to fetch knowledge base groups:", e);
+      }
+    };
+    fetchGroup();
+  }, [selectedKnowledgeBaseId, selectedConnectionId]);
 
   useEffect(() => {
     addDisplacement(0.035);
@@ -73,27 +117,21 @@ const QueryInput: React.FC<QueryInputProps> = ({
           <div></div>
         )}
       </div>
-      {/* Selected KB pills */}
-      {selectedKnowledgeBases.length > 0 && (
-        <div className="w-full flex flex-wrap gap-1.5 px-1">
-          {selectedKnowledgeBases.map((kb) => (
-            <span
-              key={kb.id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/15 text-accent text-[11px] border border-accent/30"
+      {/* Selected KB pill */}
+      {groupDetails && (
+        <div className="w-full flex flex-wrap gap-1.5 px-1 pb-1">
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/20 text-accent text-xs font-medium border border-accent/40 shadow-sm"
+          >
+            📚 {groupDetails.name}
+            <span className="text-[10px] opacity-80">({groupDetails.tables.length} tables)</span>
+            <button
+              onClick={() => onKnowledgeBaseChange(null)}
+              className="hover:text-red-400 transition-colors ml-1"
             >
-              {kb.table_name}
-              <button
-                onClick={() =>
-                  onKnowledgeBaseChange(
-                    selectedKnowledgeBases.filter((k) => k.id !== kb.id)
-                  )
-                }
-                className="hover:text-red-400 transition-colors"
-              >
-                <IoClose size={12} />
-              </button>
-            </span>
-          ))}
+              <IoClose size={14} />
+            </button>
+          </span>
         </div>
       )}
       {showRoute && (
@@ -196,7 +234,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
             />
             <KnowledgeBaseSelection
               selectedConnectionId={selectedConnectionId}
-              selectedKnowledgeBases={selectedKnowledgeBases}
+              selectedKnowledgeBaseId={selectedKnowledgeBaseId}
               onKnowledgeBaseChange={onKnowledgeBaseChange}
             />
             <Button

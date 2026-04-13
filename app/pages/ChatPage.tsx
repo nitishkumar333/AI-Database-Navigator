@@ -34,7 +34,6 @@ interface KnowledgeBaseEntry {
   table_name: string;
   table_description: string;
 }
-
 export default function ChatPage() {
   const { sendQuery } = useContext(QueryContext);
   const { id } = useContext(SessionContext);
@@ -53,7 +52,7 @@ export default function ChatPage() {
 
   // Connection & KB selection state
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
-  const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState<KnowledgeBaseEntry[]>([]);
+  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<number | null>(null);
 
   const [currentQuery, setCurrentQuery] = useState<{
     [key: string]: Query;
@@ -92,11 +91,8 @@ export default function ChatPage() {
     addQueryToConversation(conversation.id, trimmedQuery, query_id);
     setConversationStatus("Thinking...", conversation.id);
 
-    // Send via REST API — now passing connection_id and knowledge_base_ids
-    const kbIds = selectedKnowledgeBases.length > 0
-      ? selectedKnowledgeBases.map((kb) => kb.id)
-      : null;
-    const result = await sendQuery(trimmedQuery, selectedConnectionId, kbIds);
+    // Send via REST API — now passing connection_id and knowledge_base_id
+    const result = await sendQuery(trimmedQuery, selectedConnectionId, selectedKnowledgeBaseId);
 
     if (!result) {
       setConversationStatus("", conversation.id);
@@ -293,9 +289,14 @@ export default function ChatPage() {
             addDistortion={addDistortion}
             selectSettings={() => {}}
             selectedConnectionId={selectedConnectionId}
-            onConnectionChange={setSelectedConnectionId}
-            selectedKnowledgeBases={selectedKnowledgeBases}
-            onKnowledgeBaseChange={setSelectedKnowledgeBases}
+            onConnectionChange={(connId) => {
+              setSelectedConnectionId(connId);
+              if (connId !== selectedConnectionId) {
+                setSelectedKnowledgeBaseId(null);
+              }
+            }}
+            selectedKnowledgeBaseId={selectedKnowledgeBaseId}
+            onKnowledgeBaseChange={setSelectedKnowledgeBaseId}
           />
         </div>
         {Object.keys(currentQuery).length === 0 && (
