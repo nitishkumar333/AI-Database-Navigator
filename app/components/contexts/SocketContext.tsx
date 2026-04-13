@@ -7,13 +7,16 @@ export const QueryContext = createContext<{
   backendOnline: boolean;
   sendQuery: (
     question: string,
-    connection_id?: number | null
+    connection_id?: number | null,
+    knowledge_base_ids?: number[] | null
   ) => Promise<any | null>;
   getToken: () => string;
+  clearAuth: () => void;
 }>({
   backendOnline: false,
   sendQuery: async () => null,
   getToken: () => "",
+  clearAuth: () => {},
 });
 
 export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
@@ -80,13 +83,20 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const clearAuth = () => {
+    localStorage.removeItem("auth_token");
+    setToken("");
+    window.location.reload();
+  };
+
   const getToken = useCallback(() => {
     return token || localStorage.getItem("auth_token") || "";
   }, [token]);
 
   const sendQuery = async (
     question: string,
-    connection_id?: number | null
+    connection_id?: number | null,
+    knowledge_base_ids?: number[] | null
   ): Promise<any | null> => {
     const authToken = getToken();
     if (!authToken) {
@@ -104,10 +114,19 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify({
           question,
           connection_id: connection_id || null,
+          knowledge_base_ids: knowledge_base_ids || null,
         }),
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearAuth();
+          return {
+            success: false,
+            error: "Session expired. Reloading...",
+            response_text: "Session expired, reloading to authenticate.",
+          };
+        }
         const errorData = await response.json().catch(() => ({}));
         return {
           success: false,
@@ -127,7 +146,7 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <QueryContext.Provider value={{ backendOnline, sendQuery, getToken }}>
+    <QueryContext.Provider value={{ backendOnline, sendQuery, getToken, clearAuth }}>
       {children}
     </QueryContext.Provider>
   );

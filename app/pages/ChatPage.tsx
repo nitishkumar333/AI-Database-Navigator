@@ -28,6 +28,13 @@ import { CollectionContext } from "../components/contexts/CollectionContext";
 //   }
 // );
 
+interface KnowledgeBaseEntry {
+  id: number;
+  connection_id: number;
+  table_name: string;
+  table_description: string;
+}
+
 export default function ChatPage() {
   const { sendQuery } = useContext(QueryContext);
   const { id } = useContext(SessionContext);
@@ -42,7 +49,11 @@ export default function ChatPage() {
     conversations,
   } = useContext(ConversationContext);
 
-  const { getRandomPrompts, collections } = useContext(CollectionContext);
+  const { getRandomPrompts, collections, connections } = useContext(CollectionContext);
+
+  // Connection & KB selection state
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
+  const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState<KnowledgeBaseEntry[]>([]);
 
   const [currentQuery, setCurrentQuery] = useState<{
     [key: string]: Query;
@@ -81,8 +92,11 @@ export default function ChatPage() {
     addQueryToConversation(conversation.id, trimmedQuery, query_id);
     setConversationStatus("Thinking...", conversation.id);
 
-    // Send via REST API
-    const result = await sendQuery(trimmedQuery);
+    // Send via REST API — now passing connection_id and knowledge_base_ids
+    const kbIds = selectedKnowledgeBases.length > 0
+      ? selectedKnowledgeBases.map((kb) => kb.id)
+      : null;
+    const result = await sendQuery(trimmedQuery, selectedConnectionId, kbIds);
 
     if (!result) {
       setConversationStatus("", conversation.id);
@@ -217,6 +231,13 @@ export default function ChatPage() {
     }
   }, [collections]);
 
+  // Auto-select first connection if none selected
+  useEffect(() => {
+    if (!selectedConnectionId && connections.length > 0) {
+      setSelectedConnectionId(connections[0].id);
+    }
+  }, [connections]);
+
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
       <div className="flex w-full justify-start items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background">
@@ -271,6 +292,10 @@ export default function ChatPage() {
             addDisplacement={addDisplacement}
             addDistortion={addDistortion}
             selectSettings={() => {}}
+            selectedConnectionId={selectedConnectionId}
+            onConnectionChange={setSelectedConnectionId}
+            selectedKnowledgeBases={selectedKnowledgeBases}
+            onKnowledgeBaseChange={setSelectedKnowledgeBases}
           />
         </div>
         {Object.keys(currentQuery).length === 0 && (
