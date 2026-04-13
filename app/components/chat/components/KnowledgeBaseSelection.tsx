@@ -14,26 +14,27 @@ import {
 import { QueryContext } from "../../contexts/SocketContext";
 import { host } from "../../host";
 
-interface KnowledgeBaseEntry {
-  id: number;
-  connection_id: number;
-  table_name: string;
-  table_description: string;
+interface KnowledgeBaseGroup {
+  id: int;
+  connection_id: int;
+  name: string;
+  tables: KnowledgeBaseEntry[];
+  created_at: string;
 }
 
 interface KnowledgeBaseSelectionProps {
   selectedConnectionId: number | null;
-  selectedKnowledgeBases: KnowledgeBaseEntry[];
-  onKnowledgeBaseChange: (kbs: KnowledgeBaseEntry[]) => void;
+  selectedKnowledgeBaseId: number | null;
+  onKnowledgeBaseChange: (kbId: number | null) => void;
 }
 
 const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
   selectedConnectionId,
-  selectedKnowledgeBases,
+  selectedKnowledgeBaseId,
   onKnowledgeBaseChange,
 }) => {
   const { getToken, clearAuth } = useContext(QueryContext);
-  const [allKBs, setAllKBs] = useState<KnowledgeBaseEntry[]>([]);
+  const [allGroups, setAllGroups] = useState<KnowledgeBaseGroup[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,8 +47,8 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
     setLoading(true);
     try {
       const url = selectedConnectionId
-        ? `${host}/api/knowledge/${selectedConnectionId}`
-        : `${host}/api/knowledge/user/all`;
+        ? `${host}/api/knowledge/${selectedConnectionId}/groups`
+        : `${host}/api/knowledge/user/groups/all`;
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -56,41 +57,42 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
       });
       if (response.ok) {
         const data = await response.json();
-        setAllKBs(data);
+        setAllGroups(data);
       } else if (response.status === 401) {
         clearAuth();
       }
     } catch (e) {
-      console.error("Failed to fetch knowledge bases:", e);
+      console.error("Failed to fetch knowledge base groups:", e);
     }
     setLoading(false);
   };
 
-  const toggleKB = (kb: KnowledgeBaseEntry) => {
-    const isSelected = selectedKnowledgeBases.some((s) => s.id === kb.id);
-    if (isSelected) {
-      onKnowledgeBaseChange(selectedKnowledgeBases.filter((s) => s.id !== kb.id));
+  const toggleGroup = (groupId: number) => {
+    if (selectedKnowledgeBaseId === groupId) {
+      onKnowledgeBaseChange(null);
     } else {
-      onKnowledgeBaseChange([...selectedKnowledgeBases, kb]);
+      onKnowledgeBaseChange(groupId);
     }
   };
 
-  if (allKBs.length === 0 && !loading) return null;
+  const selectedGroup = allGroups.find(g => g.id === selectedKnowledgeBaseId);
+
+  if (allGroups.length === 0 && !loading) return null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size={selectedKnowledgeBases.length > 0 ? "default" : "icon"}
-          className={`gap-1.5 ${selectedKnowledgeBases.length > 0 ? "text-accent text-xs px-2" : ""}`}
+          size={selectedKnowledgeBaseId ? "default" : "icon"}
+          className={`gap-1.5 ${selectedKnowledgeBaseId ? "text-accent text-xs px-2" : ""}`}
         >
           <HiOutlineBookOpen
-            className={selectedKnowledgeBases.length > 0 ? "text-accent" : "text-primary"}
+            className={selectedKnowledgeBaseId ? "text-accent" : "text-primary"}
             size={14}
           />
-          {selectedKnowledgeBases.length > 0 && (
-            <span>{selectedKnowledgeBases.length} tables</span>
+          {selectedGroup && (
+            <span className="truncate max-w-[120px]">{selectedGroup.name}</span>
           )}
         </Button>
       </DropdownMenuTrigger>
@@ -103,33 +105,31 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
           <div className="p-3 text-xs text-muted-foreground text-center">
             Loading...
           </div>
-        ) : allKBs.length === 0 ? (
+        ) : allGroups.length === 0 ? (
           <div className="p-3 text-xs text-muted-foreground text-center">
-            No knowledge base entries found. Create some in the Knowledge Base page.
+            No knowledge base groups found. Create one in the Knowledge Base page.
           </div>
         ) : (
-          allKBs.map((kb) => (
+          allGroups.map((group) => (
             <DropdownMenuCheckboxItem
-              key={kb.id}
-              checked={selectedKnowledgeBases.some((s) => s.id === kb.id)}
-              onCheckedChange={() => toggleKB(kb)}
+              key={group.id}
+              checked={selectedKnowledgeBaseId === group.id}
+              onCheckedChange={() => toggleGroup(group.id)}
               onSelect={(e) => e.preventDefault()}
               className="flex flex-col items-start"
             >
-              <p className="text-primary text-xs font-medium">{kb.table_name}</p>
-              {kb.table_description && (
-                <p className="text-muted-foreground text-[10px] truncate max-w-[200px]">
-                  {kb.table_description}
-                </p>
-              )}
+              <p className="text-primary text-xs font-medium">{group.name}</p>
+              <p className="text-muted-foreground text-[10px] truncate max-w-[200px]">
+                {group.tables.length} table{group.tables.length === 1 ? '' : 's'}
+              </p>
             </DropdownMenuCheckboxItem>
           ))
         )}
-        {selectedKnowledgeBases.length > 0 && (
+        {selectedKnowledgeBaseId !== null && (
           <>
             <DropdownMenuSeparator />
             <button
-              onClick={() => onKnowledgeBaseChange([])}
+              onClick={() => onKnowledgeBaseChange(null)}
               className="w-full text-xs text-red-400 hover:text-red-300 p-2 text-center transition-colors"
             >
               Clear Selection

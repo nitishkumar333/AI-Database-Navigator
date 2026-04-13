@@ -33,20 +33,31 @@ type KnowledgeEntry = {
   sample_queries: string[];
 };
 
+type KnowledgeBaseGroup = {
+  id: number;
+  connection_id: number;
+  name: string;
+  tables: KnowledgeEntry[];
+  created_at: string;
+};
+
 export default function KnowledgeBasePage() {
-  const { connections, fetchCollections } = useContext(CollectionContext);
+  const { connections } = useContext(CollectionContext);
   const { getToken, clearAuth } = useContext(QueryContext);
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
 
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  
+  // Group creation state
+  const [groupName, setGroupName] = useState("");
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  // Existing knowledge bases
-  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeEntry[]>([]);
-  const [loadingKBs, setLoadingKBs] = useState(false);
+  // Existing groups
+  const [kbGroups, setKbGroups] = useState<KnowledgeBaseGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const [autoDescribing, setAutoDescribing] = useState(false);
 
   const authHeaders = () => ({
@@ -61,11 +72,15 @@ export default function KnowledgeBasePage() {
     }
   }, [connections]);
 
-  // Fetch tables & existing KBs when connection changes
+  // Fetch tables & existing groups when connection changes
   useEffect(() => {
     if (selectedConnection) {
       fetchTables(selectedConnection.id);
-      fetchKnowledgeBases(selectedConnection.id);
+      fetchKnowledgeGroups(selectedConnection.id);
+      
+      // Reset form state
+      setGroupName("");
+      setSelectedTables(new Set());
     }
   }, [selectedConnection]);
 
@@ -87,22 +102,22 @@ export default function KnowledgeBasePage() {
     setLoadingTables(false);
   };
 
-  const fetchKnowledgeBases = async (connId: number) => {
-    setLoadingKBs(true);
+  const fetchKnowledgeGroups = async (connId: number) => {
+    setLoadingGroups(true);
     try {
-      const response = await fetch(`${host}/api/knowledge/${connId}`, {
+      const response = await fetch(`${host}/api/knowledge/${connId}/groups`, {
         headers: authHeaders(),
       });
       if (response.ok) {
         const data = await response.json();
-        setKnowledgeBases(data);
+        setKbGroups(data);
       } else if (response.status === 401) {
         clearAuth();
       }
     } catch (e) {
-      console.error("Failed to fetch knowledge bases:", e);
+      console.error("Failed to fetch knowledge base groups:", e);
     }
-    setLoadingKBs(false);
+    setLoadingGroups(false);
   };
 
   const toggleTable = (tableName: string) => {
@@ -125,28 +140,29 @@ export default function KnowledgeBasePage() {
     setSelectedTables(new Set());
   };
 
-  const saveKnowledgeBase = async () => {
-    if (!selectedConnection || selectedTables.size === 0) return;
+  const saveKnowledgeGroup = async () => {
+    if (!selectedConnection || selectedTables.size === 0 || groupName.trim() === "") return;
     setSaving(true);
     try {
       const response = await fetch(
-        `${host}/api/knowledge/${selectedConnection.id}/bulk`,
+        `${host}/api/knowledge/${selectedConnection.id}/group`,
         {
           method: "POST",
           headers: authHeaders(),
           body: JSON.stringify({
+            name: groupName.trim(),
             table_names: Array.from(selectedTables),
           }),
         }
       );
       if (response.ok) {
-        const data = await response.json();
         showSuccessToast(
-          "Knowledge Base Updated",
-          `${data.length} tables added to knowledge base`
+          "Knowledge Base Created",
+          `Created "${groupName.trim()}" containing ${selectedTables.size} tables`
         );
         setSelectedTables(new Set());
-        fetchKnowledgeBases(selectedConnection.id);
+        setGroupName("");
+        fetchKnowledgeGroups(selectedConnection.id);
       } else {
         const err = await response.json();
         showErrorToast("Failed", err.detail || "Could not save");
@@ -157,19 +173,19 @@ export default function KnowledgeBasePage() {
     setSaving(false);
   };
 
-  const deleteKBEntry = async (kbId: number) => {
+  const deleteKnowledgeGroup = async (groupId: number) => {
     if (!selectedConnection) return;
     try {
       const response = await fetch(
-        `${host}/api/knowledge/${selectedConnection.id}/${kbId}`,
+        `${host}/api/knowledge/group/${groupId}`,
         {
           method: "DELETE",
           headers: authHeaders(),
         }
       );
       if (response.ok) {
-        showSuccessToast("Removed from Knowledge Base");
-        fetchKnowledgeBases(selectedConnection.id);
+        showSuccessToast("Knowledge Base Deleted");
+        fetchKnowledgeGroups(selectedConnection.id);
       }
     } catch (e) {
       showErrorToast("Error", String(e));
@@ -196,16 +212,13 @@ export default function KnowledgeBasePage() {
           "Auto-Describe Complete",
           `${successCount}/${data.results.length} tables described`
         );
-        fetchKnowledgeBases(selectedConnection.id);
+        fetchKnowledgeGroups(selectedConnection.id);
       }
     } catch (e) {
       showErrorToast("Error", String(e));
     }
     setAutoDescribing(false);
   };
-
-  // Tables that are already in the KB
-  const kbTableNames = new Set(knowledgeBases.map((kb) => kb.table_name));
 
   return (
     <div className="flex flex-col w-full h-screen overflow-y-auto p-2 lg:p-6">
@@ -220,11 +233,10 @@ export default function KnowledgeBasePage() {
           <div>
             <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
               <HiOutlineBookOpen className="text-accent" size={28} />
-              Knowledge Base
+              Knowledge Bases
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Select tables from your database to create a knowledge base. Use it
-              in chat to focus queries on specific tables.
+              Create named collections of tables to focus the AI's context during chats.
             </p>
           </div>
         </div>
@@ -242,7 +254,6 @@ export default function KnowledgeBasePage() {
                 key={conn.id}
                 onClick={() => {
                   setSelectedConnection(conn);
-                  setSelectedTables(new Set());
                 }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 text-sm ${
                   selectedConnection?.id === conn.id
@@ -271,18 +282,18 @@ export default function KnowledgeBasePage() {
 
         {selectedConnection && (
           <>
-            {/* Existing KB entries */}
+            {/* Existing KB Groups */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-primary">
-                  Knowledge Base Tables
-                  {knowledgeBases.length > 0 && (
+                  Your Knowledge Bases
+                  {kbGroups.length > 0 && (
                     <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      ({knowledgeBases.length} tables)
+                      ({kbGroups.length})
                     </span>
                   )}
                 </h2>
-                {knowledgeBases.length > 0 && (
+                {kbGroups.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -295,53 +306,58 @@ export default function KnowledgeBasePage() {
                     ) : (
                       <HiOutlineBookOpen size={14} />
                     )}
-                    Auto-Describe with AI
+                    Generate Missing Table Descriptions (AI)
                   </Button>
                 )}
               </div>
 
-              {loadingKBs ? (
+              {loadingGroups ? (
                 <div className="flex items-center justify-center p-6">
                   <FaSpinner className="animate-spin text-accent" size={20} />
                 </div>
-              ) : knowledgeBases.length === 0 ? (
+              ) : kbGroups.length === 0 ? (
                 <div className="p-4 border border-dashed border-foreground rounded-xl text-center">
                   <p className="text-muted-foreground text-sm">
-                    No tables in knowledge base yet. Select tables below to add them.
+                    No knowledge bases created yet. Use the form below to create one.
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-3">
                   <AnimatePresence>
-                    {knowledgeBases.map((kb, index) => (
+                    {kbGroups.map((group, index) => (
                       <motion.div
-                        key={kb.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        key={group.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ delay: index * 0.03 }}
-                        className="flex items-center justify-between p-3 border border-accent/20 rounded-xl bg-accent/5 group hover:border-accent/40 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-accent/20 rounded-xl bg-accent/5 group hover:border-accent/40 transition-colors gap-4"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <IoCheckmarkCircle className="text-accent flex-shrink-0" size={18} />
-                          <div className="min-w-0">
-                            <p className="text-primary text-sm font-medium truncate">
-                              {kb.table_name}
-                            </p>
-                            {kb.table_description && (
-                              <p className="text-muted-foreground text-[11px] truncate">
-                                {kb.table_description}
-                              </p>
+                        <div className="flex flex-col gap-1.5 min-w-0">
+                          <h3 className="text-primary text-base font-medium flex items-center gap-2">
+                             📚 {group.name}
+                          </h3>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {group.tables.slice(0, 8).map(t => (
+                              <span key={t.id} className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent">
+                                {t.table_name}
+                              </span>
+                            ))}
+                            {group.tables.length > 8 && (
+                               <span className="px-2 py-0.5 rounded-full bg-foreground border border-foreground-muted text-[10px] text-muted-foreground">
+                                +{group.tables.length - 8} more
+                              </span>
                             )}
                           </div>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteKBEntry(kb.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10 flex-shrink-0"
+                          onClick={() => deleteKnowledgeGroup(group.id)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 flex-shrink-0 self-start sm:self-center"
                         >
-                          <GoTrash size={14} />
+                          <GoTrash size={14} className="mr-1.5" />
+                          Delete Group
                         </Button>
                       </motion.div>
                     ))}
@@ -352,122 +368,107 @@ export default function KnowledgeBasePage() {
 
             <Separator />
 
-            {/* Add tables section */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-primary">
-                  Available Tables
-                </h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={selectAll}
-                    className="text-xs text-accent hover:text-accent/80 transition-colors"
-                  >
-                    Select All
-                  </button>
-                  <span className="text-muted-foreground text-xs">|</span>
-                  <button
-                    onClick={deselectAll}
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    Deselect All
-                  </button>
-                </div>
+            {/* Create New Group Section */}
+            <div className="flex flex-col gap-5 bg-background p-5 rounded-2xl border border-foreground shadow-sm">
+              <h2 className="text-lg font-semibold text-primary">
+                Create New Knowledge Base
+              </h2>
+              
+              <div className="flex flex-col gap-2 max-w-md">
+                <label className="text-xs text-muted-foreground font-medium">
+                  Knowledge Base Name
+                </label>
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="e.g. HR Reports, Sales Data, User Analytics"
+                  className="w-full px-3 py-2 bg-transparent border border-foreground rounded-lg text-sm text-primary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 transition-all"
+                />
               </div>
 
-              {loadingTables ? (
-                <div className="flex items-center justify-center p-8">
-                  <FaSpinner className="animate-spin text-accent" size={24} />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-muted-foreground font-medium">
+                    Select Included Tables
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={selectAll}
+                      className="text-xs text-accent hover:text-accent/80 transition-colors"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-muted-foreground text-xs">|</span>
+                    <button
+                      onClick={deselectAll}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
-              ) : tables.length === 0 ? (
-                <div className="p-6 border border-dashed border-foreground rounded-xl text-center">
-                  <p className="text-muted-foreground text-sm">
-                    No tables found in this database
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {tables.map((table, index) => {
-                    const inKB = kbTableNames.has(table.name);
-                    const isSelected = selectedTables.has(table.name);
 
-                    return (
-                      <motion.button
-                        key={table.name}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.02 }}
-                        onClick={() => !inKB && toggleTable(table.name)}
-                        disabled={inKB}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-                          inKB
-                            ? "border-accent/20 bg-accent/5 opacity-60 cursor-default"
-                            : isSelected
+                {loadingTables ? (
+                  <div className="flex items-center justify-center p-8">
+                    <FaSpinner className="animate-spin text-accent" size={24} />
+                  </div>
+                ) : tables.length === 0 ? (
+                  <div className="p-6 border border-dashed border-foreground rounded-xl text-center">
+                    <p className="text-muted-foreground text-sm">
+                      No tables found in this database
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+                    {tables.map((table) => {
+                      const isSelected = selectedTables.has(table.name);
+
+                      return (
+                        <button
+                          key={table.name}
+                          onClick={() => toggleTable(table.name)}
+                          className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
+                            isSelected
                               ? "border-accent bg-accent/10 shadow-sm shadow-accent/10"
                               : "border-foreground hover:border-accent/40 hover:bg-foreground/20"
-                        }`}
-                      >
-                        {inKB ? (
-                          <IoCheckmarkCircle className="text-accent flex-shrink-0" size={18} />
-                        ) : isSelected ? (
-                          <IoCheckmarkCircle className="text-accent flex-shrink-0" size={18} />
-                        ) : (
-                          <IoEllipseOutline className="text-muted-foreground flex-shrink-0" size={18} />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-primary text-sm font-medium truncate">
-                            {table.name}
-                          </p>
-                          <p className="text-muted-foreground text-[10px]">
-                            {table.column_count} columns
-                            {inKB && " • In KB"}
-                          </p>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Save button */}
-              {selectedTables.size > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-4 border border-accent/30 rounded-xl bg-accent/5"
-                >
-                  <p className="text-sm text-primary">
-                    <span className="font-semibold text-accent">
-                      {selectedTables.size}
-                    </span>{" "}
-                    table{selectedTables.size !== 1 ? "s" : ""} selected
-                  </p>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={deselectAll}
-                      className="gap-1.5"
-                    >
-                      <GoX size={14} />
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={saveKnowledgeBase}
-                      disabled={saving}
-                      className="gap-1.5"
-                    >
-                      {saving ? (
-                        <FaSpinner className="animate-spin" size={12} />
-                      ) : (
-                        <GoPlus size={14} />
-                      )}
-                      Add to Knowledge Base
-                    </Button>
+                          }`}
+                        >
+                          {isSelected ? (
+                            <IoCheckmarkCircle className="text-accent flex-shrink-0" size={18} />
+                          ) : (
+                            <IoEllipseOutline className="text-muted-foreground flex-shrink-0" size={18} />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-primary text-sm font-medium truncate">
+                              {table.name}
+                            </p>
+                            <p className="text-muted-foreground text-[10px]">
+                              {table.column_count} columns
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                </motion.div>
-              )}
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex justify-end mt-2">
+                 <Button
+                    onClick={saveKnowledgeGroup}
+                    disabled={saving || groupName.trim() === "" || selectedTables.size === 0}
+                    className="gap-2 shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    {saving ? (
+                      <FaSpinner className="animate-spin" size={14} />
+                    ) : (
+                      <GoPlus size={16} />
+                    )}
+                    Create Knowledge Base
+                  </Button>
+              </div>
             </div>
 
             {/* Bottom spacer */}
