@@ -73,10 +73,10 @@ const CodeView: React.FC<CodeDisplayProps> = ({
                 >
                   <FaTable size={14} className="text-accent" />
                 </Button>
-                <CopyToClipboardButton copyText={item.metadata.code.text} />
+                <CopyToClipboardButton copyText={(item.code?.text || item.metadata?.code?.text || '')} />
               </div>
               <SyntaxHighlighter
-                language={item.metadata.code.language}
+                language={item.code?.language || item.metadata?.code?.language || 'sql'}
                 wrapLongLines={true}
                 showLineNumbers={true}
                 style={oneDark}
@@ -88,7 +88,7 @@ const CodeView: React.FC<CodeDisplayProps> = ({
                 }}
                 className="rounded-lg overflow-y-scroll"
               >
-                {item.metadata.code.text}
+                {item.code?.text || item.metadata?.code?.text || 'No code available'}
               </SyntaxHighlighter>
             </div>
           </div>

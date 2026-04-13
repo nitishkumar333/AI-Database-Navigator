@@ -102,7 +102,7 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
               delay: 0.4,
             }}
           >
-            {payload[0].metadata.collection_name}
+            {payload[0]?.metadata?.collection_name || payload[0]?.metadata?.connection || ""}
           </motion.div>
         )}
       </div>

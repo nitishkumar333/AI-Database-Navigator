@@ -2,22 +2,20 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Collection } from "@/app/types/objects";
-import { getCollections } from "@/app/api/getCollections";
 import { SessionContext } from "./SessionContext";
-import { deleteCollectionMetadata } from "@/app/api/deleteCollectionMetadata";
 import { ToastContext } from "./ToastContext";
+import { QueryContext } from "./SocketContext";
+import { host } from "../host";
 
 export const CollectionContext = createContext<{
   collections: Collection[];
   fetchCollections: () => void;
   loadingCollections: boolean;
-  deleteCollection: (collection_name: string) => void;
   getRandomPrompts: (amount: number) => string[];
 }>({
   collections: [],
   fetchCollections: () => {},
   loadingCollections: false,
-  deleteCollection: () => {},
   getRandomPrompts: () => [],
 });
 
@@ -27,59 +25,81 @@ export const CollectionProvider = ({
   children: React.ReactNode;
 }) => {
   const { id, fetchCollectionFlag, initialized } = useContext(SessionContext);
-  const { showErrorToast, showSuccessToast } = useContext(ToastContext);
+  const { showSuccessToast } = useContext(ToastContext);
+  const { getToken, backendOnline } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
 
-  const idRef = useRef(id);
   const initialFetch = useRef(false);
 
   useEffect(() => {
-    if (initialFetch.current || !id || !initialized) return;
+    if (initialFetch.current || !id || !backendOnline) return;
     initialFetch.current = true;
-    idRef.current = id;
     fetchCollections();
-  }, [id, initialized]);
+  }, [id, backendOnline]);
 
   useEffect(() => {
-    fetchCollections();
+    if (initialFetch.current) {
+      fetchCollections();
+    }
   }, [fetchCollectionFlag]);
 
   const fetchCollections = async () => {
-    if (!idRef.current) return;
-    setCollections([]);
+    const token = getToken();
+    if (!token) return;
     setLoadingCollections(true);
-    const collections: Collection[] = await getCollections(idRef.current);
-    setCollections(collections);
-    setLoadingCollections(false);
-    showSuccessToast(`${collections.length} Collections Loaded`);
-  };
-
-  const deleteCollection = async (collection_name: string) => {
-    if (!idRef.current) return;
-    const result = await deleteCollectionMetadata(
-      idRef.current,
-      collection_name
-    );
-
-    if (result.error) {
-      showErrorToast("Failed to Remove Analysis", result.error);
-    } else {
-      showSuccessToast(
-        "Analysis Removed",
-        `Analysis for "${collection_name}" has been removed successfully.`
-      );
-      fetchCollections();
+    try {
+      const response = await fetch(`${host}/api/connections`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (response.ok) {
+        const connections = await response.json();
+        // Map connections to Collection type for compatibility
+        const mapped: Collection[] = connections.map(
+          (conn: {
+            id: number;
+            name: string;
+            host: string;
+            port: number;
+            db_name: string;
+            username: string;
+          }) => ({
+            name: `${conn.name} (${conn.db_name}@${conn.host})`,
+            total: 0, // Will be populated when user clicks into it
+            vectorizer: {
+              fields: {},
+              global: {
+                named_vector: "default",
+                vectorizer: "none",
+                model: "none",
+              },
+            },
+            processed: true,
+            prompts: [
+              `Show all tables in ${conn.name}`,
+              `How many records are in each table?`,
+              `Show me the first 10 rows`,
+            ],
+          })
+        );
+        setCollections(mapped);
+        if (mapped.length > 0) {
+          showSuccessToast(`${mapped.length} connections loaded`);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch collections:", e);
     }
+    setLoadingCollections(false);
   };
 
   const getRandomPrompts = (amount: number = 4) => {
-    // Merge all prompts from all collections into a single array
     const allPrompts = collections.reduce((acc: string[], collection) => {
       return acc.concat(collection.prompts || []);
     }, []);
-
-    // Shuffle the array and return requested amount
     const shuffled = allPrompts.sort(() => 0.5 - Math.random());
     return shuffled.slice(0, amount);
   };
@@ -90,7 +110,6 @@ export const CollectionProvider = ({
         collections,
         fetchCollections,
         loadingCollections,
-        deleteCollection,
         getRandomPrompts,
       }}
     >

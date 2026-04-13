@@ -1,5 +1,4 @@
 const nextConfig = {
-  output: "export",
   trailingSlash: false,
   webpack: (config, { isServer }) => {
     // Add a rule to handle .glsl files
@@ -8,7 +7,7 @@ const nextConfig = {
       exclude: /node_modules/,
       use: [
         {
-          loader: "raw-loader", // or "asset/source" in newer Webpack versions
+          loader: "raw-loader",
         },
         {
           loader: "glslify-loader",

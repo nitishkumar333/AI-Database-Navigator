@@ -1,4 +1,3 @@
-import { TreeUpdatePayload } from "@/app/components/types";
 import {
   TicketPayload,
   SingleMessagePayload,
@@ -29,7 +28,6 @@ export type Message = {
     | "status"
     | "completed"
     | "warning"
-    | "tree_update"
     | "training_update"
     | "suggestion";
   conversation_id: string;
@@ -42,7 +40,6 @@ export type Message = {
     | ErrorPayload
     | RateLimitPayload
     | ResponsePayload
-    | TreeUpdatePayload
     | SuggestionPayload
     | UserPromptPayload
     | SelfHealingErrorPayload
