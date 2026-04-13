@@ -8,6 +8,7 @@ import { MdChatBubbleOutline } from "react-icons/md";
 import { GoDatabase } from "react-icons/go";
 import { FaCircle } from "react-icons/fa6";
 import { MdOutlineSettingsInputComponent } from "react-icons/md";
+import { HiOutlineBookOpen } from "react-icons/hi2";
 import { IoIosWarning } from "react-icons/io";
 
 import HomeSubMenu from "@/app/components/navigation/HomeSubMenu";
@@ -71,6 +72,12 @@ const SidebarComponent: React.FC = () => {
         warning: collections.length === 0,
         loading: loadingCollections,
         onClick: () => changePage("data", {}, true, unsavedChanges),
+      },
+      {
+        title: "Knowledge Base",
+        mode: ["knowledge"],
+        icon: <HiOutlineBookOpen />,
+        onClick: () => changePage("knowledge", {}, true, unsavedChanges),
       },
       {
         title: "Settings",
@@ -154,6 +161,7 @@ const SidebarComponent: React.FC = () => {
         {(currentPage === "data" || currentPage === "collection") && (
           <DataSubMenu />
         )}
+        {currentPage === "knowledge" && <SettingsSubMenu />}
         {currentPage === "settings" && <SettingsSubMenu />}
       </SidebarContent>
       <SidebarFooter>

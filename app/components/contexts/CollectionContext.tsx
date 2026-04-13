@@ -7,13 +7,25 @@ import { ToastContext } from "./ToastContext";
 import { QueryContext } from "./SocketContext";
 import { host } from "../host";
 
+export type Connection = {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  db_name: string;
+  username: string;
+  created_at?: string;
+};
+
 export const CollectionContext = createContext<{
   collections: Collection[];
+  connections: Connection[];
   fetchCollections: () => void;
   loadingCollections: boolean;
   getRandomPrompts: (amount: number) => string[];
 }>({
   collections: [],
+  connections: [],
   fetchCollections: () => {},
   loadingCollections: false,
   getRandomPrompts: () => [],
@@ -26,8 +38,9 @@ export const CollectionProvider = ({
 }) => {
   const { id, fetchCollectionFlag, initialized } = useContext(SessionContext);
   const { showSuccessToast } = useContext(ToastContext);
-  const { getToken, backendOnline } = useContext(QueryContext);
+  const { getToken, backendOnline, clearAuth } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   const initialFetch = useRef(false);
@@ -56,17 +69,11 @@ export const CollectionProvider = ({
         },
       });
       if (response.ok) {
-        const connections = await response.json();
+        const rawConnections: Connection[] = await response.json();
+        setConnections(rawConnections);
         // Map connections to Collection type for compatibility
-        const mapped: Collection[] = connections.map(
-          (conn: {
-            id: number;
-            name: string;
-            host: string;
-            port: number;
-            db_name: string;
-            username: string;
-          }) => ({
+        const mapped: Collection[] = rawConnections.map(
+          (conn) => ({
             name: `${conn.name} (${conn.db_name}@${conn.host})`,
             total: 0, // Will be populated when user clicks into it
             vectorizer: {
@@ -89,6 +96,8 @@ export const CollectionProvider = ({
         if (mapped.length > 0) {
           showSuccessToast(`${mapped.length} connections loaded`);
         }
+      } else if (response.status === 401) {
+        clearAuth();
       }
     } catch (e) {
       console.error("Failed to fetch collections:", e);
@@ -108,6 +117,7 @@ export const CollectionProvider = ({
     <CollectionContext.Provider
       value={{
         collections,
+        connections,
         fetchCollections,
         loadingCollections,
         getRandomPrompts,

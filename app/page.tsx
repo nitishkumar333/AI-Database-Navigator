@@ -7,6 +7,7 @@ import ChatPage from "./pages/ChatPage";
 import DataPage from "./pages/DataPage";
 import CollectionPage from "./pages/CollectionPage";
 import SettingsPage from "./pages/SettingsPage";
+import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 
 export default function Home() {
   const { currentPage } = useContext(RouterContext);
@@ -16,6 +17,7 @@ export default function Home() {
       {currentPage === "data" && <DataPage />}
       {currentPage === "collection" && <CollectionPage />}
       {currentPage === "settings" && <SettingsPage />}
+      {currentPage === "knowledge" && <KnowledgeBasePage />}
     </div>
   );
 }

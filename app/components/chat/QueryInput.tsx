@@ -6,8 +6,16 @@ import { IoArrowUpCircleSharp, IoClose } from "react-icons/io5";
 import { RiFlowChart } from "react-icons/ri";
 import { FaTrash } from "react-icons/fa";
 import CollectionSelection from "./components/CollectionSelection";
+import KnowledgeBaseSelection from "./components/KnowledgeBaseSelection";
 import { Button } from "@/components/ui/button";
 import { TbSettings } from "react-icons/tb";
+
+interface KnowledgeBaseEntry {
+  id: number;
+  connection_id: number;
+  table_name: string;
+  table_description: string;
+}
 
 interface QueryInputProps {
   handleSendQuery: (query: string) => void;
@@ -16,6 +24,10 @@ interface QueryInputProps {
   addDisplacement: (value: number) => void;
   addDistortion: (value: number) => void;
   selectSettings: () => void;
+  selectedConnectionId: number | null;
+  onConnectionChange: (connectionId: number | null) => void;
+  selectedKnowledgeBases: KnowledgeBaseEntry[];
+  onKnowledgeBaseChange: (kbs: KnowledgeBaseEntry[]) => void;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({
@@ -25,6 +37,10 @@ const QueryInput: React.FC<QueryInputProps> = ({
   addDisplacement,
   addDistortion,
   selectSettings,
+  selectedConnectionId,
+  onConnectionChange,
+  selectedKnowledgeBases,
+  onKnowledgeBaseChange,
 }) => {
   const [query, setQuery] = useState("");
 
@@ -57,6 +73,29 @@ const QueryInput: React.FC<QueryInputProps> = ({
           <div></div>
         )}
       </div>
+      {/* Selected KB pills */}
+      {selectedKnowledgeBases.length > 0 && (
+        <div className="w-full flex flex-wrap gap-1.5 px-1">
+          {selectedKnowledgeBases.map((kb) => (
+            <span
+              key={kb.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/15 text-accent text-[11px] border border-accent/30"
+            >
+              {kb.table_name}
+              <button
+                onClick={() =>
+                  onKnowledgeBaseChange(
+                    selectedKnowledgeBases.filter((k) => k.id !== kb.id)
+                  )
+                }
+                className="hover:text-red-400 transition-colors"
+              >
+                <IoClose size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {showRoute && (
         <div className="w-full flex gap-2 bg-background_alt rounded-xl p-2 fade-in justify-between">
           <input
@@ -151,7 +190,15 @@ const QueryInput: React.FC<QueryInputProps> = ({
                 <TbSettings size={16} />
               </Button>
             )}
-            <CollectionSelection />
+            <CollectionSelection
+              selectedConnectionId={selectedConnectionId}
+              onConnectionChange={onConnectionChange}
+            />
+            <KnowledgeBaseSelection
+              selectedConnectionId={selectedConnectionId}
+              selectedKnowledgeBases={selectedKnowledgeBases}
+              onKnowledgeBaseChange={onKnowledgeBaseChange}
+            />
             <Button
               variant="ghost"
               size={"icon"}
