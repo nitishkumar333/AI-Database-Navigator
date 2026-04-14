@@ -16,20 +16,11 @@ import {
 import { HiOutlineBookOpen } from "react-icons/hi2";
 import { FaSpinner } from "react-icons/fa";
 
-type KnowledgeEntry = {
-  id: number;
-  connection_id: number;
-  table_name: string;
-  table_description: string;
-  column_descriptions: Record<string, string>;
-  sample_queries: string[];
-};
-
 type KnowledgeBaseGroup = {
   id: number;
   connection_id: number;
   name: string;
-  tables: KnowledgeEntry[];
+  tables: string[];
   created_at: string;
 };
 
@@ -99,33 +90,7 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const autoDescribe = async () => {
-    if (!selectedConnection) return;
-    setAutoDescribing(true);
-    try {
-      const response = await fetch(
-        `${host}/api/knowledge/${selectedConnection.id}/auto-describe`,
-        {
-          method: "POST",
-          headers: authHeaders(),
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const successCount = data.results.filter(
-          (r: { status: string }) => r.status === "success"
-        ).length;
-        showSuccessToast(
-          "Auto-Describe Complete",
-          `${successCount}/${data.results.length} tables described`
-        );
-        fetchKnowledgeGroups(selectedConnection.id);
-      }
-    } catch (e) {
-      showErrorToast("Error", String(e));
-    }
-    setAutoDescribing(false);
-  };
+
 
   const handleKnowledgeBaseCreated = () => {
     if (selectedConnection) {
@@ -206,22 +171,7 @@ export default function KnowledgeBasePage() {
                     </span>
                   )}
                 </h2>
-                {kbGroups.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={autoDescribe}
-                    disabled={autoDescribing}
-                    className="gap-2 text-xs"
-                  >
-                    {autoDescribing ? (
-                      <FaSpinner className="animate-spin" size={12} />
-                    ) : (
-                      <HiOutlineBookOpen size={14} />
-                    )}
-                    Generate Missing Table Descriptions (AI)
-                  </Button>
-                )}
+
               </div>
 
               {loadingGroups ? (
@@ -252,8 +202,8 @@ export default function KnowledgeBasePage() {
                           </h3>
                           <div className="flex flex-wrap gap-1.5 mt-1">
                             {group.tables.slice(0, 8).map(t => (
-                              <span key={t.id} className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent">
-                                {t.table_name}
+                              <span key={t} className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent">
+                                {t}
                               </span>
                             ))}
                             {group.tables.length > 8 && (

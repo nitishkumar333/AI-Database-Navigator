@@ -10,18 +10,11 @@ import { TbSettings } from "react-icons/tb";
 import { QueryContext } from "../contexts/SocketContext";
 import { host } from "../host";
 
-interface KnowledgeBaseEntry {
-  id: number;
-  connection_id: number;
-  table_name: string;
-  table_description: string;
-}
-
 interface KnowledgeBaseGroup {
   id: number;
   connection_id: number;
   name: string;
-  tables: KnowledgeBaseEntry[];
+  tables: string[];
   created_at: string;
 }
 
