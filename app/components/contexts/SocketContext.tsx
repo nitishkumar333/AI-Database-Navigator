@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useEffect, useState, useCallback } from "react";
+import { createContext, useEffect, useState, useContext, useCallback } from "react";
 import { host } from "../host";
+import { AuthContext } from "./AuthContext";
 
 export const QueryContext = createContext<{
   backendOnline: boolean;
@@ -21,18 +22,7 @@ export const QueryContext = createContext<{
 
 export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   const [backendOnline, setBackendOnline] = useState(false);
-  const [token, setToken] = useState<string>("");
-
-  // Auto-auth on mount
-  useEffect(() => {
-    const stored = localStorage.getItem("auth_token");
-    if (stored) {
-      setToken(stored);
-      checkHealth();
-    } else {
-      autoAuth();
-    }
-  }, []);
+  const { getToken, clearAuth } = useContext(AuthContext);
 
   // Health check polling
   useEffect(() => {
@@ -50,59 +40,19 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const autoAuth = async () => {
-    try {
-      // Try to register
-      let response = await fetch(`${host}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "admin@dataanalyst.local",
-          username: "admin",
-          password: "admin123",
-        }),
-      });
-
-      // Whether registration succeeded or not, try to login
-      response = await fetch(`${host}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "admin@dataanalyst.local",
-          password: "admin123",
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem("auth_token", data.access_token);
-        setToken(data.access_token);
-      }
-    } catch (e) {
-      console.error("Auto-auth failed:", e);
-    }
-  };
-
-  const clearAuth = () => {
-    localStorage.removeItem("auth_token");
-    setToken("");
-    window.location.reload();
-  };
-
-  const getToken = useCallback(() => {
-    return token || localStorage.getItem("auth_token") || "";
-  }, [token]);
-
   const sendQuery = async (
     question: string,
     connection_id?: number | null,
     knowledge_base_id?: number | null
   ): Promise<any | null> => {
-    const authToken = getToken();
-    if (!authToken) {
-      await autoAuth();
-    }
     const currentToken = getToken();
+    if (!currentToken) {
+      return {
+        success: false,
+        error: "Not authenticated",
+        response_text: "**Error:** Please log in first.",
+      };
+    }
 
     try {
       const response = await fetch(`${host}/api/query/chat`, {
@@ -123,8 +73,8 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
           clearAuth();
           return {
             success: false,
-            error: "Session expired. Reloading...",
-            response_text: "Session expired, reloading to authenticate.",
+            error: "Session expired. Please log in again.",
+            response_text: "Session expired. Please log in again.",
           };
         }
         const errorData = await response.json().catch(() => ({}));

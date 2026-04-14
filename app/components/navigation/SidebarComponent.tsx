@@ -3,6 +3,7 @@
 import React, { useContext, useEffect, useState } from "react";
 
 import { QueryContext } from "../contexts/SocketContext";
+import { AuthContext } from "../contexts/AuthContext";
 
 import { MdChatBubbleOutline } from "react-icons/md";
 import { GoDatabase } from "react-icons/go";
@@ -10,6 +11,7 @@ import { FaCircle } from "react-icons/fa6";
 import { MdOutlineSettingsInputComponent } from "react-icons/md";
 import { HiOutlineBookOpen } from "react-icons/hi2";
 import { IoIosWarning } from "react-icons/io";
+import { IoLogOutOutline } from "react-icons/io5";
 
 import HomeSubMenu from "@/app/components/navigation/HomeSubMenu";
 import DataSubMenu from "@/app/components/navigation/DataSubMenu";
@@ -40,6 +42,8 @@ const SidebarComponent: React.FC = () => {
   const { changePage, currentPage } = useContext(RouterContext);
   const { collections, loadingCollections } = useContext(CollectionContext);
   const { unsavedChanges } = useContext(SessionContext);
+  const { isAuthenticated, user, logout, onboardingStatus } =
+    useContext(AuthContext);
 
   const [items, setItems] = useState<
     {
@@ -88,6 +92,15 @@ const SidebarComponent: React.FC = () => {
     ];
     setItems(_items);
   }, [collections, unsavedChanges]);
+
+  // Don't render sidebar if not authenticated or onboarding not complete
+  if (
+    !isAuthenticated ||
+    !onboardingStatus ||
+    !onboardingStatus.onboarding_complete
+  ) {
+    return null;
+  }
 
   return (
     <Sidebar className="fade-in">
@@ -167,12 +180,30 @@ const SidebarComponent: React.FC = () => {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="w-full justify-start items-center cursor-default hover:bg-transparent">
-              <GoDatabase />
-              <span className="text-xs text-muted-foreground">
-                NL → SQL Platform
-              </span>
-            </SidebarMenuButton>
+            <div className="flex items-center justify-between w-full px-2 py-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs text-accent font-bold uppercase">
+                    {user?.username?.charAt(0) || "U"}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-primary font-medium truncate">
+                    {user?.username || "User"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {user?.email || ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="p-2 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
+                title="Logout"
+              >
+                <IoLogOutOutline size={16} />
+              </button>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

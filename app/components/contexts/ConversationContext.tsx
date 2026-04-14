@@ -11,6 +11,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { SessionContext } from "./SessionContext";
 import { RouterContext } from "./RouterContext";
+import { AuthContext } from "./AuthContext";
 import { host } from "../host";
 import { QueryContext } from "./SocketContext";
 
@@ -64,7 +65,7 @@ export const ConversationProvider = ({
 }) => {
   const { id } = useContext(SessionContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { getToken } = useContext(QueryContext);
+  const { getToken } = useContext(AuthContext);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(

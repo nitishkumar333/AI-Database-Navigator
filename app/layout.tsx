@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import { Manrope, Space_Grotesk } from "next/font/google";
+import { AuthProvider } from "./components/contexts/AuthContext";
 import { SessionProvider } from "./components/contexts/SessionContext";
 import SidebarComponent from "./components/navigation/SidebarComponent";
 import { CollectionProvider } from "./components/contexts/CollectionContext";
@@ -43,26 +44,28 @@ export default function RootLayout({
       <body
         className={`bg-background h-screen w-screen overflow-hidden ${space_grotesk.variable} ${manrope.variable} font-text antialiased flex`}
       >
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div></div>}>
           <ToastProvider>
-            <RouterProvider>
-              <QueryProvider>
-                <SessionProvider>
-                  <CollectionProvider>
-                    <ConversationProvider>
-                      <SidebarProvider>
-                        <SidebarComponent />
-                        <main className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
-                          <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt z-50" />
-                          {children}
-                        </main>
-                      </SidebarProvider>
-                      <Toaster />
-                    </ConversationProvider>
-                  </CollectionProvider>
-                </SessionProvider>
-              </QueryProvider>
-            </RouterProvider>
+            <AuthProvider>
+              <RouterProvider>
+                <QueryProvider>
+                  <SessionProvider>
+                    <CollectionProvider>
+                      <ConversationProvider>
+                        <SidebarProvider>
+                          <SidebarComponent />
+                          <main className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
+                            <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt z-50" />
+                            {children}
+                          </main>
+                        </SidebarProvider>
+                        <Toaster />
+                      </ConversationProvider>
+                    </CollectionProvider>
+                  </SessionProvider>
+                </QueryProvider>
+              </RouterProvider>
+            </AuthProvider>
           </ToastProvider>
         </Suspense>
       </body>
