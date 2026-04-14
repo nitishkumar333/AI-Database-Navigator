@@ -64,3 +64,41 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/onboarding-status")
+def get_onboarding_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check whether the user has completed onboarding (connection + knowledge base)."""
+    from app.models.connection import DBConnection
+    from app.models.knowledge import KnowledgeBaseGroup
+
+    has_connection = (
+        db.query(DBConnection)
+        .filter(DBConnection.user_id == current_user.id)
+        .first()
+        is not None
+    )
+
+    has_knowledge_base = False
+    if has_connection:
+        user_conn_ids = [
+            c.id
+            for c in db.query(DBConnection)
+            .filter(DBConnection.user_id == current_user.id)
+            .all()
+        ]
+        has_knowledge_base = (
+            db.query(KnowledgeBaseGroup)
+            .filter(KnowledgeBaseGroup.connection_id.in_(user_conn_ids))
+            .first()
+            is not None
+        )
+
+    return {
+        "has_connection": has_connection,
+        "has_knowledge_base": has_knowledge_base,
+        "onboarding_complete": has_connection and has_knowledge_base,
+    }
