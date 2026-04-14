@@ -15,10 +15,10 @@ import { QueryContext } from "../../contexts/SocketContext";
 import { host } from "../../host";
 
 interface KnowledgeBaseGroup {
-  id: int;
-  connection_id: int;
+  id: number;
+  connection_id: number;
   name: string;
-  tables: KnowledgeBaseEntry[];
+  tables: string[];
   created_at: string;
 }
 
