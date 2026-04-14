@@ -94,7 +94,7 @@ export default function LoginPage() {
         className="relative w-full max-w-md mx-4"
       >
         {/* Card */}
-        <div className="relative overflow-hidden rounded-2xl border border-foreground/60 bg-background_alt/80 backdrop-blur-xl shadow-2xl shadow-black/30">
+        <div className="relative overflow-hidden rounded-2xl border-foreground/60 backdrop-blur-xl shadow-black/30">
           {/* Accent top bar */}
           <div className="h-1 w-full bg-gradient-to-r from-accent via-highlight to-accent" />
 
@@ -129,7 +129,7 @@ export default function LoginPage() {
                 }}
                 className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
                   mode === "login"
-                    ? "bg-foreground text-primary shadow-sm"
+                    ? "bg-foreground/50 text-primary shadow-sm"
                     : "text-muted-foreground hover:text-primary"
                 }`}
               >
@@ -143,7 +143,7 @@ export default function LoginPage() {
                 }}
                 className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
                   mode === "register"
-                    ? "bg-foreground text-primary shadow-sm"
+                    ? "bg-foreground/50 text-primary shadow-sm"
                     : "text-muted-foreground hover:text-primary"
                 }`}
               >
@@ -252,16 +252,16 @@ export default function LoginPage() {
               <motion.button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-accent to-accent/80 text-background font-semibold text-sm hover:shadow-lg hover:shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
+                className="w-full tracking-wider py-3.5 rounded-xl bg-gradient-to-r from-accent to-accent/80 text-background font-semibold text-sm hover:shadow-lg hover:shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
                 whileHover={{ scale: loading ? 1 : 1.01 }}
                 whileTap={{ scale: loading ? 1 : 0.99 }}
               >
                 {loading ? (
                   <FaSpinner className="animate-spin" size={16} />
                 ) : mode === "login" ? (
-                  "Sign In"
+                  "SIGN IN"
                 ) : (
-                  "Create Account"
+                  "CREATE ACCOUNT"
                 )}
               </motion.button>
             </form>
@@ -281,11 +281,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-
-        {/* Version tag */}
-        <p className="text-center text-xs text-muted-foreground/50 mt-4">
-          v1.0.0 · NL → SQL Platform
-        </p>
       </motion.div>
     </div>
   );
