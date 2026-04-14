@@ -75,22 +75,16 @@ def chat_query(
 
     engine = get_user_engine(conn)
 
-    # If knowledge_base_id provided (which points to a KnowledgeBaseGroup)
+    # If knowledge_base_id provided (which points to a KnowledgeBase)
     # filter to those tables only
     table_filter = None
     if req.knowledge_base_id:
-        from app.models.knowledge import KnowledgeBaseGroupTable
-        kb_links = db.query(KnowledgeBaseGroupTable).filter(
-            KnowledgeBaseGroupTable.group_id == req.knowledge_base_id
-        ).all()
-        if kb_links:
-            kb_ids = [link.knowledge_base_id for link in kb_links]
-            kb_entries = db.query(KnowledgeBase).filter(
-                KnowledgeBase.id.in_(kb_ids),
-                KnowledgeBase.connection_id == conn.id,
-            ).all()
-            if kb_entries:
-                table_filter = [kb.table_name for kb in kb_entries]
+        kb_entry = db.query(KnowledgeBase).filter(
+            KnowledgeBase.id == req.knowledge_base_id,
+            KnowledgeBase.connection_id == conn.id,
+        ).first()
+        if kb_entry:
+            table_filter = kb_entry.tables
 
     result = nl_to_sql(conn.id, engine, req.question, table_filter=table_filter)
 

@@ -73,7 +73,7 @@ def get_onboarding_status(
 ):
     """Check whether the user has completed onboarding (connection + knowledge base)."""
     from app.models.connection import DBConnection
-    from app.models.knowledge import KnowledgeBaseGroup
+    from app.models.knowledge import KnowledgeBase
 
     has_connection = (
         db.query(DBConnection)
@@ -91,8 +91,8 @@ def get_onboarding_status(
             .all()
         ]
         has_knowledge_base = (
-            db.query(KnowledgeBaseGroup)
-            .filter(KnowledgeBaseGroup.connection_id.in_(user_conn_ids))
+            db.query(KnowledgeBase)
+            .filter(KnowledgeBase.connection_id.in_(user_conn_ids))
             .first()
             is not None
         )
