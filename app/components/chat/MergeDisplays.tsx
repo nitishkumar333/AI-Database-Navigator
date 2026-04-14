@@ -3,6 +3,7 @@ import { ResultPayload } from "@/app/types/chat";
 import RenderDisplay from "./RenderDisplay";
 import CodeDisplay from "./components/ViewCodeButton";
 import MergedDisplayTabs from "./components/MergedDisplayTabs";
+import CodeView from "./displays/QueryCode/CodeView";
 
 interface MergeDisplaysProps {
   payloadsToMerge: ResultPayload[];
@@ -27,6 +28,7 @@ const MergeDisplays: React.FC<MergeDisplaysProps> = ({
   handleResultPayloadChange,
 }) => {
   const [activeTab, setActiveTab] = useState(`${baseKey}-tab-0`);
+  const [showCode, setShowCode] = useState(false);
 
   if (!payloadsToMerge || payloadsToMerge.length === 0) {
     return null;
@@ -38,7 +40,13 @@ const MergeDisplays: React.FC<MergeDisplaysProps> = ({
         <CodeDisplay
           payload={payloadsToMerge}
           merged={true}
-          handleViewChange={handleViewChange}
+          handleViewChange={(view) => {
+            if (view === "code") {
+              setShowCode(!showCode);
+            } else {
+              handleViewChange(view, null);
+            }
+          }}
         />
         <div className="flex overflow-x-auto gap-2 flex-nowrap scrollbar-thin scrollbar-thumb-foreground scrollbar-track-background_alt">
           {payloadsToMerge.map((payload, idx) => {
@@ -59,6 +67,14 @@ const MergeDisplays: React.FC<MergeDisplaysProps> = ({
           })}
         </div>
       </div>
+      {showCode && (
+        <div className="w-full mt-2">
+          <CodeView
+            payload={payloadsToMerge}
+            handleViewChange={() => setShowCode(false)}
+          />
+        </div>
+      )}
       <div className="mt-2 flex flex-col gap-4">
         {payloadsToMerge.map((payload, idx) => {
           const tabValue = `${baseKey}-tab-${idx}`;

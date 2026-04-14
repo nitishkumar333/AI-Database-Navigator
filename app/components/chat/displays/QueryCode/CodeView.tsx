@@ -6,9 +6,6 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import CopyToClipboardButton from "@/app/components/navigation/CopyButton";
 import { IoClose } from "react-icons/io5";
-import { FaTable } from "react-icons/fa";
-import { useContext } from "react";
-import { RouterContext } from "@/app/components/contexts/RouterContext";
 import { FaCode } from "react-icons/fa6";
 
 interface CodeDisplayProps {
@@ -24,16 +21,10 @@ const CodeView: React.FC<CodeDisplayProps> = ({
   payload,
   handleViewChange,
 }) => {
-  const { changePage } = useContext(RouterContext);
-
   if (!payload) return null;
 
-  const routerChangeCollection = (collectionName: string) => {
-    changePage("collection", { source: collectionName }, true);
-  };
-
   return (
-    <div className="flex flex-col gap-6 overflow-hidden chat-animation">
+    <div className="flex flex-col gap-2 overflow-hidden chat-animation">
       <div className="w-full flex justify-between items-center">
         <div className="flex gap-2 items-center">
           <p>Source Code</p>
@@ -65,14 +56,6 @@ const CodeView: React.FC<CodeDisplayProps> = ({
           <div className="relative">
             <div className="overflow-y-scroll">
               <div className="absolute top-2 right-0 p-3 flex gap-1">
-                <Button
-                  className="bg-accent/10 hover:bg-accent/20 h-9 w-9"
-                  onClick={() =>
-                    routerChangeCollection(item.metadata.collection_name)
-                  }
-                >
-                  <FaTable size={14} className="text-accent" />
-                </Button>
                 <CopyToClipboardButton copyText={(item.code?.text || item.metadata?.code?.text || '')} />
               </div>
               <SyntaxHighlighter

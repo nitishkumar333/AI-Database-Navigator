@@ -57,6 +57,61 @@ interface RenderChatProps {
   handleSendQuery: (query: string) => void;
   isLastQuery: boolean;
 }
+interface ResultItemDisplayProps {
+  message: Message;
+  index: number;
+  handleViewChange: (
+    view: "chat" | "code" | "result",
+    payload: ResultPayload[] | null
+  ) => void;
+  handleResultPayloadChange: (
+    type: string,
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    payload: any,
+    collection_name: string
+  ) => void;
+}
+
+const ResultItemDisplay: React.FC<ResultItemDisplayProps> = ({
+  message,
+  index,
+  handleViewChange,
+  handleResultPayloadChange,
+}) => {
+  const [showCode, setShowCode] = useState(true);
+
+  return (
+    <div className="w-full flex flex-col justify-start items-start gap-3">
+      {(message.payload as ResultPayload).code && (
+        <CodeDisplay
+          payload={[message.payload as ResultPayload]}
+          merged={false}
+          handleViewChange={(view) => {
+            if (view === "code") {
+              setShowCode(!showCode);
+            } else {
+              handleViewChange(view, null);
+            }
+          }}
+        />
+      )}
+      {showCode && (
+        <div className="w-full mt-2">
+          <CodeView
+            payload={[message.payload as ResultPayload]}
+            handleViewChange={() => setShowCode(false)}
+          />
+        </div>
+      )}
+      <RenderDisplay
+        payload={message.payload as ResultPayload}
+        index={index}
+        messageId={message.id}
+        handleResultPayloadChange={handleResultPayloadChange}
+      />
+    </div>
+  );
+};
 
 const RenderChat: React.FC<RenderChatProps> = ({
   messages,
@@ -263,7 +318,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
     }
     return output;
   }, [displayMessages]);
-
+  console.log(displayMessages);
   return (
     <div
       className={`flex justify-start items-start w-full p-4 transition-all  duration-300`}
@@ -334,23 +389,14 @@ const RenderChat: React.FC<RenderChatProps> = ({
                         {/* Result Messages */}
                         {item.type !== "merged_result" &&
                           message.type === "result" && (
-                            <div className="w-full flex flex-col justify-start items-start gap-3">
-                              {(message.payload as ResultPayload).code && (
-                                <CodeDisplay
-                                  payload={[message.payload as ResultPayload]}
-                                  merged={false}
-                                  handleViewChange={handleViewChange}
-                                />
-                              )}
-                              <RenderDisplay
-                                payload={message.payload as ResultPayload}
-                                index={index}
-                                messageId={message.id}
-                                handleResultPayloadChange={
-                                  handleResultPayloadChange
-                                }
-                              />
-                            </div>
+                            <ResultItemDisplay
+                              message={message as Message}
+                              index={index}
+                              handleViewChange={handleViewChange}
+                              handleResultPayloadChange={
+                                handleResultPayloadChange
+                              }
+                            />
                           )}
                         {/* Text Messages */}
                         {item.type !== "merged_result" &&
@@ -475,14 +521,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
           )}
         </div>
       )}
-      {currentView === "code" && (
-        <div className="w-full flex flex-col gap-4">
-          <CodeView
-            payload={currentPayload as ResultPayload[]}
-            handleViewChange={handleViewChange}
-          />
-        </div>
-      )}
+
       {currentView === "result" && (
         <div className="w-full flex flex-col gap-4">
           <RenderDisplayView

@@ -5,8 +5,6 @@ import { FaCircle } from "react-icons/fa";
 import { IoArrowUpCircleSharp, IoClose } from "react-icons/io5";
 import { RiFlowChart } from "react-icons/ri";
 import { FaTrash } from "react-icons/fa";
-import CollectionSelection from "./components/CollectionSelection";
-import KnowledgeBaseSelection from "./components/KnowledgeBaseSelection";
 import { Button } from "@/components/ui/button";
 import { TbSettings } from "react-icons/tb";
 import { QueryContext } from "../contexts/SocketContext";
@@ -61,6 +59,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
   const [showRoute, setShowRoute] = useState<boolean>(false);
 
   const triggerQuery = (_query: string) => {
+    if (!selectedKnowledgeBaseId) return;
     if (_query.trim() === "" || currentStatus !== "") return;
     handleSendQuery(_query);
     setQuery("");
@@ -180,13 +179,15 @@ const QueryInput: React.FC<QueryInputProps> = ({
           className={`flex w-full bg-background_alt border border-foreground_alt p-2 rounded-xl items-center flex-col`}
         >
           <textarea
+            disabled={!selectedKnowledgeBaseId}
             placeholder={
-              query_length != 0
-                ? "Ask a follow up question..."
-                : "What will you ask today?"
+              !selectedKnowledgeBaseId
+                ? "Please select a Knowledge Base to chat..."
+                : query_length !== 0
+                  ? "Ask a follow up question..."
+                  : "What will you ask today?"
             }
-            className={`w-full p-2 bg-transparent placeholder:text-secondary outline-none text-sm leading-tight min-h-[5vh] max-h-[10vh] rounded-xl flex items-center justify-center"
-            }`}
+            className={`w-full p-2 bg-transparent ${!selectedKnowledgeBaseId ? "cursor-not-allowed opacity-50" : ""} placeholder:text-secondary outline-none text-sm leading-tight min-h-[5vh] max-h-[10vh] rounded-xl flex items-center justify-center`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -228,18 +229,10 @@ const QueryInput: React.FC<QueryInputProps> = ({
                 <TbSettings size={16} />
               </Button>
             )}
-            <CollectionSelection
-              selectedConnectionId={selectedConnectionId}
-              onConnectionChange={onConnectionChange}
-            />
-            <KnowledgeBaseSelection
-              selectedConnectionId={selectedConnectionId}
-              selectedKnowledgeBaseId={selectedKnowledgeBaseId}
-              onKnowledgeBaseChange={onKnowledgeBaseChange}
-            />
             <Button
               variant="ghost"
               size={"icon"}
+              disabled={!selectedKnowledgeBaseId || query.trim() === ""}
               onClick={() => triggerQuery(query)}
             >
               <IoArrowUpCircleSharp size={16} />
