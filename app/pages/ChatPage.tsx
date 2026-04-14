@@ -8,6 +8,8 @@ import { MdChatBubbleOutline } from "react-icons/md";
 
 import QueryInput from "../components/chat/QueryInput";
 import RenderChat from "../components/chat/RenderChat";
+import CollectionSelection from "../components/chat/components/CollectionSelection";
+import KnowledgeBaseSelection from "../components/chat/components/KnowledgeBaseSelection";
 import { QueryContext } from "../components/contexts/SocketContext";
 import { SessionContext } from "../components/contexts/SessionContext";
 import { ConversationContext } from "../components/contexts/ConversationContext";
@@ -104,30 +106,30 @@ export default function ChatPage() {
     const messages: Message[] = [];
 
     // If SQL was generated, add code display as a result message
-    if (result.generated_sql) {
-      const codeMessage: Message = {
-        type: "result",
-        id: uuidv4(),
-        conversation_id: conversation.id,
-        user_id: id || "",
-        query_id: query_id,
-        payload: {
-          type: "generic",
-          metadata: {
-            row_count: result.row_count || 0,
-            latency_ms: result.latency_ms || 0,
-            connection: result.connection_name || "",
-          },
-          code: {
-            language: "sql",
-            title: "Generated SQL",
-            text: result.generated_sql || "",
-          },
-          objects: [],
-        } as ResultPayload,
-      };
-      messages.push(codeMessage);
-    }
+    // if (result.generated_sql) {
+    //   const codeMessage: Message = {
+    //     type: "result",
+    //     id: uuidv4(),
+    //     conversation_id: conversation.id,
+    //     user_id: id || "",
+    //     query_id: query_id,
+    //     payload: {
+    //       type: "generic",
+    //       metadata: {
+    //         row_count: result.row_count || 0,
+    //         latency_ms: result.latency_ms || 0,
+    //         connection: result.connection_name || "",
+    //       },
+    //       code: {
+    //         language: "sql",
+    //         title: "Generated SQL",
+    //         text: result.generated_sql || "",
+    //       },
+    //       objects: [],
+    //     } as ResultPayload,
+    //   };
+    //   messages.push(codeMessage);
+    // }
 
     // If there are rows to display, add a table result
     if (result.success && result.rows && result.rows.length > 0) {
@@ -236,16 +238,32 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
-      <div className="flex w-full justify-start items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background">
+      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background border-b border-foreground/5 pb-2">
         <div className="flex gap-2 items-center justify-center fade-in">
-          <p className="text-primary text-sm">
+          <p className="text-primary text-sm font-medium opacity-80">
             {currentTitle && currentTitle != "New Conversation"
               ? currentTitle
-              : ""}
+              : "New Conversation"}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <CollectionSelection
+            selectedConnectionId={selectedConnectionId}
+            onConnectionChange={(connId) => {
+              setSelectedConnectionId(connId);
+              if (connId !== selectedConnectionId) {
+                setSelectedKnowledgeBaseId(null);
+              }
+            }}
+          />
+          <KnowledgeBaseSelection
+            selectedConnectionId={selectedConnectionId}
+            selectedKnowledgeBaseId={selectedKnowledgeBaseId}
+            onKnowledgeBaseChange={setSelectedKnowledgeBaseId}
+          />
+        </div>
       </div>
-      {currentConversation != null && <Separator className="w-full" />}
+      {currentConversation != null && <Separator className="w-full hidden" />}
 
       <div className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-center items-center">
         <div className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] h-[80vh]">
