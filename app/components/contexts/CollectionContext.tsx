@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Collection } from "@/app/types/objects";
 import { SessionContext } from "./SessionContext";
 import { ToastContext } from "./ToastContext";
+import { AuthContext } from "./AuthContext";
 import { QueryContext } from "./SocketContext";
 import { host } from "../host";
 
@@ -38,7 +39,8 @@ export const CollectionProvider = ({
 }) => {
   const { id, fetchCollectionFlag, initialized } = useContext(SessionContext);
   const { showSuccessToast } = useContext(ToastContext);
-  const { getToken, backendOnline, clearAuth } = useContext(QueryContext);
+  const { getToken, clearAuth, isAuthenticated } = useContext(AuthContext);
+  const { backendOnline } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
@@ -46,10 +48,10 @@ export const CollectionProvider = ({
   const initialFetch = useRef(false);
 
   useEffect(() => {
-    if (initialFetch.current || !id || !backendOnline) return;
+    if (initialFetch.current || !id || !backendOnline || !isAuthenticated) return;
     initialFetch.current = true;
     fetchCollections();
-  }, [id, backendOnline]);
+  }, [id, backendOnline, isAuthenticated]);
 
   useEffect(() => {
     if (initialFetch.current) {
