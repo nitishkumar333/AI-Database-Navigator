@@ -105,32 +105,6 @@ export default function ChatPage() {
     // Build response messages
     const messages: Message[] = [];
 
-    // If SQL was generated, add code display as a result message
-    // if (result.generated_sql) {
-    //   const codeMessage: Message = {
-    //     type: "result",
-    //     id: uuidv4(),
-    //     conversation_id: conversation.id,
-    //     user_id: id || "",
-    //     query_id: query_id,
-    //     payload: {
-    //       type: "generic",
-    //       metadata: {
-    //         row_count: result.row_count || 0,
-    //         latency_ms: result.latency_ms || 0,
-    //         connection: result.connection_name || "",
-    //       },
-    //       code: {
-    //         language: "sql",
-    //         title: "Generated SQL",
-    //         text: result.generated_sql || "",
-    //       },
-    //       objects: [],
-    //     } as ResultPayload,
-    //   };
-    //   messages.push(codeMessage);
-    // }
-
     // If there are rows to display, add a table result
     if (result.success && result.rows && result.rows.length > 0) {
       const tableMessage: Message = {
