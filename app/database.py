@@ -23,5 +23,5 @@ def get_db():
 
 
 def init_db():
-    from app.models import user, connection, knowledge, query_history  # noqa
+    from app.models import user, connection, knowledge, query_history, conversation  # noqa
     Base.metadata.create_all(bind=engine)

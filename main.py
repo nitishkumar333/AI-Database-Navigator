@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
-from app.routers import auth, connections, schema, knowledge, query, history
+from app.routers import auth, connections, schema, knowledge, query, history, conversations
 
 app = FastAPI(
     title="AI Data Analyst Platform",
@@ -25,6 +25,7 @@ app.include_router(schema.router)
 app.include_router(knowledge.router)
 app.include_router(query.router)
 app.include_router(history.router)
+app.include_router(conversations.router)
 
 
 @app.on_event("startup")

@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
+import json
 from app.database import get_db
 from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.models.query_history import QueryHistory
+from app.models.conversation import Conversation, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.nl_to_sql import nl_to_sql, execute_raw_sql
@@ -29,6 +31,8 @@ class ChatRequest(BaseModel):
     question: str
     connection_id: int | None = None
     knowledge_base_id: int | None = None
+    conversation_id: str | None = None
+    query_id: str | None = None
 
 
 def _get_connection(conn_id: int, user: User, db: Session) -> DBConnection:
@@ -103,7 +107,7 @@ def chat_query(
     print("schema_context", schema_context)
 
     sql_agent = SQLAgent(engine, schema_context)
-    result = sql_agent.run_query(req.question, conn.id) # TODO: replace conn.id with conversation_id
+    result = sql_agent.run_query(req.question, req.conversation_id or str(conn.id))
 
     # Save to history
     history = QueryHistory(
@@ -117,6 +121,47 @@ def chat_query(
         latency_ms=result.get("latency_ms", 0),
     )
     db.add(history)
+
+    # Save conversation messages if conversation_id provided
+    if req.conversation_id:
+        # Ensure the conversation exists
+        conv = db.query(Conversation).filter(
+            Conversation.id == req.conversation_id,
+            Conversation.user_id == current_user.id,
+        ).first()
+        if conv:
+            # Save user message
+            user_msg = ConversationMessage(
+                conversation_id=req.conversation_id,
+                role="user",
+                content=req.question,
+                message_type="text",
+                metadata_json="{}",
+                query_id=req.query_id,
+            )
+            db.add(user_msg)
+
+            # Save assistant response
+            assistant_metadata = {
+                "generated_sql": result.get("generated_sql", ""),
+                "columns": result.get("columns", []),
+                "rows": result.get("rows", [])[:100],  # Cap stored rows
+                "row_count": result.get("row_count", 0),
+                "latency_ms": result.get("latency_ms", 0),
+                "success": result.get("success", False),
+                "error": result.get("error", ""),
+            }
+            msg_type = "result" if result.get("success") and result.get("rows") else "text"
+            assistant_msg = ConversationMessage(
+                conversation_id=req.conversation_id,
+                role="assistant",
+                content=result.get("response_text", ""),
+                message_type=msg_type,
+                metadata_json=json.dumps(assistant_metadata, default=str),
+                query_id=req.query_id,
+            )
+            db.add(assistant_msg)
+
     db.commit()
 
     return {
