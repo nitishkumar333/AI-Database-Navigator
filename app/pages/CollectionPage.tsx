@@ -165,7 +165,7 @@ export default function CollectionPage() {
         {/* Header */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <button
-            onClick={() => changePage("data", {}, true)}
+            onClick={() => changePage("settings", {}, true)}
             className="text-muted-foreground hover:text-primary transition-colors"
           >
             <GoArrowLeft size={20} />

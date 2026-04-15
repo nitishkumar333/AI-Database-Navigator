@@ -39,7 +39,7 @@ const DataConfig: React.FC<DataConfigProps> = ({
   const clearAnalysis = () => {
     if (!collection) return;
     deleteCollection(collection.name);
-    changePage("data", {}, true);
+    changePage("settings", {}, true);
   };
 
   if (!collection) {

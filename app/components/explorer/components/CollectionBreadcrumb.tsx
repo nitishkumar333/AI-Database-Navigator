@@ -25,7 +25,7 @@ const CollectionBreadcrumb: React.FC<CollectionBreadcrumbProps> = ({
         <BreadcrumbItem>
           <BreadcrumbLink
             className="cursor-pointer text-lg flex items-center gap-2"
-            onClick={() => changePage("data", {}, true)}
+            onClick={() => changePage("settings", {}, true)}
           >
             Data Dashboard
           </BreadcrumbLink>

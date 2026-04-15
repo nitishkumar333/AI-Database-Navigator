@@ -10,6 +10,7 @@ import { host } from "../components/host";
 import ConnectionForm from "../components/shared/ConnectionForm";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { RouterContext } from "../components/contexts/RouterContext";
 import {
   GoDatabase,
   GoPlus,
@@ -32,6 +33,7 @@ export default function SettingsPage() {
   const { fetchCollections } = useContext(CollectionContext);
   const { getToken } = useContext(AuthContext);
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
+  const { changePage } = useContext(RouterContext);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,10 +149,17 @@ export default function SettingsPage() {
             connections.map((conn, index) => (
               <motion.div
                 key={conn.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="flex items-center justify-between p-4 border border-foreground rounded-xl hover:border-accent/40 transition-colors group"
+                transition={{ delay: index * 0.08, duration: 0.4 }}
+                className="cursor-pointer flex items-center justify-between p-4 border border-foreground rounded-xl hover:border-accent/40 transition-colors group"
+                onClick={() =>
+                  changePage(
+                    "collection",
+                    { collection: conn.name },
+                    true
+                  )
+                }
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
