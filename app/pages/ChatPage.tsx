@@ -93,8 +93,8 @@ export default function ChatPage() {
     addQueryToConversation(conversation.id, trimmedQuery, query_id);
     setConversationStatus("Thinking...", conversation.id);
 
-    // Send via REST API — now passing connection_id and knowledge_base_id
-    const result = await sendQuery(trimmedQuery, selectedConnectionId, selectedKnowledgeBaseId);
+    // Send via REST API — now passing connection_id, knowledge_base_id, conversation_id, and query_id
+    const result = await sendQuery(trimmedQuery, selectedConnectionId, selectedKnowledgeBaseId, conversation.id, query_id);
 
     if (!result) {
       setConversationStatus("", conversation.id);

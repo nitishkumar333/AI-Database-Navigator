@@ -7,6 +7,8 @@ import {
   Message,
   TextPayload,
   SuggestionPayload,
+  ResultPayload,
+  ResponsePayload,
 } from "@/app/types/chat";
 import { v4 as uuidv4 } from "uuid";
 import { SessionContext } from "./SessionContext";
@@ -65,7 +67,7 @@ export const ConversationProvider = ({
 }) => {
   const { id } = useContext(SessionContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { getToken } = useContext(AuthContext);
+  const { getToken, isAuthenticated } = useContext(AuthContext);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(
@@ -74,17 +76,205 @@ export const ConversationProvider = ({
   const [creatingNewConversation, setCreatingNewConversation] = useState(false);
   const initialized = useRef(false);
 
-  // Auto-create a first conversation on mount
+  // Fetch existing conversations from backend on mount
   useEffect(() => {
-    if (initialized.current || !id) return;
+    if (initialized.current || !id || !isAuthenticated) return;
     initialized.current = true;
-    startNewConversation();
-  }, [id]);
+    fetchConversationsFromBackend();
+  }, [id, isAuthenticated]);
 
-  const startNewConversation = () => {
+  const fetchConversationsFromBackend = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      // 1. Get conversation list
+      const listRes = await fetch(`${host}/api/conversations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!listRes.ok) {
+        // No conversations yet — start a fresh one
+        startNewConversation();
+        return;
+      }
+
+      const convList = await listRes.json();
+      if (convList.length === 0) {
+        startNewConversation();
+        return;
+      }
+
+      // 2. Fetch full details (with messages) for each conversation
+      const fullConversations: Conversation[] = [];
+      for (const convSummary of convList) {
+        const detailRes = await fetch(
+          `${host}/api/conversations/${convSummary.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!detailRes.ok) continue;
+        const detail = await detailRes.json();
+
+        // Rebuild the frontend Conversation object from backend data
+        const conv = rebuildConversation(detail);
+        fullConversations.push(conv);
+      }
+
+      if (fullConversations.length > 0) {
+        setConversations(fullConversations);
+        setCurrentConversation(fullConversations[0].id);
+      } else {
+        startNewConversation();
+      }
+    } catch (e) {
+      console.error("Failed to fetch conversations:", e);
+      startNewConversation();
+    }
+  };
+
+  /**
+   * Rebuild a frontend Conversation from the backend detail response.
+   * Groups messages by query_id into Query objects.
+   */
+  const rebuildConversation = (detail: any): Conversation => {
+    const queries: { [key: string]: Query } = {};
+    let queryIndex = 0;
+
+    // Group messages by query_id
+    const messagesByQuery: { [key: string]: any[] } = {};
+    for (const msg of detail.messages || []) {
+      const qid = msg.query_id || "unknown";
+      if (!messagesByQuery[qid]) {
+        messagesByQuery[qid] = [];
+      }
+      messagesByQuery[qid].push(msg);
+    }
+
+    for (const [queryId, msgs] of Object.entries(messagesByQuery)) {
+      const frontendMessages: Message[] = [];
+      let queryText = "";
+
+      for (const msg of msgs as any[]) {
+        if (msg.role === "user") {
+          queryText = msg.content;
+          // User message
+          frontendMessages.push({
+            type: "User",
+            id: uuidv4(),
+            query_id: queryId,
+            conversation_id: detail.id,
+            user_id: id || "",
+            payload: {
+              type: "text",
+              metadata: {},
+              code: { language: "", title: "", text: "" },
+              objects: [msg.content],
+            } as ResultPayload,
+          });
+        } else if (msg.role === "assistant") {
+          let meta: any = {};
+          try {
+            meta = JSON.parse(msg.metadata_json || "{}");
+          } catch {}
+
+          // If there are rows, add a table result message
+          if (
+            msg.message_type === "result" &&
+            meta.success &&
+            meta.rows &&
+            meta.rows.length > 0
+          ) {
+            frontendMessages.push({
+              type: "result",
+              id: uuidv4(),
+              conversation_id: detail.id,
+              user_id: id || "",
+              query_id: queryId,
+              payload: {
+                type: "table",
+                metadata: {
+                  row_count: meta.row_count || 0,
+                  latency_ms: meta.latency_ms || 0,
+                },
+                code: {
+                  language: "sql",
+                  title: "Generated SQL",
+                  text: meta.generated_sql || "",
+                },
+                objects: meta.rows.slice(0, 100),
+              } as ResultPayload,
+            });
+          }
+
+          // Text response
+          const statusText = meta.success
+            ? msg.content
+            : `❌ ${meta.error || msg.content || "Query failed"}`;
+
+          frontendMessages.push({
+            type: "text",
+            id: uuidv4(),
+            conversation_id: detail.id,
+            user_id: id || "",
+            query_id: queryId,
+            payload: {
+              type: "response",
+              metadata: {},
+              objects: [{ text: statusText }],
+            } as ResponsePayload,
+          });
+        }
+      }
+
+      queries[queryId] = {
+        id: queryId,
+        query: queryText,
+        messages: frontendMessages,
+        finished: true,
+        query_start: new Date(
+          (msgs as any[])[0]?.created_at || new Date()
+        ),
+        query_end: new Date(
+          (msgs as any[])[(msgs as any[]).length - 1]?.created_at || new Date()
+        ),
+        feedback: null,
+        NER: null,
+        index: queryIndex++,
+      };
+    }
+
+    return {
+      id: detail.id,
+      name: detail.name || "New Conversation",
+      queries,
+      current: "",
+      timestamp: new Date(detail.created_at || new Date()),
+      initialized: Object.keys(queries).length > 0,
+      error: false,
+    };
+  };
+
+  const startNewConversation = async () => {
     if (creatingNewConversation) return;
     setCreatingNewConversation(true);
     const conversation_id = uuidv4();
+
+    // Create on backend
+    try {
+      const token = getToken();
+      if (token) {
+        await fetch(`${host}/api/conversations`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ id: conversation_id, name: "New Conversation" }),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to create conversation on backend:", e);
+    }
+
     const newConversation: Conversation = {
       ...initialConversation,
       id: conversation_id,
@@ -98,7 +288,20 @@ export const ConversationProvider = ({
     }
   };
 
-  const removeConversation = (conversation_id: string) => {
+  const removeConversation = async (conversation_id: string) => {
+    // Delete on backend
+    try {
+      const token = getToken();
+      if (token) {
+        await fetch(`${host}/api/conversations/${conversation_id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (e) {
+      console.error("Failed to delete conversation on backend:", e);
+    }
+
     setConversations((prev) => prev.filter((c) => c.id !== conversation_id));
     if (currentConversation === conversation_id) {
       setCurrentConversation(null);
@@ -118,7 +321,24 @@ export const ConversationProvider = ({
     );
   };
 
-  const setConversationTitle = (title: string, conversationId: string) => {
+  const setConversationTitle = async (title: string, conversationId: string) => {
+    // Update on backend
+    try {
+      const token = getToken();
+      if (token) {
+        await fetch(`${host}/api/conversations/${conversationId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ name: title }),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to update conversation title:", e);
+    }
+
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId ? { ...c, name: title } : c
