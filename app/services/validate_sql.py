@@ -3,66 +3,20 @@ import re
 import sqlparse
 from typing import Dict, Any, Tuple
 from sqlalchemy import text, inspect
-from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import get_settings
-from app.utils.db_manager import get_user_engine
 
 settings = get_settings()
-
-_llm = None
-
-
-def get_llm():
-    global _llm
-    if _llm is None:
-        _llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0,
-        )
-    return _llm
-
-
-def refine_sql_from_markdown(text_input: str) -> str:
-    # Remove markdown code block syntax (```sql, ```, etc.)
-    text_input = re.sub(r'```sql\s*', '', text_input)
-    text_input = re.sub(r'```\s*', '', text_input)
-    
-    # Replace \n literals with actual spaces
-    text_input = text_input.replace('\\n', ' ')
-    
-    # Replace actual newlines with spaces
-    text_input = text_input.replace('\n', ' ')
-    
-    # Replace tabs with spaces
-    text_input = text_input.replace('\t', ' ')
-    
-    # Remove extra whitespace (multiple spaces to single space)
-    text_input = re.sub(r'\s+', ' ', text_input)
-    
-    # Clean up whitespace around parentheses and commas
-    text_input = re.sub(r'\s*\(\s*', '(', text_input)
-    text_input = re.sub(r'\s*\)\s*', ')', text_input)
-    text_input = re.sub(r'\s*,\s*', ', ', text_input)
-    text_input = re.sub(r'\s*;\s*', ';', text_input)
-    
-    # Trim leading/trailing whitespace
-    text_input = text_input.strip()
-    
-    # Ensure semicolon at the end if missing
-    if text_input and not text_input.endswith(';'):
-        text_input += ';'
-    
-    return text_input
-
 
 class ValidateSqlQuery:
     def __init__(self, engine):
         self.engine = engine
 
     def validate_sql_query(self, sql_query: str) -> Dict[str, Any]:
+        print("validate_sql_query", sql_query)
+        sql_query = refine_sql_from_markdown(sql_query)
+        print("refine_sql_from_markdown", sql_query)
         result = {
-            'sql_query': sql_query.strip(),
+            'sql_query': sql_query,
             'validation_query': None,
             'validation_result': {}
         }
@@ -81,7 +35,9 @@ class ValidateSqlQuery:
         # Step 2: Validate against database schema
         schema_valid, schema_reason, validation_query = self._validate_against_schema(sql_query)
         result['validation_query'] = validation_query
-        
+        print("schema_valid", schema_valid)
+        print("schema_reason", schema_reason)
+        print("validation_query", validation_query)
         if not schema_valid:
             result['validation_result'] = {
                 'is_safe': False,
@@ -203,6 +159,38 @@ class ValidateSqlQuery:
                 "error": str(error),
             }
 
+def refine_sql_from_markdown(text_input: str) -> str:
+    # Remove markdown code block syntax (```sql, ```, etc.)
+    text_input = re.sub(r'```sql\s*', '', text_input)
+    text_input = re.sub(r'```\s*', '', text_input)
+    
+    # Replace \n literals with actual spaces
+    text_input = text_input.replace('\\n', ' ')
+    
+    # Replace actual newlines with spaces
+    text_input = text_input.replace('\n', ' ')
+    
+    # Replace tabs with spaces
+    text_input = text_input.replace('\t', ' ')
+    
+    # Remove extra whitespace (multiple spaces to single space)
+    text_input = re.sub(r'\s+', ' ', text_input)
+    
+    # Clean up whitespace around parentheses and commas
+    text_input = re.sub(r'\s*\(\s*', '(', text_input)
+    text_input = re.sub(r'\s*\)\s*', ')', text_input)
+    text_input = re.sub(r'\s*,\s*', ', ', text_input)
+    text_input = re.sub(r'\s*;\s*', ';', text_input)
+    
+    # Trim leading/trailing whitespace
+    text_input = text_input.strip()
+    
+    # Ensure semicolon at the end if missing
+    if text_input and not text_input.endswith(';'):
+        text_input += ';'
+
+    return text_input
+
 def get_schema_context(engine, table_names: list) -> str:
     """Build schema context string for the given tables."""
     inspector = inspect(engine)
@@ -241,98 +229,6 @@ def get_schema_context(engine, table_names: list) -> str:
             context_parts.append(f"  TABLE {table_name}: (unable to read schema)")
 
     return "\n\n".join(context_parts)
-
-
-def nl_to_sql(conn_id: int, engine, question: str, connection_db_session=None, table_filter: list = None) -> dict:
-    """Convert natural language question to SQL and execute it.
-    
-    Args:
-        table_filter: If provided, only use these table names for schema context.
-                      This allows scoping queries to a knowledge base subset.
-    """
-    start_time = time.time()
-
-    # Step 1: Get schema — filtered to KB tables if provided, else all tables
-    inspector = inspect(engine)
-    all_tables = inspector.get_table_names()
-
-    if table_filter:
-        # Only use tables that exist in both the filter and the actual DB
-        context_tables = [t for t in table_filter if t in all_tables]
-        if not context_tables:
-            context_tables = all_tables  # Fallback if filter matches nothing
-    else:
-        context_tables = all_tables
-    schema_context = get_schema_context(engine, context_tables)
-    # Step 2: Build prompt and generate SQL
-    prompt = f"""You are a SQL expert. Generate a PostgreSQL SELECT query for the following question.
-
-DATABASE SCHEMA:
-{schema_context}
-
-RULES:
-1. Generate ONLY a SELECT query - no INSERT, UPDATE, DELETE, DROP, etc.
-2. Use proper PostgreSQL syntax
-3. Use proper table and column names from the schema
-4. Add appropriate LIMIT clause if the query could return many rows
-5. Return ONLY the SQL query, no explanations
-
-USER QUESTION: {question}
-
-SQL QUERY:"""
-
-    llm = get_llm()
-    response = llm.invoke(prompt)
-    generated_sql = response.content.strip()
-
-    # Clean up SQL
-    refined_sql = refine_sql_from_markdown(generated_sql)
-
-    # Step 3: Validate SQL using the user-provided logic
-    validation = ValidateSqlQuery(engine)
-    result = validation.validate_sql_query(refined_sql)
-
-    # Step 4: Execute query if safe
-    if result['validation_result'].get('is_safe') and result['validation_result'].get('schema_validated'):
-        try:
-            with engine.connect() as connection:
-                query_result = connection.execute(text(result['sql_query']))
-                columns = list(query_result.keys())
-                rows = [dict(zip(columns, row)) for row in query_result.fetchall()]
-
-            latency_ms = (time.time() - start_time) * 1000
-
-            return {
-                "success": True,
-                "question": question,
-                "generated_sql": result['sql_query'],
-                "columns": columns,
-                "rows": rows,
-                "row_count": len(rows),
-                "latency_ms": round(latency_ms, 2),
-                "relevant_tables": all_tables,
-            }
-        except Exception as error:
-            latency_ms = (time.time() - start_time) * 1000
-            return {
-                "success": False,
-                "question": question,
-                "generated_sql": result['sql_query'],
-                "error": str(error),
-                "latency_ms": round(latency_ms, 2),
-                "relevant_tables": all_tables,
-            }
-    else:
-        # Not safe or schema not valid
-        latency_ms = (time.time() - start_time) * 1000
-        return {
-            "success": False,
-            "question": question,
-            "generated_sql": refined_sql,
-            "error": result['validation_result'].get('explanation', 'Validation Failed'),
-            "latency_ms": round(latency_ms, 2),
-            "relevant_tables": all_tables,
-        }
 
 
 def execute_raw_sql(engine, sql: str) -> dict:

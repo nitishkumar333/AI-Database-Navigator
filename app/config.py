@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./app_metadata.db"
     GEMINI_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
-    CHROMA_PERSIST_DIR: str = "./chroma_data"
 
     class Config:
         env_file = ".env"

@@ -10,6 +10,9 @@ from app.models.query_history import QueryHistory
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.nl_to_sql import nl_to_sql, execute_raw_sql
+from app.services.sql_agent import SQLAgent
+from app.services.validate_sql import get_schema_context
+from sqlalchemy import text, inspect
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
@@ -53,7 +56,6 @@ def chat_query(
     Otherwise, use the first available connection for the user.
     Returns structured response with SQL, results, and formatted text.
     """
-    print("req", req)
     # Find connection
     conn = None
     if req.connection_id:
@@ -85,8 +87,23 @@ def chat_query(
         ).first()
         if kb_entry:
             table_filter = kb_entry.tables
+    
+    inspector = inspect(engine)
+    all_tables = inspector.get_table_names()
+    if table_filter:
+        # Only use tables that exist in both the filter and the actual DB
+        context_tables = [t for t in table_filter if t in all_tables]
+        if not context_tables:
+            context_tables = all_tables  # Fallback if filter matches nothing
+    else:
+        context_tables = all_tables
+    
+    schema_context = get_schema_context(engine, context_tables)
 
-    result = nl_to_sql(conn.id, engine, req.question, table_filter=table_filter)
+    print("schema_context", schema_context)
+
+    sql_agent = SQLAgent(engine, schema_context)
+    result = sql_agent.run_query(req.question, conn.id) # TODO: replace conn.id with conversation_id
 
     # Save to history
     history = QueryHistory(
@@ -102,42 +119,8 @@ def chat_query(
     db.add(history)
     db.commit()
 
-    # Build formatted response text
-    sql = result.get("generated_sql", "")
-    rows = result.get("rows", [])
-    cols = result.get("columns", [])
-    row_count = result.get("row_count", 0)
-    latency_ms = result.get("latency_ms", 0)
-
-    if result.get("success"):
-        md_table = ""
-        if rows and cols:
-            md_table = "\n\n| " + " | ".join(str(c) for c in cols) + " |\n"
-            md_table += "| " + " | ".join(["---"] * len(cols)) + " |\n"
-            for row in rows[:50]:
-                md_table += (
-                    "| "
-                    + " | ".join(str(row.get(c, ""))[:50] for c in cols)
-                    + " |\n"
-                )
-            if row_count > 50:
-                md_table += f"\n*Showing 50 of {row_count} rows.*\n"
-
-        response_text = (
-            f"**Query executed successfully** ({latency_ms:.0f}ms, {row_count} rows)\n\n"
-            f"```sql\n{sql}\n```\n"
-            f"{md_table}"
-        )
-    else:
-        error_msg = result.get("error", "Unknown error occurred")
-        response_text = f"**Query failed**\n\n"
-        if sql:
-            response_text += f"```sql\n{sql}\n```\n\n"
-        response_text += f"**Error:** {error_msg}"
-
     return {
         **result,
-        "response_text": response_text,
         "connection_name": conn.name,
         "connection_id": conn.id,
     }
