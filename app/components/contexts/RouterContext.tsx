@@ -93,7 +93,6 @@ export const RouterProvider = ({ children }: { children: React.ReactNode }) => {
     // Validate page parameter against known pages
     const validPages = [
       "chat",
-      "data",
       "collection",
       "settings",
       "knowledge",

@@ -132,7 +132,7 @@ export default function ChatPage() {
 
     // Add text response (summary/status)
     const statusText = result.success
-      ? `✅ Query returned ${result.row_count || 0} rows in ${Math.round(result.latency_ms || 0)}ms`
+      ? result.response_text
       : `❌ ${result.error || "Query failed"}`;
     
     const textMessage: Message = {

@@ -14,7 +14,6 @@ import { IoIosWarning } from "react-icons/io";
 import { IoLogOutOutline } from "react-icons/io5";
 
 import HomeSubMenu from "@/app/components/navigation/HomeSubMenu";
-import DataSubMenu from "@/app/components/navigation/DataSubMenu";
 
 import { public_path } from "@/app/components/host";
 
@@ -63,19 +62,6 @@ const SidebarComponent: React.FC = () => {
         mode: ["chat"],
         icon: <MdChatBubbleOutline />,
         onClick: () => changePage("chat", {}, true, unsavedChanges),
-      },
-      {
-        title: "Data",
-        mode: ["data", "collection"],
-        icon:
-          collections.length === 0 ? (
-            <IoIosWarning className="text-warning" />
-          ) : (
-            <GoDatabase />
-          ),
-        warning: collections.length === 0,
-        loading: loadingCollections,
-        onClick: () => changePage("data", {}, true, unsavedChanges),
       },
       {
         title: "Knowledge Base",
@@ -171,9 +157,6 @@ const SidebarComponent: React.FC = () => {
         <Separator />
 
         {currentPage === "chat" && <HomeSubMenu />}
-        {(currentPage === "data" || currentPage === "collection") && (
-          <DataSubMenu />
-        )}
         {currentPage === "knowledge" && <SettingsSubMenu />}
         {currentPage === "settings" && <SettingsSubMenu />}
       </SidebarContent>
