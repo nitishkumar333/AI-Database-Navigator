@@ -42,7 +42,12 @@ next-env.d.ts
 .vscode
 
 venv/
+/venv/
 .venv/
 .env
-
-
+*.db*
+*.sqlite*
+*.pyc
+__pycache__/
+*.cpython-310.pyc
+*.cpython-312.pyc
