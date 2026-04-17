@@ -4,6 +4,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AuthContext } from "../components/contexts/AuthContext";
 import { ToastContext } from "../components/contexts/ToastContext";
+import { CollectionContext } from "../components/contexts/CollectionContext";
 import { host } from "../components/host";
 import ConnectionForm from "../components/shared/ConnectionForm";
 import KnowledgeBaseForm from "../components/shared/KnowledgeBaseForm";
@@ -48,6 +49,7 @@ export default function OnboardingPage() {
   const { user, onboardingStatus, refreshOnboardingStatus } =
     useContext(AuthContext);
   const { showSuccessToast } = useContext(ToastContext);
+  const { fetchCollections } = useContext(CollectionContext);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [savedConnectionId, setSavedConnectionId] = useState<number | null>(
@@ -88,6 +90,7 @@ export default function OnboardingPage() {
   const handleConnectionSaved = async (connection: Connection) => {
     setSavedConnectionId(connection.id);
     await refreshOnboardingStatus();
+    fetchCollections();
     setCurrentStep(2);
   };
 
@@ -101,6 +104,7 @@ export default function OnboardingPage() {
     showSuccessToast("Setup Complete", "Welcome to AI Data Analyst!");
     // Small delay for the toast to show, then the page.tsx will detect onboarding_complete
     await refreshOnboardingStatus();
+    fetchCollections();
     setCompleting(false);
   };
 
