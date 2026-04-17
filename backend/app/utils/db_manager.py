@@ -3,7 +3,7 @@ from sqlalchemy.pool import QueuePool
 from typing import Dict
 from app.utils.security import decrypt_value
 from cachetools import TTLCache
-
+from fastapi import HTTPException
 # Cache of user DB engines
 # Prevents memory leaks by caching up to 100 engines, 
 # and dropping connections after 1 hour (3600 seconds) of inactivity
@@ -18,7 +18,11 @@ def get_user_engine(connection):
     """Get or create a SQLAlchemy engine for a user's database connection."""
     cache_key = f"{connection.user_id}_{connection.id}"
     if cache_key not in _engine_cache:
-        password = decrypt_value(connection.encrypted_password)
+        try:
+            password = decrypt_value(connection.encrypted_password)
+        except Exception as e:
+            print(e)
+            raise HTTPException(status_code=401, detail="Invalid token")
         url = get_user_db_url(
             connection.host,
             connection.port,

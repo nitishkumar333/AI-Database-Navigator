@@ -26,12 +26,14 @@ interface KnowledgeBaseSelectionProps {
   selectedConnectionId: number | null;
   selectedKnowledgeBaseId: number | null;
   onKnowledgeBaseChange: (kbId: number | null) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
   selectedConnectionId,
   selectedKnowledgeBaseId,
   onKnowledgeBaseChange,
+  onLoadingChange,
 }) => {
   const { getToken, clearAuth } = useContext(QueryContext);
   const [allGroups, setAllGroups] = useState<KnowledgeBaseGroup[]>([]);
@@ -45,6 +47,7 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
     const token = getToken();
     if (!token) return;
     setLoading(true);
+    if (onLoadingChange) onLoadingChange(true);
     try {
       const url = selectedConnectionId
         ? `${host}/api/knowledge/${selectedConnectionId}/groups`
@@ -68,6 +71,7 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
       console.error("Failed to fetch knowledge base groups:", e);
     }
     setLoading(false);
+    if (onLoadingChange) onLoadingChange(false);
   };
 
   const toggleGroup = (groupId: number) => {
