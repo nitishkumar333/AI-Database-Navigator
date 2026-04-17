@@ -58,6 +58,9 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
       if (response.ok) {
         const data = await response.json();
         setAllGroups(data);
+        if (data.length > 0 && selectedKnowledgeBaseId === null) {
+          onKnowledgeBaseChange(data[0].id);
+        }
       } else if (response.status === 401) {
         clearAuth();
       }
