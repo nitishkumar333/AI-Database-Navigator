@@ -11,14 +11,15 @@ node_modules
 !.yarn/versions
 
 # testing
-/coverage
+coverage
 
 # next.js
-/.next/
-/out/
+.next/
+out/
+.next/
 
 # production
-/build
+build
 
 # misc
 .DS_Store
@@ -42,7 +43,6 @@ next-env.d.ts
 .vscode
 
 venv/
-/venv/
 .venv/
 .env
 *.db*
