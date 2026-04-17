@@ -4,7 +4,7 @@ import os
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "AI Data Analyst Platform"
+    APP_NAME: str = "SQLNav"
     SECRET_KEY: str = "change-this-to-a-secure-random-key-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours

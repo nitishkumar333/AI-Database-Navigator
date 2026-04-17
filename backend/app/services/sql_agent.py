@@ -59,7 +59,7 @@ def create_sql_tool(agent_instance):
             return str(e)
 
         if result['validation_result'].get('is_safe') and result['validation_result'].get('schema_validated'):
-            result = validation.execute_sql_query(sql_query)
+            result = validation._execute_sql_query(sql_query)
             agent_instance.generated_sql = result.get('sql_query', sql_query)
             agent_instance.columns = result.get('columns', [])
             agent_instance.rows = result.get('rows', [])

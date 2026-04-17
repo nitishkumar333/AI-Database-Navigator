@@ -101,7 +101,7 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     setCompleting(true);
-    showSuccessToast("Setup Complete", "Welcome to AI Data Analyst!");
+    showSuccessToast("Setup Complete", "Welcome to SQLNav!");
     // Small delay for the toast to show, then the page.tsx will detect onboarding_complete
     await refreshOnboardingStatus();
     fetchCollections();

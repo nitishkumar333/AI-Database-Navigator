@@ -95,10 +95,10 @@ const SidebarComponent: React.FC = () => {
           <div className="flex items-center gap-2">
             <img
               src={`${public_path}logo.svg`}
-              alt="AI Data Analyst"
+              alt="SQLNav"
               className="w-5 h-5"
             />
-            <p className="text-sm font-bold text-primary">AI Data Analyst</p>
+            <p className="text-sm font-bold text-primary">SQLNav</p>
           </div>
           <div className="flex items-center justify-center gap-1">
             {backendOnline ? (

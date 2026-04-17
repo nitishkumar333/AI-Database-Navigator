@@ -111,7 +111,7 @@ export default function LoginPage() {
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-primary font-heading">
-                  AI Data Analyst
+                  SQLNav
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   Natural Language → SQL Platform
