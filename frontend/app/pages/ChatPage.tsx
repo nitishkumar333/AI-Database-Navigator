@@ -50,7 +50,7 @@ export default function ChatPage() {
     conversations,
   } = useContext(ConversationContext);
 
-  const { getRandomPrompts, collections, connections } = useContext(CollectionContext);
+  const { fetchSuggestions, clearSuggestionsCache, collections, connections } = useContext(CollectionContext);
 
   // Connection & KB selection state
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
@@ -78,6 +78,8 @@ export default function ChatPage() {
   };
 
   const [randomPrompts, setRandomPrompts] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [isKbLoading, setIsKbLoading] = useState(true);
 
   const handleSendQuery = async (query: string) => {
     if (query.trim() === "" || currentStatus !== "") return;
@@ -161,7 +163,7 @@ export default function ChatPage() {
 
     setConversationStatus("", conversation.id);
     finishQuery(conversation.id, query_id);
-    addSuggestionToConversation(conversation.id, query_id);
+    addSuggestionToConversation(conversation.id, query_id, selectedConnectionId, selectedKnowledgeBaseId);
   };
 
   useEffect(() => {
@@ -197,11 +199,23 @@ export default function ChatPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (collections.length > 0) {
-      setRandomPrompts(getRandomPrompts(4));
+  const loadSuggestions = async (forceRefresh: boolean = false) => {
+    if (!selectedConnectionId) return;
+    setLoadingSuggestions(true);
+    try {
+      const suggestions = await fetchSuggestions(selectedConnectionId, selectedKnowledgeBaseId, forceRefresh);
+      setRandomPrompts(suggestions);
+    } catch {
+      setRandomPrompts([]);
     }
-  }, [collections]);
+    setLoadingSuggestions(false);
+  };
+
+  useEffect(() => {
+    if (selectedConnectionId && !isKbLoading) {
+      loadSuggestions();
+    }
+  }, [selectedConnectionId, selectedKnowledgeBaseId, isKbLoading]);
 
   // Auto-select first connection if none selected
   useEffect(() => {
@@ -234,6 +248,7 @@ export default function ChatPage() {
             selectedConnectionId={selectedConnectionId}
             selectedKnowledgeBaseId={selectedKnowledgeBaseId}
             onKnowledgeBaseChange={setSelectedKnowledgeBaseId}
+            onLoadingChange={setIsKbLoading}
           />
         </div>
       </div>
@@ -316,7 +331,8 @@ export default function ChatPage() {
                 variant="default"
                 className="w-10"
                 onClick={() => {
-                  setRandomPrompts(getRandomPrompts(4));
+                  clearSuggestionsCache();
+                  loadSuggestions(true);
                 }}
               >
                 <IoRefresh />

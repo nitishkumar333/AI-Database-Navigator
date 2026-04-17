@@ -23,13 +23,15 @@ export const CollectionContext = createContext<{
   connections: Connection[];
   fetchCollections: () => void;
   loadingCollections: boolean;
-  getRandomPrompts: (amount: number) => string[];
+  fetchSuggestions: (connectionId: number, knowledgeBaseId?: number | null, forceRefresh?: boolean) => Promise<string[]>;
+  clearSuggestionsCache: () => void;
 }>({
   collections: [],
   connections: [],
   fetchCollections: () => {},
   loadingCollections: false,
-  getRandomPrompts: () => [],
+  fetchSuggestions: async () => [],
+  clearSuggestionsCache: () => {},
 });
 
 export const CollectionProvider = ({
@@ -44,6 +46,9 @@ export const CollectionProvider = ({
   const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
+
+  // Cache for suggestions keyed by "connId_kbId"
+  const suggestionsCache = useRef<Record<string, string[]>>({});
 
   const initialFetch = useRef(false);
 
@@ -77,7 +82,7 @@ export const CollectionProvider = ({
         const mapped: Collection[] = rawConnections.map(
           (conn) => ({
             name: `${conn.name} (${conn.db_name}@${conn.host})`,
-            total: 0, // Will be populated when user clicks into it
+            total: 0,
             vectorizer: {
               fields: {},
               global: {
@@ -87,11 +92,7 @@ export const CollectionProvider = ({
               },
             },
             processed: true,
-            prompts: [
-              `Show all tables in ${conn.name}`,
-              `How many records are in each table?`,
-              `Show me the first 10 rows`,
-            ],
+            prompts: [],
           })
         );
         setCollections(mapped);
@@ -107,12 +108,53 @@ export const CollectionProvider = ({
     setLoadingCollections(false);
   };
 
-  const getRandomPrompts = (amount: number = 4) => {
-    const allPrompts = collections.reduce((acc: string[], collection) => {
-      return acc.concat(collection.prompts || []);
-    }, []);
-    const shuffled = allPrompts.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, amount);
+  const fetchSuggestions = async (
+    connectionId: number,
+    knowledgeBaseId?: number | null,
+    forceRefresh?: boolean
+  ): Promise<string[]> => {
+    const cacheKey = `${connectionId}_${knowledgeBaseId || "all"}`;
+    if (!forceRefresh && suggestionsCache.current[cacheKey]) {
+      return suggestionsCache.current[cacheKey];
+    }
+
+    try {
+      const token = getToken();
+      if (!token) return [];
+
+      const response = await fetch(`${host}/api/suggestions/initial`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          connection_id: connectionId,
+          knowledge_base_id: knowledgeBaseId || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const suggestions = data.suggestions || [];
+        suggestionsCache.current[cacheKey] = suggestions;
+        return suggestions;
+      }
+    } catch (e) {
+      console.error("Failed to fetch suggestions:", e);
+    }
+
+    // Fallback
+    return [
+      "Show all tables in the database",
+      "How many records are in each table?",
+      "Show me the first 10 rows",
+      "What columns are available?",
+    ];
+  };
+
+  const clearSuggestionsCache = () => {
+    suggestionsCache.current = {};
   };
 
   return (
@@ -122,7 +164,8 @@ export const CollectionProvider = ({
         connections,
         fetchCollections,
         loadingCollections,
-        getRandomPrompts,
+        fetchSuggestions,
+        clearSuggestionsCache,
       }}
     >
       {children}

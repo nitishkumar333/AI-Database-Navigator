@@ -41,7 +41,9 @@ export const ConversationContext = createContext<{
   handleConversationError: (conversationId: string) => void;
   addSuggestionToConversation: (
     conversationId: string,
-    queryId: string
+    queryId: string,
+    connectionId?: number | null,
+    knowledgeBaseId?: number | null
   ) => void;
 }>({
   conversations: [],
@@ -58,6 +60,7 @@ export const ConversationContext = createContext<{
   finishQuery: () => {},
   handleConversationError: () => {},
   addSuggestionToConversation: () => {},
+
 });
 
 export const ConversationProvider = ({
@@ -442,26 +445,71 @@ export const ConversationProvider = ({
 
   const addSuggestionToConversation = async (
     conversationId: string,
-    queryId: string
+    queryId: string,
+    connectionId?: number | null,
+    knowledgeBaseId?: number | null
   ) => {
     try {
       const token = getToken();
-      const response = await fetch(`${host}/api/connections`, {
+      if (!token || !connectionId) return;
+
+      // Build conversation history from the current conversation's queries
+      const conversation = conversations.find((c) => c.id === conversationId);
+      const conversationHistory: { role: string; content: string }[] = [];
+      if (conversation) {
+        const sortedQueries = Object.values(conversation.queries)
+          .sort((a, b) => a.index - b.index)
+          .slice(-5);
+        for (const q of sortedQueries) {
+          if (q.query) {
+            conversationHistory.push({ role: "user", content: q.query });
+          }
+          // Find assistant text responses in messages
+          for (const msg of q.messages) {
+            if (
+              msg.type === "text" &&
+              msg.payload &&
+              "objects" in msg.payload &&
+              Array.isArray(msg.payload.objects) &&
+              msg.payload.objects.length > 0
+            ) {
+              const textObj = msg.payload.objects[0] as any;
+              if (textObj?.text) {
+                conversationHistory.push({
+                  role: "assistant",
+                  content: textObj.text,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const response = await fetch(`${host}/api/suggestions/conversation`, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          connection_id: connectionId,
+          knowledge_base_id: knowledgeBaseId || null,
+          conversation_history: conversationHistory,
+        }),
       });
-      if (!response.ok) return;
-      const connections = await response.json();
-      if (connections.length === 0) return;
 
-      // Generate simple suggestions based on connection
-      const suggestions = [
-        "Show me all tables in the database",
-        "What are the most recent records?",
-        "How many rows are in each table?",
+      let suggestions = [
+        "Show me more details about the results",
+        "What are the top records by count?",
+        "Are there any related tables to explore?",
       ];
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestions && data.suggestions.length > 0) {
+          suggestions = data.suggestions;
+        }
+      }
 
       const newMessage: Message = {
         type: "suggestion",
