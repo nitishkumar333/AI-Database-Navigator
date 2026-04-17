@@ -29,7 +29,7 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   // Health check polling
   useEffect(() => {
     checkHealth();
-    const interval = setInterval(checkHealth, 10000);
+    const interval = setInterval(checkHealth, 60000);
     return () => clearInterval(interval);
   }, []);
 

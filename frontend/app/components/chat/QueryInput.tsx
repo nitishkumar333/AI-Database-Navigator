@@ -47,10 +47,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
   const { getToken, clearAuth } = useContext(QueryContext);
   const [groupDetails, setGroupDetails] = useState<KnowledgeBaseGroup | null>(null);
 
-  const [route, setRoute] = useState<string>("");
-  const [mimick, setMimick] = useState<boolean>(false);
-  const [showRoute, setShowRoute] = useState<boolean>(false);
-
   const triggerQuery = (_query: string) => {
     if (!selectedKnowledgeBaseId) return;
     if (_query.trim() === "" || currentStatus !== "") return;
@@ -126,45 +122,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
           </span>
         </div>
       )}
-      {showRoute && (
-        <div className="w-full flex gap-2 bg-background_alt rounded-xl p-2 fade-in justify-between">
-          <input
-            className="flex-grow p-2 bg-transparent outline-none text-xs resize-none"
-            value={route}
-            placeholder="Enter a route: e.g. search/query/text_response"
-            onChange={(e) => setRoute(e.target.value)}
-          />
-          <div className="flex gap-2">
-            {mimick ? (
-              <button
-                className="btn text-accent"
-                onClick={() => setMimick(false)}
-              >
-                <p className="text-xs">Disable Mimicking</p>
-              </button>
-            ) : (
-              <button
-                className="btn text-secondary"
-                onClick={() => setMimick(true)}
-              >
-                <p className="text-xs">Enable Mimicking</p>
-              </button>
-            )}
-            <button
-              className="btn-round text-secondary rounded-full"
-              onClick={() => setRoute("")}
-            >
-              <FaTrash size={12} />
-            </button>
-            <button
-              className="btn-round text-secondary rounded-full"
-              onClick={() => setShowRoute(false)}
-            >
-              <IoClose size={12} />
-            </button>
-          </div>
-        </div>
-      )}
       <div
         className={`w-full flex gap-2 rounded-xl text-primary placeholder:text-secondary`}
       >
@@ -197,31 +154,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
             }}
           />
           <div className="flex justify-end gap-1 w-full">
-            {process.env.NODE_ENV === "development" && (
-              <Button
-                variant="ghost"
-                size={"icon"}
-                className={`${
-                  showRoute && !route
-                    ? "text-primary"
-                    : route
-                      ? "text-accent"
-                      : "text-secondary"
-                }`}
-                onClick={() => setShowRoute(!showRoute)}
-              >
-                <RiFlowChart size={16} />
-              </Button>
-            )}
-            {query_length > 0 && (
-              <Button
-                variant="ghost"
-                size={"icon"}
-                onClick={() => selectSettings()}
-              >
-                <TbSettings size={16} />
-              </Button>
-            )}
             <Button
               variant="ghost"
               size={"icon"}

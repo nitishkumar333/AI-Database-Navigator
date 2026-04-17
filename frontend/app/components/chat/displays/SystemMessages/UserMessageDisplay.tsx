@@ -106,7 +106,7 @@ const UserMessageDisplay: React.FC<UserMessageDisplayProps> = ({
 
   return (
     <div
-      className="flex flex-col rounded-lg transition-all duration-300 justify-start items-start mt-8 cursor-pointer w-full"
+      className="flex flex-col rounded-lg transition-all duration-300 justify-start items-start cursor-pointer w-full"
       onClick={onClick}
     >
       <div className="w-full">

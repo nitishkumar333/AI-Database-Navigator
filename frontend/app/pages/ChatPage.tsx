@@ -323,9 +323,9 @@ export default function ChatPage() {
         )}
         {Object.keys(currentQuery).length === 0 && (
           <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in">
-            <div className="flex items-center gap-4">
-              <p className="text-primary text-3xl font-semibold">
-                Ask AI Data Analyst
+            <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[40vw] px-4 pb-4">
+              <p className="text-left text-3xl font-semibold">
+                Ask Anything
               </p>
               <Button
                 variant="default"

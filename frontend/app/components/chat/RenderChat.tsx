@@ -147,6 +147,14 @@ const RenderChat: React.FC<RenderChatProps> = ({
     return _messages.filter((message) => message.type !== "training_update");
   };
 
+  const messagesTopRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (displayMessages.length > 0) {
+      messagesTopRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [displayMessages.length]);
+
   useEffect(() => {
     const filtered_messages = filterMessages(messages);
     setDisplayMessages(filtered_messages);
@@ -318,13 +326,14 @@ const RenderChat: React.FC<RenderChatProps> = ({
     }
     return output;
   }, [displayMessages]);
-  console.log(displayMessages);
+
   return (
     <div
-      className={`flex justify-start items-start w-full p-4 transition-all  duration-300`}
+      className={`flex justify-start items-start w-full p-4 pt-0 transition-all  duration-300`}
     >
       {currentView === "chat" && (
         <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">
+          <div ref={messagesTopRef} />
           {displayMessages
             .filter((m) => m.type === "User")
             .map((message, index) => (

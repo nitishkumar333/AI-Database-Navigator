@@ -4,7 +4,7 @@ from app.database import init_db
 from app.routers import auth, connections, schema, knowledge, query, history, conversations, suggestions
 
 app = FastAPI(
-    title="AI Data Analyst Platform",
+    title="SQLNav",
     description="Natural Language → SQL",
     version="1.0.0",
 )
@@ -36,7 +36,7 @@ def on_startup():
 
 @app.get("/")
 def root():
-    return {"message": "AI Data Analyst Platform API", "docs": "/docs"}
+    return {"message": "SQLNav Platform API", "docs": "/docs"}
 
 
 @app.get("/health")

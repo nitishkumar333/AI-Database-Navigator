@@ -45,7 +45,7 @@ export const SessionProvider = ({
   useEffect(() => {
     if (initialized.current || !id || !backendOnline) return;
     initialized.current = true;
-    showSuccessToast("Connected to AI Data Analyst");
+    showSuccessToast("Connected to SQLNav");
   }, [id, backendOnline]);
 
   return (

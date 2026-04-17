@@ -30,7 +30,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "AI Data Analyst",
+  title: "SQLNav",
   description: "Natural Language → SQL Platform",
 };
 
