@@ -39,13 +39,13 @@ export default function Home() {
     return <OnboardingPage />;
   }
 
-  // Fully authenticated and onboarded → show main app
+  // Fully authenticated and onboarded -> show main app
   return (
-    <div className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
+    <>
       {currentPage === "chat" && <ChatPage />}
       {currentPage === "collection" && <CollectionPage />}
       {currentPage === "settings" && <SettingsPage />}
       {currentPage === "knowledge" && <KnowledgeBasePage />}
-    </div>
+    </>
   );
 }

@@ -27,6 +27,7 @@ import {
   SidebarMenuButton,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 import { Separator } from "@/components/ui/separator";
@@ -43,6 +44,7 @@ const SidebarComponent: React.FC = () => {
   const { unsavedChanges } = useContext(SessionContext);
   const { isAuthenticated, user, logout, onboardingStatus } =
     useContext(AuthContext);
+  const { setOpenMobile } = useSidebar();
 
   const [items, setItems] = useState<
     {
@@ -61,19 +63,28 @@ const SidebarComponent: React.FC = () => {
         title: "Chat",
         mode: ["chat"],
         icon: <MdChatBubbleOutline />,
-        onClick: () => changePage("chat", {}, true, unsavedChanges),
+        onClick: () => {
+          changePage("chat", {}, true, unsavedChanges);
+          setOpenMobile(false);
+        },
       },
       {
         title: "Knowledge Base",
         mode: ["knowledge"],
         icon: <HiOutlineBookOpen />,
-        onClick: () => changePage("knowledge", {}, true, unsavedChanges),
+        onClick: () => {
+          changePage("knowledge", {}, true, unsavedChanges);
+          setOpenMobile(false);
+        },
       },
       {
         title: "Settings",
         mode: ["settings"],
         icon: <MdOutlineSettingsInputComponent />,
-        onClick: () => changePage("settings", {}, true, unsavedChanges),
+        onClick: () => {
+          changePage("settings", {}, true, unsavedChanges);
+          setOpenMobile(false);
+        },
       },
     ];
     setItems(_items);

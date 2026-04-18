@@ -15,6 +15,7 @@ import {
   SidebarGroupLabel,
   SidebarGroupAction,
   SidebarMenuAction,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 import {
@@ -35,6 +36,7 @@ const HomeSubMenu: React.FC = () => {
     conversations,
     creatingNewConversation,
   } = useContext(ConversationContext);
+  const { setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup>
@@ -44,7 +46,10 @@ const HomeSubMenu: React.FC = () => {
         </SidebarGroupLabel>
         <SidebarGroupAction
           title="Add Conversation"
-          onClick={() => startNewConversation()}
+          onClick={() => {
+            startNewConversation();
+            setOpenMobile(false);
+          }}
           disabled={creatingNewConversation}
         >
           <FaPlus /> <span className="sr-only">Add Conversation</span>
@@ -63,7 +68,10 @@ const HomeSubMenu: React.FC = () => {
                 variant={
                   currentConversation === conv.id ? "active" : "default"
                 }
-                onClick={() => selectConversation(conv.id)}
+                onClick={() => {
+                  selectConversation(conv.id);
+                  setOpenMobile(false);
+                }}
               >
                 <p className="truncate max-w-[13rem]">{conv.name}</p>
               </SidebarMenuButton>

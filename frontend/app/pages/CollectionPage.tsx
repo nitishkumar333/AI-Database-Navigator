@@ -156,7 +156,7 @@ export default function CollectionPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen overflow-hidden p-2 lg:p-6">
+    <div className="flex flex-col w-full h-full overflow-hidden p-2 pt-0">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -186,10 +186,10 @@ export default function CollectionPage() {
             <FaSpinner className="animate-spin text-accent" size={32} />
           </div>
         ) : (
-          <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+          <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
             {/* Table List */}
-            <div className="w-64 flex-shrink-0 border border-foreground rounded-xl overflow-y-auto">
-              <div className="p-3 border-b border-foreground">
+            <div className="w-full md:w-64 md:min-h-0 flex-shrink-0 flex md:block border border-foreground rounded-xl overflow-y-auto md:overflow-y-auto overflow-x-auto">
+              <div className="p-3 border-b border-foreground hidden md:block">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Tables
                 </p>
@@ -198,17 +198,17 @@ export default function CollectionPage() {
                 <button
                   key={table.name}
                   onClick={() => loadColumns(table.name)}
-                  className={`w-full text-left px-4 py-3 text-sm border-b border-foreground/50 hover:bg-foreground/30 transition-colors flex items-center justify-between ${
+                  className={`w-auto md:w-full flex-auto flex-shrink-0 text-left px-4 py-3 text-sm border-r md:border-r-0 md:border-b border-foreground/50 hover:bg-foreground/30 transition-colors flex items-center justify-between gap-3 ${
                     selectedTable === table.name
-                      ? "bg-accent/10 text-accent border-l-2 border-l-accent"
+                      ? "bg-accent/10 text-accent border-b-2 md:border-b-0 md:border-l-2 md:border-l-accent border-b-accent md:border-b-foreground/50"
                       : "text-primary"
                   }`}
                 >
-                  <span className="flex items-center gap-2 truncate">
-                    <GoTable size={14} />
+                  <span className="flex items-center gap-2 truncate whitespace-nowrap">
+                    <GoTable size={14} className="flex-shrink-0"/>
                     {table.name}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground hidden md:inline">
                     {table.column_count}
                   </span>
                 </button>

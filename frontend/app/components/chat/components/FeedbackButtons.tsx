@@ -135,55 +135,7 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
               )}s`
           : "0s"}
       </p>
-      <div className="flex ">
-        <CopyToClipboardButton copyText={content} />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                className={`bg-background ${
-                  superLiked ? "text-alt_color_a" : ""
-                }`}
-                onClick={handleSuperLike}
-              >
-                <FaHeart size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Very Good Response</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                className={`bg-background ${liked ? "text-accent" : ""}`}
-                onClick={handleLike}
-              >
-                <FaThumbsUp size={12} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Good Response</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                className={`bg-background ${disliked ? "text-error" : ""}`}
-                onClick={handleDislike}
-              >
-                <FaThumbsDown size={12} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Bad Response</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+      <CopyToClipboardButton copyText={content} />
     </div>
   );
 };
