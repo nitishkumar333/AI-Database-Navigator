@@ -243,3 +243,20 @@ body {
     @apply bg-background text-primary;
   }
 }
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.15) 25%,
+    hsl(var(--muted-foreground) / 0.3) 50%,
+    hsl(var(--muted-foreground) / 0.15) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
