@@ -321,32 +321,46 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        {Object.keys(currentQuery).length === 0 && (
-          <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in">
-            <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[40vw] px-4 pb-4">
-              <p className="text-left text-3xl font-semibold">
-                Ask Anything
-              </p>
-              <Button
-                variant="default"
-                className="w-10"
-                onClick={() => {
-                  clearSuggestionsCache();
-                  loadSuggestions(true);
-                }}
-              >
-                <IoRefresh />
-              </Button>
-            </div>
+      {Object.keys(currentQuery).length === 0 && (
+        <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in">
+          <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[40vw] px-4 pb-4">
+            <p className="text-left text-3xl font-semibold">Ask Anything</p>
+            <Button
+              variant="default"
+              className="w-10"
+              onClick={() => {
+                clearSuggestionsCache();
+                loadSuggestions(true);
+              }}
+            >
+              <IoRefresh />
+            </Button>
+          </div>
 
+          {loadingSuggestions ? (
+            <div className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-1">
+              {[72, 85, 60, 78].map((width, index) => (
+                <div
+                  key={index}
+                  className="flex flex-col gap-2 px-4 pt-2 pb-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="skeleton h-[14px] w-[14px] rounded-sm shrink-0" />
+                    <div
+                      className="skeleton h-[14px] rounded"
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
+                  <div className="skeleton h-px w-full opacity-50" />
+                </div>
+              ))}
+            </div>
+          ) : (
             <motion.div
               className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-3"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{
-                staggerChildren: 0.03,
-                delayChildren: 0.05,
-              }}
+              transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
             >
               {randomPrompts.map((prompt, index) => (
                 <motion.button
@@ -411,11 +425,13 @@ export default function ChatPage() {
                       transition: { duration: 0.3 },
                     }}
                   />
+                  <div className="skeleton h-[2px] w-full opacity-50" />
                 </motion.button>
               ))}
             </motion.div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
       </div>
     </div>
   );
