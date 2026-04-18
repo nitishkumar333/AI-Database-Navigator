@@ -357,7 +357,7 @@ export default function ChatPage() {
             </div>
           ) : (
             <motion.div
-              className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-3"
+              className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-3 mb-12"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
@@ -399,7 +399,7 @@ export default function ChatPage() {
                       <MdChatBubbleOutline size={14} />
                     </motion.div>
                     <motion.p
-                      className="text-primary text-sm truncate lg:w-[35vw] w-[80vw]"
+                      className="text-primary text-sm truncate w-[80%] md:w-[90%]"
                       initial={{ opacity: 0.8 }}
                       whileHover={{
                         opacity: 1,

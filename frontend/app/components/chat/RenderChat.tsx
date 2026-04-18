@@ -160,9 +160,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
     setDisplayMessages(filtered_messages);
     addDisplacement(0.1);
     addDistortion(0.08);
-    if (process.env.NODE_ENV === "development") {
-      console.log(messages);
-    }
     buildRefMap(filtered_messages);
   }, [messages, addDisplacement, addDistortion]);
 
