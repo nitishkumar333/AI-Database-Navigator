@@ -6,8 +6,6 @@ import { useEffect, useState } from "react";
 import CopyToClipboardButton from "@/app/components/navigation/CopyButton";
 import { Button } from "@/components/ui/button";
 import { FaHeart } from "react-icons/fa";
-import { EvaluationContext } from "@/app/components/contexts/EvaluationContext";
-import { useContext } from "react";
 
 interface FeedbackButtonsProps {
   conversationID: string;
@@ -43,9 +41,6 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const [superLiked, setSuperLiked] = useState(false);
-
-  const { showFeedbackNotification, disableFeedbackNotification } =
-    useContext(EvaluationContext);
 
   useEffect(() => {
     setLiked(feedback === 1);
@@ -89,22 +84,7 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (showFeedbackNotification) {
-      // Start fade out after 4 seconds
-      const fadeTimer = setTimeout(() => {}, 4000);
 
-      // Disable notification after fade out (7 seconds total)
-      const disableTimer = setTimeout(() => {
-        disableFeedbackNotification();
-      }, 7000);
-
-      return () => {
-        clearTimeout(fadeTimer);
-        clearTimeout(disableTimer);
-      };
-    }
-  }, [showFeedbackNotification, disableFeedbackNotification]);
 
   return (
     <div className="w-full flex justify-end items-center gap-2">
