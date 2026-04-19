@@ -399,7 +399,7 @@ export default function ChatPage() {
                       <MdChatBubbleOutline size={14} />
                     </motion.div>
                     <motion.p
-                      className="text-primary text-sm truncate w-[80%] md:w-[90%]"
+                      className="text-primary text-sm truncate"
                       initial={{ opacity: 0.8 }}
                       whileHover={{
                         opacity: 1,
