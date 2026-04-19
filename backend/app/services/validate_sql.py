@@ -3,7 +3,9 @@ import re
 import sqlparse
 from typing import Dict, Any, Tuple
 from sqlalchemy import text, inspect
+import hashlib
 from app.config import get_settings
+from app.services.redis_client import redis_client
 
 settings = get_settings()
 
@@ -191,8 +193,32 @@ def refine_sql_from_markdown(text_input: str) -> str:
 
     return text_input
 
+def get_all_table_names(engine) -> list:
+    url_str = str(engine.url)
+    url_hash = hashlib.md5(url_str.encode()).hexdigest()
+    cache_key = f"tables:{url_hash}"
+    
+    cached_tables = redis_client.get(cache_key)
+    if cached_tables:
+        return cached_tables
+        
+    inspector = inspect(engine)
+    all_tables = inspector.get_table_names()
+    
+    redis_client.set(cache_key, all_tables, ex=3600)
+    return all_tables
+
 def get_schema_context(engine, table_names: list) -> str:
     """Build schema context string for the given tables."""
+    url_str = str(engine.url)
+    table_names_sorted = sorted(table_names)
+    tables_hash = hashlib.md5((url_str + ":" + ",".join(table_names_sorted)).encode()).hexdigest()
+    cache_key = f"schema:{tables_hash}"
+    
+    cached_schema = redis_client.get(cache_key)
+    if cached_schema:
+        return cached_schema
+
     inspector = inspect(engine)
     context_parts = []
 
@@ -228,7 +254,10 @@ def get_schema_context(engine, table_names: list) -> str:
         except Exception:
             context_parts.append(f"  TABLE {table_name}: (unable to read schema)")
 
-    return "\n\n".join(context_parts)
+    schema_str = "\n\n".join(context_parts)
+    redis_client.set(cache_key, schema_str, ex=3600)
+    return schema_str
+
 
 
 def execute_raw_sql(engine, sql: str) -> dict:
