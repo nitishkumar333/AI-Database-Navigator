@@ -107,8 +107,11 @@ export default function ChatPage() {
     // Build response messages
     const messages: Message[] = [];
 
-    // If there are rows to display, add a table result
-    if (result.success && result.rows && result.rows.length > 0) {
+    // If there are rows to display or products, add a result
+    if (result.success && (result.display_type === "product" || (result.rows && result.rows.length > 0))) {
+      const payloadType = result.display_type || "table";
+      const objects = payloadType === "product" ? (result.products_data || []) : result.rows.slice(0, 100);
+
       const tableMessage: Message = {
         type: "result",
         id: uuidv4(),
@@ -116,7 +119,7 @@ export default function ChatPage() {
         user_id: id || "",
         query_id: query_id,
         payload: {
-          type: "table",
+          type: payloadType,
           metadata: {
             row_count: result.row_count || 0,
             latency_ms: result.latency_ms || 0,
@@ -126,7 +129,7 @@ export default function ChatPage() {
             title: "Generated SQL",
             text: result.generated_sql || "",
           },
-          objects: result.rows.slice(0, 100) as { [key: string]: string }[],
+          objects: objects,
         } as ResultPayload,
       };
       messages.push(tableMessage);
