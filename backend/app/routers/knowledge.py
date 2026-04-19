@@ -7,6 +7,9 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.utils.security import get_current_user
+from app.services.redis_client import redis_client
+from fastapi.encoders import jsonable_encoder
+import json
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge Base"])
 
@@ -42,11 +45,18 @@ def list_all_user_knowledge_groups(
     current_user: User = Depends(get_current_user),
 ):
     """List all knowledge bases across all connections for the current user."""
+
+    cache_key = f"kb:user:{current_user.id}:connections:all"
+    cached = redis_client.get(cache_key)
+    if cached is not None:
+        return cached
+
     user_connections = db.query(DBConnection).filter(
         DBConnection.user_id == current_user.id
     ).all()
     conn_ids = [c.id for c in user_connections]
     if not conn_ids:
+        redis_client.set(cache_key, [])
         return []
     
     kbs = db.query(KnowledgeBase).filter(
@@ -62,6 +72,7 @@ def list_all_user_knowledge_groups(
             tables=kb.tables,
             created_at=str(kb.created_at) if kb.created_at else None
         ))
+    redis_client.set(cache_key, json.dumps(jsonable_encoder(result)))
     return result
 
 
@@ -72,6 +83,13 @@ def list_knowledge_groups(
     current_user: User = Depends(get_current_user),
 ):
     """List all knowledge bases for a specific connection."""
+
+    cache_key = f"kb:user:{current_user.id}:connection:{conn_id}:groups"
+    cached = redis_client.get(cache_key)
+    if cached is not None:
+        print("Cache hit", cache_key)
+        return cached
+
     _get_connection(conn_id, current_user, db)
     
     kbs = db.query(KnowledgeBase).filter(
@@ -87,6 +105,8 @@ def list_knowledge_groups(
             tables=kb.tables,
             created_at=str(kb.created_at) if kb.created_at else None
         ))
+    
+    redis_client.set(cache_key, json.dumps(jsonable_encoder(result)))
     return result
 
 
@@ -116,6 +136,12 @@ def create_knowledge_group(
     db.add(kb)
     db.commit()
     db.refresh(kb)
+
+    cache_key = f"kb:user:{current_user.id}:connection:{conn_id}:groups"
+    redis_client.delete(cache_key)
+
+    cache_key = f"kb:user:{current_user.id}:connections:all"
+    redis_client.delete(cache_key)
     
     return KnowledgeBaseResponse(
         id=kb.id,
@@ -141,4 +167,11 @@ def delete_knowledge_group(
     
     db.delete(kb)
     db.commit()
+
+    cache_key = f"kb:user:{current_user.id}:connection:{kb.connection_id}:groups"
+    redis_client.delete(cache_key)
+
+    cache_key = f"kb:user:{current_user.id}:connections:all"
+    redis_client.delete(cache_key)
+    
     return {"message": "Knowledge Base deleted"}

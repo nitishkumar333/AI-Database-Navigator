@@ -11,10 +11,8 @@ from app.models.query_history import QueryHistory
 from app.models.conversation import Conversation, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
-from app.services.nl_to_sql import nl_to_sql, execute_raw_sql
 from app.services.sql_agent import SQLAgent
-from app.services.validate_sql import get_schema_context
-from sqlalchemy import text, inspect
+from app.services.validate_sql import get_schema_context, get_all_table_names, execute_raw_sql
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
@@ -92,8 +90,7 @@ def chat_query(
         if kb_entry:
             table_filter = kb_entry.tables
     
-    inspector = inspect(engine)
-    all_tables = inspector.get_table_names()
+    all_tables = get_all_table_names(engine)
     if table_filter:
         # Only use tables that exist in both the filter and the actual DB
         context_tables = [t for t in table_filter if t in all_tables]
@@ -169,36 +166,6 @@ def chat_query(
         "connection_name": conn.name,
         "connection_id": conn.id,
     }
-
-
-@router.post("/{conn_id}")
-def natural_language_query(
-    conn_id: int,
-    req: NLQueryRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Convert natural language to SQL, execute"""
-    conn = _get_connection(conn_id, current_user, db)
-    engine = get_user_engine(conn)
-
-    result = nl_to_sql(conn_id, engine, req.question)
-
-    # Save to history
-    history = QueryHistory(
-        user_id=current_user.id,
-        connection_id=conn_id,
-        nl_query=req.question,
-        generated_sql=result.get("generated_sql", ""),
-        row_count=result.get("row_count", 0),
-        success=result.get("success", False),
-        error_message=result.get("error", ""),
-        latency_ms=result.get("latency_ms", 0),
-    )
-    db.add(history)
-    db.commit()
-
-    return result
 
 
 @router.post("/{conn_id}/execute-sql")
