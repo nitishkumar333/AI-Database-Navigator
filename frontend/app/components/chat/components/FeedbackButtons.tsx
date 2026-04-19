@@ -1,11 +1,7 @@
 "use client";
 
-import { Message, ResponsePayload } from "@/app/types/chat";
-import { FaThumbsDown, FaThumbsUp } from "react-icons/fa";
-import { useEffect, useState } from "react";
+import { Message } from "@/app/types/chat";
 import CopyToClipboardButton from "@/app/components/navigation/CopyButton";
-import { Button } from "@/components/ui/button";
-import { FaHeart } from "react-icons/fa";
 
 interface FeedbackButtonsProps {
   conversationID: string;
@@ -21,13 +17,6 @@ interface FeedbackButtonsProps {
   ) => void;
 }
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
 const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   conversationID,
   queryID,
@@ -37,72 +26,8 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   feedback,
   updateFeedback,
 }) => {
-  const [content, setContent] = useState("");
-  const [liked, setLiked] = useState(false);
-  const [disliked, setDisliked] = useState(false);
-  const [superLiked, setSuperLiked] = useState(false);
-
-  useEffect(() => {
-    setLiked(feedback === 1);
-    setDisliked(feedback === 0);
-    setSuperLiked(feedback === 2);
-  }, [feedback]);
-
-  const handleSuperLike = () => {
-    updateFeedback(conversationID, queryID, 2);
-  };
-
-  const handleLike = () => {
-    updateFeedback(conversationID, queryID, 1);
-  };
-
-  const handleDislike = () => {
-    updateFeedback(conversationID, queryID, 0);
-  };
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      let content = "";
-      messages.forEach((message) => {
-        if (message.type === "text") {
-          const response = message.payload as ResponsePayload;
-          if (
-            response.type === "summary" ||
-            response.type === "text_with_citations" ||
-            response.type === "text_with_title"
-          ) {
-            content += response.metadata.title || "";
-            content += "\n\n";
-            for (const object of response.objects) {
-              content += object.text;
-              content += "\n\n";
-            }
-          }
-        }
-      });
-      setContent(content);
-    }
-  }, [messages]);
-
-
-
   return (
     <div className="w-full flex justify-end items-center gap-2">
-      {/* TODO: Fix feedback notification UI - needs better positioning and styling */}
-      {/* {showFeedbackNotification && (
-        <div className="relative">
-          <div
-            className={`flex absolute bottom-full transition-opacity duration-300 gap-2 right-0 mb-2 bg-foreground backdrop-blur-sm rounded-lg p-3 ${
-              fadeIn ? "fade-in" : "fade-out"
-            }`}
-          >
-            <GrInfo size={16} className="text-primary" />
-            <p className="text-sm text-primary">
-              Rate this response and help Elysia improve!
-            </p>
-          </div>
-        </div>
-      )} */}
       <p className="text-sm text-secondary">
         Finished in{" "}
         {query_end
@@ -115,7 +40,7 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
               )}s`
           : "0s"}
       </p>
-      <CopyToClipboardButton copyText={content} />
+      <CopyToClipboardButton copyText={""} />
     </div>
   );
 };

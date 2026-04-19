@@ -5,7 +5,6 @@ import React, { useContext, useEffect, useState } from "react";
 import {
   Message,
   ResponsePayload,
-  SummaryPayload,
   ResultPayload,
   TextPayload,
   NERPayload,
@@ -19,7 +18,6 @@ import UserMessageDisplay from "./displays/SystemMessages/UserMessageDisplay";
 import ErrorMessageDisplay from "./displays/SystemMessages/ErrorMessageDisplay";
 import TextDisplay from "./displays/Generic/TextDisplay";
 import WarningDisplay from "./displays/SystemMessages/WarningDisplay";
-import SummaryDisplay from "./displays/Summary/SummaryDisplay";
 import CodeDisplay from "./components/ViewCodeButton";
 import FeedbackButtons from "./components/FeedbackButtons";
 import InfoMessageDisplay from "./displays/SystemMessages/InfoMessageDisplay";
@@ -30,7 +28,6 @@ import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
 import RenderDisplay from "./RenderDisplay";
 import MergeDisplays from "./MergeDisplays";
 import RenderDisplayView from "./RenderDisplayView";
-import CitationDisplay from "./displays/Summary/CitationDisplay";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
 import { DisplayProvider } from "../contexts/DisplayContext";
@@ -416,25 +413,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
                                     (message.payload as ResponsePayload)
                                       .objects as TextPayload[]
                                   }
-                                />
-                              )}
-                              {/* TODO Replace with text_with_title */}
-                              {(message.payload as ResponsePayload).type ===
-                                "summary" && (
-                                <SummaryDisplay
-                                  key={`${index}-${message.id}-summary`}
-                                  payload={
-                                    (message.payload as ResponsePayload)
-                                      .objects as SummaryPayload[]
-                                  }
-                                />
-                              )}
-
-                              {(message.payload as ResponsePayload).type ===
-                                "text_with_citations" && (
-                                <CitationDisplay
-                                  key={`${index}-${message.id}-summary`}
-                                  payload={message.payload as ResponsePayload}
                                 />
                               )}
                             </div>

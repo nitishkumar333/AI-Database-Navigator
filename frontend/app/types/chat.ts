@@ -87,9 +87,7 @@ export type ResponsePayload = {
   type:
     | "response"
     | "summary"
-    | "code"
-    | "text_with_citations"
-    | "text_with_title";
+    | "code";
   /* eslint-disable @typescript-eslint/no-explicit-any */
   metadata: any;
   objects:
