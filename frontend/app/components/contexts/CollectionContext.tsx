@@ -83,14 +83,6 @@ export const CollectionProvider = ({
           (conn) => ({
             name: `${conn.name} (${conn.db_name}@${conn.host})`,
             total: 0,
-            vectorizer: {
-              fields: {},
-              global: {
-                named_vector: "default",
-                vectorizer: "none",
-                model: "none",
-              },
-            },
             processed: true,
             prompts: [],
           })

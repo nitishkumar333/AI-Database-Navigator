@@ -13,22 +13,18 @@ import {
 export type Message = {
   type:
     | "result"
-    | "self_healing_error"
     | "ner"
     | "title"
     | "user_prompt"
     | "error"
-    | "tree_timeout_error"
     | "user_timeout_error"
     | "rate_limit_error"
     | "authentication_error"
     | "text"
     | "User"
-    | "decision"
     | "status"
     | "completed"
     | "warning"
-    | "training_update"
     | "suggestion";
   conversation_id: string;
   id: string;
@@ -41,20 +37,7 @@ export type Message = {
     | RateLimitPayload
     | ResponsePayload
     | SuggestionPayload
-    | UserPromptPayload
-    | SelfHealingErrorPayload
-    | MergedSelfHealingErrorPayload;
-};
-
-export type SelfHealingErrorPayload = {
-  error_message: string;
-  feedback: string;
-};
-
-export type MergedSelfHealingErrorPayload = {
-  type: "merged_self_healing_errors";
-  payloads: SelfHealingErrorPayload[];
-  latest: SelfHealingErrorPayload;
+    | UserPromptPayload;
 };
 
 export type NERPayload = {

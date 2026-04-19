@@ -1,37 +1,10 @@
 import { ToasterToast } from "@/hooks/useToast";
 
-export type VectorizerField = {
-  named_vector: string;
-  vectorizer: string;
-  model: string;
-};
-
-export type Vectorizer = {
-  fields: {
-    [key: string]: VectorizerField[];
-  };
-  global: VectorizerField;
-};
-
 export type Collection = {
   name: string;
   total: number;
-  vectorizer: Vectorizer;
   processed: boolean;
   prompts: string[];
-};
-
-export type DecisionTreeNode = {
-  name: string;
-  id: string;
-  description: string;
-  instruction: string;
-  reasoning: string;
-  branch: boolean;
-  options: { [key: string]: DecisionTreeNode };
-  // Note: Added for frontend only - not from backend
-  choosen?: boolean;
-  blocked?: boolean;
 };
 
 export type ModelProvider = {
@@ -43,46 +16,6 @@ export type Model = {
   api_keys: string[];
   speed: string;
   accuracy: string;
-};
-
-export type MetadataCollection = {
-  mappings: { [key: string]: { [key: string]: [key: string] } };
-  fields: { [key: string]: MetadataField };
-  length: number;
-  summary: string;
-  name: string;
-  named_vectors: MetadataNamedVector[];
-  vectorizer: MetadataVectorizer;
-};
-
-export type MetadataVectorizer = {
-  vectorizer: string;
-  model: string;
-};
-
-export type MetadataNamedVector = {
-  source_properties: string[];
-  enabled: boolean;
-  vectorizer: string;
-  model: string;
-  description: string;
-  name: string;
-};
-
-export type MetadataField = {
-  range: [number, number];
-  type: string;
-  groups: { [key: string]: GroupMetadataField };
-  mean: number;
-  name: string;
-  description: string;
-  date_range: string[];
-  date_mean: string;
-};
-
-export type GroupMetadataField = {
-  value: string;
-  count: number;
 };
 
 export type Filter = {
