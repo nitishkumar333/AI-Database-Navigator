@@ -10,6 +10,7 @@ from app.models.knowledge import KnowledgeBase
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.validate_sql import get_schema_context, get_all_table_names
+from app.services.redis_client import redis_client
 from app.utils.prompts import initial_suggestions_prompt, conversation_suggestions_prompt
 from app.config import get_settings
 
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api/suggestions", tags=["Suggestions"])
 class InitialSuggestionsRequest(BaseModel):
     connection_id: int
     knowledge_base_id: Optional[int] = None
+    force_refresh: bool = False
 
 
 class ConversationSuggestionsRequest(BaseModel):
@@ -82,6 +84,13 @@ def get_initial_suggestions(
 ):
     """Generate initial prompt suggestions based on the knowledge base schema."""
     try:
+        cache_key = f"initial_suggestions:user:{current_user.id}:connection:{req.connection_id}:kb:{req.knowledge_base_id or 'all'}"
+        
+        if not req.force_refresh:
+            cached_suggestions = redis_client.get(cache_key)
+            if cached_suggestions:
+                return SuggestionsResponse(suggestions=cached_suggestions)
+
         schema_context = _get_schema_for_request(
             req.connection_id, req.knowledge_base_id, current_user, db
         )
@@ -94,6 +103,9 @@ def get_initial_suggestions(
         structured_llm = llm.with_structured_output(SuggestionList)
         result: SuggestionList = structured_llm.invoke(prompt)
         suggestions = result.suggestions[:4] if result.suggestions else _DEFAULT_SUGGESTIONS
+        
+        redis_client.set(cache_key, suggestions, ex=3600)
+        
         return SuggestionsResponse(suggestions=suggestions)
     except HTTPException:
         raise
