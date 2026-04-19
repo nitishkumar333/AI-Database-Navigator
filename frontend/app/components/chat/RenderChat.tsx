@@ -10,8 +10,6 @@ import {
   NERPayload,
   RateLimitPayload,
   SuggestionPayload,
-  SelfHealingErrorPayload,
-  MergedSelfHealingErrorPayload,
 } from "@/app/types/chat";
 
 import UserMessageDisplay from "./displays/SystemMessages/UserMessageDisplay";
@@ -27,11 +25,9 @@ import RateLimitMessageDisplay from "./displays/SystemMessages/RateLimitMessageD
 import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
 import RenderDisplay from "./RenderDisplay";
 import MergeDisplays from "./MergeDisplays";
-import RenderDisplayView from "./RenderDisplayView";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
 import { DisplayProvider } from "../contexts/DisplayContext";
-import SelfHealingErrorDisplay from "./displays/SystemMessages/SelfHealingErrorDisplay";
 
 interface RenderChatProps {
   messages: Message[];
@@ -140,10 +136,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
     handleResultPayloadChange,
   } = useContext(ChatContext);
 
-  const filterMessages = (_messages: Message[]) => {
-    return _messages.filter((message) => message.type !== "training_update");
-  };
-
   const messagesTopRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -153,11 +145,10 @@ const RenderChat: React.FC<RenderChatProps> = ({
   }, [displayMessages.length]);
 
   useEffect(() => {
-    const filtered_messages = filterMessages(messages);
-    setDisplayMessages(filtered_messages);
+    setDisplayMessages(messages);
     addDisplacement(0.1);
     addDistortion(0.08);
-    buildRefMap(filtered_messages);
+    buildRefMap(messages);
   }, [messages, addDisplacement, addDistortion]);
 
   const processedOutputItems = React.useMemo(() => {
@@ -263,51 +254,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
               metadata: currentResponsePayload.metadata,
               objects: combinedTextPayloads,
             } as ResponsePayload,
-          };
-          output.push(syntheticMessage);
-          i = j;
-          continue;
-        }
-      }
-
-      // Handle self-healing error merging
-      if (currentMessage.type === "self_healing_error") {
-        const currentSelfHealingPayload =
-          currentMessage.payload as SelfHealingErrorPayload;
-        const combinedSelfHealingPayloads: SelfHealingErrorPayload[] = [
-          currentSelfHealingPayload,
-        ];
-
-        let j = i + 1;
-
-        while (j < messagesToProcess.length) {
-          const nextMessage = messagesToProcess[j];
-          if (nextMessage.type === "self_healing_error") {
-            combinedSelfHealingPayloads.push(
-              nextMessage.payload as SelfHealingErrorPayload
-            );
-            j++;
-          } else {
-            break;
-          }
-        }
-
-        if (j > i + 1) {
-          // Create synthetic message with combined payloads
-          const syntheticMessage: Message = {
-            type: "self_healing_error",
-            id: currentMessage.id,
-            user_id: currentMessage.user_id,
-            conversation_id: currentMessage.conversation_id,
-            query_id: currentMessage.query_id,
-            payload: {
-              type: "merged_self_healing_errors",
-              payloads: combinedSelfHealingPayloads,
-              latest:
-                combinedSelfHealingPayloads[
-                  combinedSelfHealingPayloads.length - 1
-                ],
-            } as MergedSelfHealingErrorPayload,
           };
           output.push(syntheticMessage);
           i = j;
@@ -428,7 +374,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
                             />
                           )}
                         {item.type !== "merged_result" &&
-                          ["tree_timeout_error", "user_timeout_error"].includes(
+                          ["user_timeout_error"].includes(
                             message.type
                           ) && (
                             <InfoMessageDisplay
@@ -448,17 +394,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
                             <WarningDisplay
                               key={`${index}-${message.id}-warning`}
                               warning={(message.payload as TextPayload).text}
-                            />
-                          )}
-                        {item.type !== "merged_result" &&
-                          message.type === "self_healing_error" && (
-                            <SelfHealingErrorDisplay
-                              key={`${index}-${message.id}-self-healing-error`}
-                              payload={
-                                message.payload as
-                                  | SelfHealingErrorPayload
-                                  | MergedSelfHealingErrorPayload
-                              }
                             />
                           )}
                       </div>
@@ -503,16 +438,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
               </p>
             </div>
           )}
-        </div>
-      )}
-
-      {currentView === "result" && (
-        <div className="w-full flex flex-col gap-4">
-          <RenderDisplayView
-            payload={currentResultPayload}
-            type={currentResultType}
-            handleViewChange={handleViewChange}
-          />
         </div>
       )}
     </div>
