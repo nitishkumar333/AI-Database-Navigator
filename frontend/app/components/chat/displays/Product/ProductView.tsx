@@ -8,6 +8,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface ProductViewProps {
   product: ProductPayload;
 }
+// FOR CONTEXT  
+// export type ProductPayload = DefaultResultPayload & {
+//   subcategory?: string;
+//   description?: string;
+//   reviews?: string[] | number;
+//   collection?: string;
+//   tags?: string[];
+//   sizes?: string[];
+//   product_id?: string;
+//   image?: string;
+//   url?: string;
+//   rating?: number;
+//   price?: number;
+//   category?: string;
+//   colors?: string[];
+//   brand?: string;
+//   name?: string;
+//   id?: string;
+// };
 
 const ProductView: React.FC<ProductViewProps> = ({ product }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
