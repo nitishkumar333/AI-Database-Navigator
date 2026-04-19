@@ -131,6 +131,7 @@ export const CollectionProvider = ({
         body: JSON.stringify({
           connection_id: connectionId,
           knowledge_base_id: knowledgeBaseId || null,
+          force_refresh: forceRefresh || false,
         }),
       });
 
