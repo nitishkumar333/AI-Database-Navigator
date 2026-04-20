@@ -179,15 +179,13 @@ export const ConversationProvider = ({
             meta = JSON.parse(msg.metadata_json || "{}");
           } catch {}
 
-          // If there are rows or products, add a result message
+          // If there are rows, add a table result message
           if (
             msg.message_type === "result" &&
             meta.success &&
-            (meta.display_type === "product" || (meta.rows && meta.rows.length > 0))
+            meta.rows &&
+            meta.rows.length > 0
           ) {
-            const payloadType = meta.display_type || "table";
-            const objects = payloadType === "product" ? (meta.products_data || []) : meta.rows.slice(0, 100);
-
             frontendMessages.push({
               type: "result",
               id: uuidv4(),
@@ -195,7 +193,7 @@ export const ConversationProvider = ({
               user_id: id || "",
               query_id: queryId,
               payload: {
-                type: payloadType,
+                type: "table",
                 metadata: {
                   row_count: meta.row_count || 0,
                   latency_ms: meta.latency_ms || 0,
@@ -205,7 +203,7 @@ export const ConversationProvider = ({
                   title: "Generated SQL",
                   text: meta.generated_sql || "",
                 },
-                objects: objects,
+                objects: meta.rows.slice(0, 100),
               } as ResultPayload,
             });
           }
