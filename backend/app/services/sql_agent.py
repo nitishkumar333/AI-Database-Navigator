@@ -91,29 +91,6 @@ class SQLAgent:
     def generate_system_prompt(self, schema_context):
         return f"""You are an AI agent with capability to generate SQL queries. You can use tool `execute_sql_query` to generate a PostgreSQL SELECT query and answer the user's question based on the query result.
 
-        You also have the capability to decide how the frontend should render the database results. By default, the frontend will render them as a text response or a generic table.
-        However, if the user asks for a list of items or products and the database query results represent products, you should optionally dictate the frontend to display a product catalog.
-        To do this, include a JSON block anywhere in your response text formatted exactly like this:
-        ```json
-        {{
-            "display_type": "product",
-            "products": [
-                {{
-                    "id": "123",
-                    "name": "Product Name",
-                    "price": 99.99,
-                    "description": "Product Description",
-                    "image": "https://example.com/image.png",
-                    "category": "Category",
-                    "collection": "Collection",
-                    "brand": "Brand",
-                    "rating": 4.5
-                }}
-            ]
-        }}
-        ```
-        Map the fields from your SQL query results to the product properties accurately. Do not hardcode fields; extract values from the database results. You can omit fields that are not relevant or not available.
-
         DATABASE SCHEMA:
         {schema_context}"""
     
@@ -178,24 +155,6 @@ class SQLAgent:
                 "latency_ms": 0,
                 "response_text": "Error: LLM rate limit exceeded."
             }
-        import re
-        import json
-        
-        response_text = state['messages'][-1].content
-        display_type = "table"
-        products_data = []
-
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-        if json_match:
-            try:
-                parsed_json = json.loads(json_match.group(1))
-                if parsed_json.get("display_type") == "product":
-                    display_type = "product"
-                    products_data = parsed_json.get("products", [])
-                    response_text = response_text.replace(json_match.group(0), "").strip()
-            except Exception as e:
-                print("Error parsing LLM JSON:", e)
-
         return {
             "success": True,
             "question": user_input,
@@ -204,7 +163,5 @@ class SQLAgent:
             "rows": self.rows,
             "row_count": self.row_count,
             "latency_ms": round(self.latency_ms, 2),
-            "response_text": response_text,
-            "display_type": display_type,
-            "products_data": products_data
+            "response_text": state['messages'][-1].content
         }

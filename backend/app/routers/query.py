@@ -147,10 +147,8 @@ def chat_query(
                 "latency_ms": result.get("latency_ms", 0),
                 "success": result.get("success", False),
                 "error": result.get("error", ""),
-                "display_type": result.get("display_type", "table"),
-                "products_data": result.get("products_data", []),
             }
-            msg_type = "result" if result.get("success") and (result.get("rows") or result.get("display_type") == "product") else "text"
+            msg_type = "result" if result.get("success") and result.get("rows") else "text"
             assistant_msg = ConversationMessage(
                 conversation_id=req.conversation_id,
                 role="assistant",
