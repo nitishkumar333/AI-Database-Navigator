@@ -41,7 +41,7 @@ export const CollectionProvider = ({
 }) => {
   const { id, fetchCollectionFlag, initialized } = useContext(SessionContext);
   const { showSuccessToast } = useContext(ToastContext);
-  const { getToken, clearAuth, isAuthenticated } = useContext(AuthContext);
+  const { getToken, clearAuth, isAuthenticated, user } = useContext(AuthContext);
   const { backendOnline } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -52,11 +52,21 @@ export const CollectionProvider = ({
 
   const initialFetch = useRef(false);
 
+  // Reset all collection state when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCollections([]);
+      setConnections([]);
+      suggestionsCache.current = {};
+      initialFetch.current = false;
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (initialFetch.current || !id || !backendOnline || !isAuthenticated) return;
     initialFetch.current = true;
     fetchCollections();
-  }, [id, backendOnline, isAuthenticated]);
+  }, [id, backendOnline, isAuthenticated, user]);
 
   useEffect(() => {
     if (initialFetch.current) {

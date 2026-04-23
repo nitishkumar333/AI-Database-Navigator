@@ -70,7 +70,7 @@ export const ConversationProvider = ({
 }) => {
   const { id } = useContext(SessionContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { getToken, isAuthenticated } = useContext(AuthContext);
+  const { getToken, isAuthenticated, user } = useContext(AuthContext);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(
@@ -79,12 +79,22 @@ export const ConversationProvider = ({
   const [creatingNewConversation, setCreatingNewConversation] = useState(false);
   const initialized = useRef(false);
 
-  // Fetch existing conversations from backend on mount
+  // Reset all conversation state when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setConversations([]);
+      setCurrentConversation(null);
+      setCreatingNewConversation(false);
+      initialized.current = false;
+    }
+  }, [isAuthenticated]);
+
+  // Fetch existing conversations from backend on mount or after login
   useEffect(() => {
     if (initialized.current || !id || !isAuthenticated) return;
     initialized.current = true;
     fetchConversationsFromBackend();
-  }, [id, isAuthenticated]);
+  }, [id, isAuthenticated, user]);
 
   const fetchConversationsFromBackend = async () => {
     try {
@@ -124,10 +134,9 @@ export const ConversationProvider = ({
 
       if (fullConversations.length > 0) {
         setConversations(fullConversations);
-        setCurrentConversation(fullConversations[0].id);
-      } else {
-        startNewConversation();
       }
+      // Always start with a fresh empty conversation ("Ask Anything" screen)
+      startNewConversation();
     } catch (e) {
       console.error("Failed to fetch conversations:", e);
       startNewConversation();
@@ -261,23 +270,7 @@ export const ConversationProvider = ({
     setCreatingNewConversation(true);
     const conversation_id = uuidv4();
 
-    // Create on backend
-    try {
-      const token = getToken();
-      if (token) {
-        await fetch(`${host}/api/conversations`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ id: conversation_id, name: "New Conversation" }),
-        });
-      }
-    } catch (e) {
-      console.error("Failed to create conversation on backend:", e);
-    }
-
+    // Only create locally — backend creation is deferred until the first message is sent
     const newConversation: Conversation = {
       ...initialConversation,
       id: conversation_id,
@@ -374,11 +367,31 @@ export const ConversationProvider = ({
     );
   };
 
-  const addQueryToConversation = (
+  const addQueryToConversation = async (
     conversationId: string,
     query: string,
     query_id: string
   ) => {
+    // Lazily create conversation on backend when first message is sent
+    const conversation = conversations.find((c) => c.id === conversationId);
+    if (conversation && Object.keys(conversation.queries).length === 0) {
+      try {
+        const token = getToken();
+        if (token) {
+          await fetch(`${host}/api/conversations`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ id: conversationId, name: "New Conversation" }),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to create conversation on backend:", e);
+      }
+    }
+
     const userMessage: Message = {
       type: "User",
       id: uuidv4(),
@@ -528,13 +541,7 @@ export const ConversationProvider = ({
     }
   };
 
-  // Auto-select conversation from URL
-  useEffect(() => {
-    if (conversations.length > 0 && !currentConversation) {
-      const latest = conversations[conversations.length - 1];
-      setCurrentConversation(latest.id);
-    }
-  }, [conversations, currentConversation]);
+
 
   return (
     <ConversationContext.Provider
