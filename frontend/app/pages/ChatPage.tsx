@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { motion } from "framer-motion";
 
 import { Query, Message, ResultPayload, ResponsePayload } from "@/app/types/chat";
+import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductData";
 import { MdChatBubbleOutline } from "react-icons/md";
 
 import QueryInput from "../components/chat/QueryInput";
@@ -107,15 +108,34 @@ export default function ChatPage() {
     // Build response messages
     const messages: Message[] = [];
 
-    // If there are rows to display, add a table result
+    // If there are rows to display, detect whether to render as products or table
     if (result.success && result.rows && result.rows.length > 0) {
-      const tableMessage: Message = {
-        type: "result",
-        id: uuidv4(),
-        conversation_id: conversation.id,
-        user_id: id || "",
-        query_id: query_id,
-        payload: {
+      console.log("Raw query result rows:", result.rows);
+      const detection = detectProductData(result.rows, result.columns);
+      console.log("Detection result:", detection);
+      let resultPayload: ResultPayload;
+
+      if (detection.isProduct) {
+        // Map raw rows to ProductPayload objects for the product view
+        const products = mapRowsToProducts(
+          result.rows.slice(0, 100),
+          detection.fieldMapping
+        );
+        resultPayload = {
+          type: "product",
+          metadata: {
+            row_count: result.row_count || 0,
+            latency_ms: result.latency_ms || 0,
+          },
+          code: {
+            language: "sql",
+            title: "Generated SQL",
+            text: result.generated_sql || "",
+          },
+          objects: products,
+        } as ResultPayload;
+      } else {
+        resultPayload = {
           type: "table",
           metadata: {
             row_count: result.row_count || 0,
@@ -127,9 +147,18 @@ export default function ChatPage() {
             text: result.generated_sql || "",
           },
           objects: result.rows.slice(0, 100) as { [key: string]: string }[],
-        } as ResultPayload,
+        } as ResultPayload;
+      }
+
+      const resultMessage: Message = {
+        type: "result",
+        id: uuidv4(),
+        conversation_id: conversation.id,
+        user_id: id || "",
+        query_id: query_id,
+        payload: resultPayload,
       };
-      messages.push(tableMessage);
+      messages.push(resultMessage);
     }
 
     // Add text response (summary/status)

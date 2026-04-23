@@ -1,6 +1,6 @@
 export type DefaultResultPayload = {
   uuid?: string;
-  ELYSIA_SUMMARY?: string;
+  E_SUMMARY?: string;
   _REF_ID?: string;
 };
 
