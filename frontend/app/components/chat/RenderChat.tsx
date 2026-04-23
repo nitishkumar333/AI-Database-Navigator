@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useContext, useEffect, useState } from "react";
+import { IoArrowBack } from "react-icons/io5";
 
 import {
   Message,
@@ -28,6 +29,7 @@ import MergeDisplays from "./MergeDisplays";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
 import { DisplayProvider } from "../contexts/DisplayContext";
+import ProductView from "./displays/Product/ProductView";
 
 interface RenderChatProps {
   messages: Message[];
@@ -437,6 +439,20 @@ const RenderChat: React.FC<RenderChatProps> = ({
                 Connection lost. Reconnecting...
               </p>
             </div>
+          )}
+        </div>
+      )}
+      {currentView === "result" && currentResultPayload && (
+        <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">
+          <button
+            onClick={() => handleViewChange("chat", null)}
+            className="flex items-center gap-2 text-secondary hover:text-primary transition-colors duration-200 w-fit group"
+          >
+            <IoArrowBack className="text-lg group-hover:-translate-x-1 transition-transform duration-200" />
+            <span className="text-sm font-medium">Back to results</span>
+          </button>
+          {currentResultType === "product" && (
+            <ProductView product={currentResultPayload} />
           )}
         </div>
       )}
