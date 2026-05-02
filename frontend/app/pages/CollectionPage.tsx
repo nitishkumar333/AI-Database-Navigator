@@ -50,7 +50,7 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(false);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [activeTab, setActiveTab] = useState<"columns" | "preview">("columns");
+  const [activeTab, setActiveTab] = useState<"columns" | "preview">("preview");
 
   // Extract connection name — get auth token
   const connName = collectionName.split(" (")[0];
@@ -62,6 +62,41 @@ export default function CollectionPage() {
   useEffect(() => {
     findConnection();
   }, [connName]);
+
+  // Auto-select first table and load preview when tables are loaded
+  useEffect(() => {
+    if (tables.length > 0 && !selectedTable && connId) {
+      const firstName = tables[0].name;
+      setSelectedTable(firstName);
+      // Load both columns and preview for the first table
+      (async () => {
+        setLoadingColumns(true);
+        setLoadingPreview(true);
+        try {
+          const [colRes, prevRes] = await Promise.all([
+            fetch(`${host}/api/schema/${connId}/tables/${firstName}/columns`, {
+              headers: {
+                Authorization: `Bearer ${getToken()}`,
+                "Content-Type": "application/json",
+              },
+            }),
+            fetch(`${host}/api/schema/${connId}/tables/${firstName}/preview`, {
+              headers: {
+                Authorization: `Bearer ${getToken()}`,
+                "Content-Type": "application/json",
+              },
+            }),
+          ]);
+          if (colRes.ok) setColumns(await colRes.json());
+          if (prevRes.ok) setPreview(await prevRes.json());
+        } catch (e) {
+          console.error("Failed to auto-load first table:", e);
+        }
+        setLoadingColumns(false);
+        setLoadingPreview(false);
+      })();
+    }
+  }, [tables, connId]);
 
   const findConnection = async () => {
     try {
@@ -108,27 +143,32 @@ export default function CollectionPage() {
   const loadColumns = async (tableName: string) => {
     if (!connId) return;
     setLoadingColumns(true);
+    setLoadingPreview(true);
     setSelectedTable(tableName);
-    setActiveTab("columns");
+    setActiveTab("preview");
     setPreview(null);
     try {
-      const response = await fetch(
-        `${host}/api/schema/${connId}/tables/${tableName}/columns`,
-        {
+      const [colRes, prevRes] = await Promise.all([
+        fetch(`${host}/api/schema/${connId}/tables/${tableName}/columns`, {
           headers: {
             Authorization: `Bearer ${getToken()}`,
             "Content-Type": "application/json",
           },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setColumns(data);
-      }
+        }),
+        fetch(`${host}/api/schema/${connId}/tables/${tableName}/preview`, {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+            "Content-Type": "application/json",
+          },
+        }),
+      ]);
+      if (colRes.ok) setColumns(await colRes.json());
+      if (prevRes.ok) setPreview(await prevRes.json());
     } catch (e) {
-      console.error("Failed to load columns:", e);
+      console.error("Failed to load table data:", e);
     }
     setLoadingColumns(false);
+    setLoadingPreview(false);
   };
 
   const loadPreview = async (tableName: string) => {
@@ -227,19 +267,6 @@ export default function CollectionPage() {
                   {/* Tabs */}
                   <div className="flex items-center gap-0 border-b border-foreground flex-shrink-0">
                     <button
-                      onClick={() => setActiveTab("columns")}
-                      className={`px-4 py-3 text-sm font-medium transition-colors ${
-                        activeTab === "columns"
-                          ? "text-accent border-b-2 border-accent bg-accent/5"
-                          : "text-muted-foreground hover:text-primary"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <GoKey size={14} />
-                        Columns ({columns.length})
-                      </span>
-                    </button>
-                    <button
                       onClick={() => {
                         if (selectedTable) loadPreview(selectedTable);
                       }}
@@ -252,6 +279,19 @@ export default function CollectionPage() {
                       <span className="flex items-center gap-2">
                         <GoEye size={14} />
                         Preview Data
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("columns")}
+                      className={`px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === "columns"
+                          ? "text-accent border-b-2 border-accent bg-accent/5"
+                          : "text-muted-foreground hover:text-primary"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <GoKey size={14} />
+                        Columns ({columns.length})
                       </span>
                     </button>
                   </div>
