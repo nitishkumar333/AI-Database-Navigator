@@ -53,9 +53,15 @@ export default function ChatPage() {
 
   const { fetchSuggestions, clearSuggestionsCache, collections, connections } = useContext(CollectionContext);
 
-  // Connection & KB selection state
-  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
-  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<number | null>(null);
+  // Connection & KB selection state — restore from localStorage on mount
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(() => {
+    const stored = localStorage.getItem("selected_connection_id");
+    return stored ? parseInt(stored, 10) : null;
+  });
+  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<number | null>(() => {
+    const stored = localStorage.getItem("selected_knowledge_base_id");
+    return stored ? parseInt(stored, 10) : null;
+  });
 
   const [currentQuery, setCurrentQuery] = useState<{
     [key: string]: Query;
@@ -246,7 +252,24 @@ export default function ChatPage() {
     }
   }, [selectedConnectionId, selectedKnowledgeBaseId, isKbLoading]);
 
-  // Auto-select first connection if none selected
+  // Persist selected connection & KB to localStorage
+  useEffect(() => {
+    if (selectedConnectionId !== null) {
+      localStorage.setItem("selected_connection_id", String(selectedConnectionId));
+    } else {
+      localStorage.removeItem("selected_connection_id");
+    }
+  }, [selectedConnectionId]);
+
+  useEffect(() => {
+    if (selectedKnowledgeBaseId !== null) {
+      localStorage.setItem("selected_knowledge_base_id", String(selectedKnowledgeBaseId));
+    } else {
+      localStorage.removeItem("selected_knowledge_base_id");
+    }
+  }, [selectedKnowledgeBaseId]);
+
+  // Auto-select first connection only if nothing stored and none selected
   useEffect(() => {
     if (!selectedConnectionId && connections.length > 0) {
       setSelectedConnectionId(connections[0].id);
