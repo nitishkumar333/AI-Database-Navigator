@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -13,6 +13,7 @@ from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.sql_agent import SQLAgent
 from app.services.validate_sql import get_schema_context, get_all_table_names, execute_raw_sql
+from app.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
@@ -49,6 +50,7 @@ def _get_connection(conn_id: int, user: User, db: Session) -> DBConnection:
 @router.post("/chat")
 def chat_query(
     req: ChatRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -58,6 +60,10 @@ def chat_query(
     Otherwise, use the first available connection for the user.
     Returns structured response with SQL, results, and formatted text.
     """
+    # ── Rate limit check ──
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(current_user.id, client_ip)
+
     # Find connection
     conn = None
     if req.connection_id:
@@ -100,8 +106,6 @@ def chat_query(
         context_tables = all_tables
     
     schema_context = get_schema_context(engine, context_tables)
-
-    print("schema_context", schema_context)
 
     sql_agent = SQLAgent(engine, schema_context)
     result = sql_agent.run_query(req.question, req.conversation_id or str(conn.id))

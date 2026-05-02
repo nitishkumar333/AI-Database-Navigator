@@ -12,6 +12,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from .validate_sql import ValidateSqlQuery
 from langgraph.prebuilt import ToolNode
 from langchain_core.runnables import RunnableLambda
+from google.api_core.exceptions import ResourceExhausted
+from fastapi import HTTPException
 
 from app.config import get_settings
 settings = get_settings()
@@ -104,17 +106,10 @@ class SQLAgent:
             temperature=0,
         )
         runnable_llm = assistant_prompt | llm.bind_tools([self.execute_sql_query])
-
-        try:
-            response = runnable_llm.invoke({"conversation": state["messages"]})
-            print("response", response)
-        except Exception as e:
-            print("error", e)
-            return {**state,"messages": AIMessage(content=str(e))}
+        response = runnable_llm.invoke({"conversation": state["messages"]})
         return {**state,"messages": response}
     
     def build_workflow(self):
-        print("build_workflow")
         graph = StateGraph(self.UserState)
         graph.add_node("generate_response", self.generate_response)
         graph.add_node("tools", create_tool_node_with_fallback([self.execute_sql_query]))
@@ -137,8 +132,9 @@ class SQLAgent:
         config = { "configurable": { "thread_id": conversation_id} }
         try:
             state = self.workflow.invoke(initial_state, config)
+        except ResourceExhausted as e:
+            raise HTTPException(status_code=429, detail="LLM API rate limit exceeded. Please try again later.")
         except Exception as e:
-            print("error", e)
             return {
                 "success": False,
                 "question": user_input,
