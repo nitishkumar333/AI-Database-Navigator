@@ -150,7 +150,6 @@ export type Query = {
   finished: boolean;
   query_start: Date;
   query_end: Date | null;
-  feedback: number | null; // -1, 0 , +1
   NER: NERPayload | null;
   index: number;
 };

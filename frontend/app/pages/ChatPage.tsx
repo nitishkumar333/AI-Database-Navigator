@@ -20,23 +20,9 @@ import { IoRefresh } from "react-icons/io5";
 
 import { Button } from "@/components/ui/button";
 
-// import dynamic from "next/dynamic";
 import { Separator } from "@/components/ui/separator";
 import { CollectionContext } from "../components/contexts/CollectionContext";
 
-// const AbstractSphereScene = dynamic(
-//   () => import("@/app/components/threejs/AbstractSphere"),
-//   {
-//     ssr: false,
-//   }
-// );
-
-interface KnowledgeBaseEntry {
-  id: number;
-  connection_id: number;
-  table_name: string;
-  table_description: string;
-}
 export default function ChatPage() {
   const { sendQuery } = useContext(QueryContext);
   const { id } = useContext(SessionContext);
@@ -124,15 +110,11 @@ export default function ChatPage() {
       if (detection.isProduct) {
         // Map raw rows to ProductPayload objects for the product view
         const products = mapRowsToProducts(
-          result.rows.slice(0, 100),
+          result.rows.slice(0, 50),
           detection.fieldMapping
         );
         resultPayload = {
           type: "product",
-          metadata: {
-            row_count: result.row_count || 0,
-            latency_ms: result.latency_ms || 0,
-          },
           code: {
             language: "sql",
             title: "Generated SQL",
@@ -143,16 +125,12 @@ export default function ChatPage() {
       } else {
         resultPayload = {
           type: "table",
-          metadata: {
-            row_count: result.row_count || 0,
-            latency_ms: result.latency_ms || 0,
-          },
           code: {
             language: "sql",
             title: "Generated SQL",
             text: result.generated_sql || "",
           },
-          objects: result.rows.slice(0, 100) as { [key: string]: string }[],
+          objects: result.rows.slice(0, 50) as { [key: string]: string }[],
         } as ResultPayload;
       }
 
@@ -324,8 +302,6 @@ export default function ChatPage() {
                     _collapsed={index !== array.length - 1}
                     messagesEndRef={messagesEndRef}
                     NER={query.NER}
-                    feedback={query.feedback}
-                    updateFeedback={() => {}}
                     addDisplacement={addDisplacement}
                     addDistortion={addDistortion}
                     handleSendQuery={handleSendQuery}
@@ -436,7 +412,7 @@ export default function ChatPage() {
                     y: 0,
                   }}
                 >
-                  <div className="flex items-center justify-start gap-2 relative z-10">
+                  <div className="flex items-center justify-start gap-2 relative z-10 w-full min-w-0">
                     <motion.div
                       whileHover={{
                         scale: 1.1,

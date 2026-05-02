@@ -15,10 +15,8 @@ class HistoryResponse(BaseModel):
     connection_id: int
     nl_query: str
     generated_sql: str
-    row_count: int
     success: bool
     error_message: str
-    latency_ms: float
     created_at: Optional[str] = None
 
     class Config:

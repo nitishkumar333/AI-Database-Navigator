@@ -21,6 +21,7 @@ const CodeView: React.FC<CodeDisplayProps> = ({
   payload,
   handleViewChange,
 }) => {
+  console.log(payload, 'payload CodeView')
   if (!payload) return null;
 
   return (
@@ -39,20 +40,6 @@ const CodeView: React.FC<CodeDisplayProps> = ({
       </div>
       {payload.map((item, index) => (
         <div key={index} className="w-full">
-          <div className="flex justify-start items-center w-full">
-            <div className="flex gap-2 items-center w-full">
-              {payload[0].metadata.collection_name && (
-                <div className="flex flex-row justify-between items-center w-full">
-                  <div className="flex gap-2 justify-start items-center">
-                    <div className="text-highlight bg-highlight/10 h-9 w-9 rounded-md flex items-center justify-center">
-                      <FaCode size={14} className="text-highlight" />
-                    </div>
-                    {item.metadata.collection_name}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
           <div className="relative">
             <div className="overflow-y-scroll">
               <div className="absolute top-2 right-0 p-3 flex gap-1">

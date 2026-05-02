@@ -84,7 +84,6 @@ export type Settings = {
   LOGGING_LEVEL_INT: number;
   MODEL_API_BASE: string | null;
   SETTINGS_ID: string;
-  USE_FEEDBACK: boolean;
   WCD_API_KEY: string;
   WCD_URL: string;
   WEAVIATE_IS_LOCAL: boolean;

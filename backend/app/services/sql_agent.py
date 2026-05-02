@@ -51,7 +51,6 @@ def create_sql_tool(agent_instance):
         Returns:
             Result of sql query execution on database
         """
-        print("execute_sql_query called with:", sql_query)
         try:
             validation = ValidateSqlQuery(agent_instance.engine)
             result = validation.validate_sql_query(sql_query)
@@ -63,8 +62,6 @@ def create_sql_tool(agent_instance):
             agent_instance.generated_sql = result.get('sql_query', sql_query)
             agent_instance.columns = result.get('columns', [])
             agent_instance.rows = result.get('rows', [])
-            agent_instance.row_count = result.get('row_count', 0)
-            agent_instance.latency_ms = result.get('latency_ms', 0)
             return result
         else:
             return result['validation_result'].get('explanation', "SQL query is not safe to execute.")
@@ -77,8 +74,6 @@ class SQLAgent:
         self.system_prompt = self.generate_system_prompt(schema_context)
         self.columns = []
         self.rows = []
-        self.row_count = 0
-        self.latency_ms = 0
         self.generated_sql = ""
 
         self.execute_sql_query = create_sql_tool(self)
@@ -95,7 +90,6 @@ class SQLAgent:
         {schema_context}"""
     
     def generate_response(self, state: UserState) -> dict:
-        print("generate_response")
         system_prompt = self.system_prompt
         assistant_prompt = ChatPromptTemplate.from_messages(
             [
@@ -151,8 +145,6 @@ class SQLAgent:
                 "generated_sql": "",
                 "columns": [],
                 "rows": [],
-                "row_count": 0,
-                "latency_ms": 0,
                 "response_text": "Error: LLM rate limit exceeded."
             }
         return {
@@ -161,7 +153,5 @@ class SQLAgent:
             "generated_sql": self.generated_sql,
             "columns": self.columns,
             "rows": self.rows,
-            "row_count": self.row_count,
-            "latency_ms": round(self.latency_ms, 2),
             "response_text": state['messages'][-1].content
         }

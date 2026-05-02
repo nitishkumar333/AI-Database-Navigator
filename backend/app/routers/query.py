@@ -112,10 +112,8 @@ def chat_query(
         connection_id=conn.id,
         nl_query=req.question,
         generated_sql=result.get("generated_sql", ""),
-        row_count=result.get("row_count", 0),
         success=result.get("success", False),
         error_message=result.get("error", ""),
-        latency_ms=result.get("latency_ms", 0),
     )
     db.add(history)
 
@@ -142,9 +140,7 @@ def chat_query(
             assistant_metadata = {
                 "generated_sql": result.get("generated_sql", ""),
                 "columns": result.get("columns", []),
-                "rows": result.get("rows", [])[:100],  # Cap stored rows
-                "row_count": result.get("row_count", 0),
-                "latency_ms": result.get("latency_ms", 0),
+                "rows": result.get("rows", [])[:50],  # Cap stored rows
                 "success": result.get("success", False),
                 "error": result.get("error", ""),
             }
@@ -187,10 +183,8 @@ def execute_sql(
         connection_id=conn_id,
         nl_query="[Manual SQL]",
         generated_sql=req.sql,
-        row_count=result.get("row_count", 0),
         success=result.get("success", False),
         error_message=result.get("error", ""),
-        latency_ms=result.get("latency_ms", 0),
     )
     db.add(history)
     db.commit()
