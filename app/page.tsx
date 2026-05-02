@@ -1,0 +1,21 @@
+"use client";
+
+import React, { useContext } from "react";
+
+import { RouterContext } from "./components/contexts/RouterContext";
+import ChatPage from "./pages/ChatPage";
+import DataPage from "./pages/DataPage";
+import CollectionPage from "./pages/CollectionPage";
+import SettingsPage from "./pages/SettingsPage";
+
+export default function Home() {
+  const { currentPage } = useContext(RouterContext);
+  return (
+    <div className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 md:p-6 overflow-hidden">
+      {currentPage === "chat" && <ChatPage />}
+      {currentPage === "data" && <DataPage />}
+      {currentPage === "collection" && <CollectionPage />}
+      {currentPage === "settings" && <SettingsPage />}
+    </div>
+  );
+}
