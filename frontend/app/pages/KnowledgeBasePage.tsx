@@ -107,7 +107,12 @@ export default function KnowledgeBasePage() {
         className="flex flex-col gap-6 w-full max-w-4xl mx-auto"
       >
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.1 }}
+          className="flex items-center justify-between"
+        >
           <div>
             <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
               <HiOutlineBookOpen className="text-accent" size={28} />
@@ -117,19 +122,29 @@ export default function KnowledgeBasePage() {
               Create named collections of tables to focus the AI&apos;s context during chats.
             </p>
           </div>
-        </div>
+        </motion.div>
 
         <Separator />
 
         {/* Connection selector */}
-        <div className="flex flex-col gap-2">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.2 }}
+          className="flex flex-col gap-2"
+        >
           <label className="text-xs text-muted-foreground font-medium">
             Database Connection
           </label>
           <div className="flex flex-wrap gap-2">
-            {connections.map((conn) => (
-              <button
+            {connections.map((conn, i) => (
+              <motion.button
                 key={conn.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.25 + i * 0.05 }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => {
                   setSelectedConnection(conn);
                 }}
@@ -144,103 +159,151 @@ export default function KnowledgeBasePage() {
                 <span className="text-[10px] text-muted-foreground">
                   {conn.db_name}
                 </span>
-              </button>
+              </motion.button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {connections.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 p-12 border border-dashed border-foreground rounded-xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="flex flex-col items-center justify-center gap-3 p-12 border border-dashed border-foreground rounded-xl"
+          >
             <GoDatabase size={40} className="text-muted-foreground" />
             <p className="text-muted-foreground text-sm">
               No database connections found. Add one in Settings first.
             </p>
-          </div>
+          </motion.div>
         )}
 
-        {selectedConnection && (
-          <>
-            {/* Existing KB Groups */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-primary">
-                  Your Knowledge Bases
-                  {kbGroups.length > 0 && (
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      ({kbGroups.length})
-                    </span>
-                  )}
-                </h2>
-
-              </div>
-
-              {loadingGroups ? (
-                <div className="flex items-center justify-center p-6">
-                  <FaSpinner className="animate-spin text-accent" size={20} />
+        <AnimatePresence>
+          {selectedConnection && (
+            <motion.div
+              key={selectedConnection.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.35 }}
+              className="flex flex-col gap-6"
+            >
+              {/* Existing KB Groups */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.3 }}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-primary">
+                    Your Knowledge Bases
+                    {kbGroups.length > 0 && (
+                      <span className="ml-2 text-sm font-normal text-muted-foreground">
+                        ({kbGroups.length})
+                      </span>
+                    )}
+                  </h2>
                 </div>
-              ) : kbGroups.length === 0 ? (
-                <div className="p-4 border border-dashed border-foreground rounded-xl text-center">
-                  <p className="text-muted-foreground text-sm">
-                    No knowledge bases created yet. Use the form below to create one.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  <AnimatePresence>
-                    {kbGroups.map((group, index) => (
-                      <motion.div
-                        key={group.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: index * 0.03 }}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-accent/20 rounded-xl bg-accent/5 group hover:border-accent/40 transition-colors gap-4"
-                      >
-                        <div className="flex flex-col gap-1.5 min-w-0">
-                          <h3 className="text-primary text-base font-medium flex items-center gap-2">
-                             📚 {group.name}
-                          </h3>
-                          <div className="flex flex-wrap gap-1.5 mt-1">
-                            {group.tables.slice(0, 8).map(t => (
-                              <span key={t} className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent">
-                                {t}
-                              </span>
-                            ))}
-                            {group.tables.length > 8 && (
-                               <span className="px-2 py-0.5 rounded-full bg-foreground border border-foreground-muted text-[10px] text-muted-foreground">
-                                +{group.tables.length - 8} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteKnowledgeGroup(group.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 flex-shrink-0 self-start sm:self-center"
+
+                {loadingGroups ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center justify-center p-6"
+                  >
+                    <FaSpinner className="animate-spin text-accent" size={20} />
+                  </motion.div>
+                ) : kbGroups.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4, delay: 0.35 }}
+                    className="p-4 border border-dashed border-foreground rounded-xl text-center"
+                  >
+                    <p className="text-muted-foreground text-sm">
+                      No knowledge bases created yet. Use the form below to create one.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    <AnimatePresence>
+                      {kbGroups.map((group, index) => (
+                        <motion.div
+                          key={group.id}
+                          initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.92, x: -20 }}
+                          transition={{ duration: 0.35, delay: index * 0.06 }}
+                          whileHover={{ scale: 1.01, borderColor: "rgba(var(--accent), 0.5)" }}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-accent/20 rounded-xl bg-accent/5 group hover:border-accent/40 transition-colors gap-4"
                         >
-                          <GoTrash size={14} className="mr-1.5" />
-                          Delete Group
-                        </Button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
+                          <div className="flex flex-col gap-1.5 min-w-0">
+                            <h3 className="text-primary text-base font-medium flex items-center gap-2">
+                               📚 {group.name}
+                            </h3>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {group.tables.slice(0, 8).map((t, tIdx) => (
+                                <motion.span
+                                  key={t}
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ duration: 0.25, delay: index * 0.06 + tIdx * 0.03 }}
+                                  className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent"
+                                >
+                                  {t}
+                                </motion.span>
+                              ))}
+                              {group.tables.length > 8 && (
+                                 <span className="px-2 py-0.5 rounded-full bg-foreground border border-foreground-muted text-[10px] text-muted-foreground">
+                                  +{group.tables.length - 8} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteKnowledgeGroup(group.id)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 flex-shrink-0 self-start sm:self-center"
+                            >
+                              <GoTrash size={14} className="mr-1.5" />
+                              Delete Group
+                            </Button>
+                          </motion.div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </motion.div>
 
-            <Separator />
+              <motion.div
+                initial={{ opacity: 0, scaleX: 0.5 }}
+                animate={{ opacity: 1, scaleX: 1 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <Separator />
+              </motion.div>
 
-            {/* Create New Group — using shared component */}
-            <KnowledgeBaseForm
-              connectionId={selectedConnection.id}
-              onKnowledgeBaseCreated={handleKnowledgeBaseCreated}
-            />
+              {/* Create New Group — using shared component */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+              >
+                <KnowledgeBaseForm
+                  connectionId={selectedConnection.id}
+                  onKnowledgeBaseCreated={handleKnowledgeBaseCreated}
+                />
+              </motion.div>
 
-            {/* Bottom spacer */}
-            <div className="h-8" />
-          </>
-        )}
+              {/* Bottom spacer */}
+              <div className="h-8" />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

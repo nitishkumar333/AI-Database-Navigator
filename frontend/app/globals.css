@@ -199,8 +199,8 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 9%;
-    --background_alt: 0 0% 14%;
+    --background: 0 0% 5%;
+    --background_alt: 0 0% 7%;
     --foreground: 0 0% 18%;
     --foreground_alt: 0 0% 20%;
     --primary: 0 0% 95%;
@@ -259,4 +259,16 @@ body {
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 4px;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
