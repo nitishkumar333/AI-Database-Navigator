@@ -193,6 +193,8 @@ export const AuthProvider = ({
 
   const logout = () => {
     localStorage.removeItem("auth_token");
+    localStorage.removeItem("selected_connection_id");
+    localStorage.removeItem("selected_knowledge_base_id");
     setToken("");
     setUser(null);
     setOnboardingStatus(null);
