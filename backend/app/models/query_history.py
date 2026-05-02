@@ -11,8 +11,6 @@ class QueryHistory(Base):
     connection_id = Column(Integer, ForeignKey("db_connections.id"), nullable=False)
     nl_query = Column(Text, nullable=False)
     generated_sql = Column(Text, default="")
-    row_count = Column(Integer, default=0)
     success = Column(Boolean, default=True)
     error_message = Column(Text, default="")
-    latency_ms = Column(Float, default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

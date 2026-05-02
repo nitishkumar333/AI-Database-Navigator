@@ -153,7 +153,6 @@ class ValidateSqlQuery:
                 "success": True,
                 "columns": columns,
                 "rows": rows,
-                "row_count": len(rows),
             }
         except Exception as error:
             return {
@@ -262,19 +261,15 @@ def get_schema_context(engine, table_names: list) -> str:
 
 def execute_raw_sql(engine, sql: str) -> dict:
     """Execute user-edited SQL query."""
-    start_time = time.time()
-    
     refined_sql = refine_sql_from_markdown(sql)
     validation = ValidateSqlQuery(engine)
     result = validation.validate_sql_query(refined_sql)
 
     if not (result['validation_result'].get('is_safe') and result['validation_result'].get('schema_validated')):
-        latency_ms = (time.time() - start_time) * 1000
         return {
             "success": False,
             "sql": refined_sql,
             "error": result['validation_result'].get('explanation', 'Validation Failed'),
-            "latency_ms": round(latency_ms, 2),
         }
 
     try:
@@ -283,20 +278,15 @@ def execute_raw_sql(engine, sql: str) -> dict:
             columns = list(query_result.keys())
             rows = [dict(zip(columns, row)) for row in query_result.fetchall()]
 
-        latency_ms = (time.time() - start_time) * 1000
         return {
             "success": True,
             "sql": result['sql_query'],
             "columns": columns,
             "rows": rows,
-            "row_count": len(rows),
-            "latency_ms": round(latency_ms, 2),
         }
     except Exception as e:
-        latency_ms = (time.time() - start_time) * 1000
         return {
             "success": False,
             "sql": result['sql_query'],
             "error": str(e),
-            "latency_ms": round(latency_ms, 2),
         }

@@ -203,10 +203,6 @@ export const ConversationProvider = ({
               query_id: queryId,
               payload: {
                 type: "table",
-                metadata: {
-                  row_count: meta.row_count || 0,
-                  latency_ms: meta.latency_ms || 0,
-                },
                 code: {
                   language: "sql",
                   title: "Generated SQL",
@@ -248,7 +244,6 @@ export const ConversationProvider = ({
         query_end: new Date(
           (msgs as any[])[(msgs as any[]).length - 1]?.created_at || new Date()
         ),
-        feedback: null,
         NER: null,
         index: queryIndex++,
       };
@@ -412,7 +407,6 @@ export const ConversationProvider = ({
       finished: false,
       query_start: new Date(),
       query_end: null,
-      feedback: null,
       NER: null,
       index: 0,
       messages: [userMessage],

@@ -18,7 +18,6 @@ import ErrorMessageDisplay from "./displays/SystemMessages/ErrorMessageDisplay";
 import TextDisplay from "./displays/Generic/TextDisplay";
 import WarningDisplay from "./displays/SystemMessages/WarningDisplay";
 import CodeDisplay from "./components/ViewCodeButton";
-import FeedbackButtons from "./components/FeedbackButtons";
 import InfoMessageDisplay from "./displays/SystemMessages/InfoMessageDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QueryContext } from "../contexts/SocketContext";
@@ -41,12 +40,6 @@ interface RenderChatProps {
   query_start: Date;
   query_end: Date | null;
   NER: NERPayload | null;
-  feedback: number | null;
-  updateFeedback: (
-    conversationId: string,
-    queryId: string,
-    feedback: number
-  ) => void;
   addDisplacement: (value: number) => void;
   addDistortion: (value: number) => void;
   handleSendQuery: (query: string) => void;
@@ -118,8 +111,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
   query_start,
   query_end,
   NER,
-  feedback,
-  updateFeedback,
   addDisplacement,
   addDistortion,
   handleSendQuery,
@@ -403,17 +394,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
                   );
                 })}
               </div>
-              {finished && (
-                <FeedbackButtons
-                  conversationID={conversationID}
-                  queryID={queryID}
-                  messages={messages}
-                  query_start={query_start}
-                  query_end={query_end}
-                  feedback={feedback}
-                  updateFeedback={updateFeedback}
-                />
-              )}
               {displayMessages
                 .filter((m) => m.type === "suggestion")
                 .map((message, index) => (
