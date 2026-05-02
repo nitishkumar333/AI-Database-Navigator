@@ -93,7 +93,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   return (
     <div
-      className={`fixed bottom-8 gap-1 flex items-center justify-center flex-col transition-all duration-300 "md:w-[60vw] lg:w-[40vw] w-full p-2 md:p-0 lg:p-0" `}
+      className={`fixed bottom-8 gap-1 flex items-center justify-center flex-col transition-all duration-300 "md:w-[60vw] lg:w-[45vw] w-full p-2 md:p-0 lg:p-0" `}
     >
       <div className="w-full flex justify-between items-center gap-2 mb-2">
         {currentStatus != "" ? (

@@ -256,7 +256,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
-      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background border-b border-foreground/5 pb-2">
+      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background border-b border-foreground pb-2">
         <div className="flex gap-2 items-center justify-center fade-in">
           <p className="text-primary text-sm font-medium opacity-80">
             {currentTitle && currentTitle != "New Conversation"
@@ -285,7 +285,7 @@ export default function ChatPage() {
       {currentConversation != null && <Separator className="w-full hidden" />}
 
       <div className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-center items-center">
-        <div className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] h-[80vh]">
+        <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] h-[80vh]">
           {currentQuery &&
             Object.entries(currentQuery)
               .sort((a, b) => a[1].index - b[1].index)
@@ -350,9 +350,21 @@ export default function ChatPage() {
           </div>
         )}
       {Object.keys(currentQuery).length === 0 && (
-        <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in">
-          <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[40vw] px-4 pb-4">
-            <p className="text-left text-3xl font-semibold">Ask Anything</p>
+        <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in pb-5 md:pb-0">
+          <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
+            <p
+              className="text-left text-3xl font-semibold"
+              style={{
+                background: "linear-gradient(90deg, #2d8a5e, #41ba7fff, #4dc98dff, #79eeb1ff, #49BC84, #3da874, #2d8a5e)",
+                backgroundSize: "200% 100%",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                animation: "gradientShift 3s ease-in-out infinite",
+              }}
+            >
+              Ask Anything
+            </p>
             <Button
               variant="default"
               className="w-10"
@@ -366,7 +378,7 @@ export default function ChatPage() {
           </div>
 
           {loadingSuggestions ? (
-            <div className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-1">
+            <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-1">
               {[72, 85, 60, 78].map((width, index) => (
                 <div
                   key={index}
@@ -385,7 +397,7 @@ export default function ChatPage() {
             </div>
           ) : (
             <motion.div
-              className="flex flex-col w-full md:w-[60vw] lg:w-[40vw] gap-3 mb-12"
+              className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-3 mb-12"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
