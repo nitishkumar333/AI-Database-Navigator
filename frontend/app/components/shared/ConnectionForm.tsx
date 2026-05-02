@@ -46,6 +46,7 @@ export default function ConnectionForm({
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [connectionString, setConnectionString] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     host: "localhost",
@@ -54,6 +55,28 @@ export default function ConnectionForm({
     username: "postgres",
     password: "",
   });
+
+  const handleConnectionStringChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setConnectionString(val);
+    
+    try {
+      const url = new URL(val);
+      if (url.protocol === "postgresql:" || url.protocol === "postgres:") {
+        const updates: Partial<typeof formData> = {};
+        if (url.hostname) updates.host = url.hostname;
+        if (url.port) updates.port = parseInt(url.port, 10);
+        else updates.port = 5432;
+        if (url.pathname && url.pathname !== "/") updates.db_name = url.pathname.slice(1);
+        if (url.username) updates.username = decodeURIComponent(url.username);
+        if (url.password) updates.password = decodeURIComponent(url.password);
+        
+        setFormData((prev) => ({ ...prev, ...updates }));
+      }
+    } catch (err) {
+      // Ignore invalid URLs while typing
+    }
+  };
 
   const authHeaders = () => ({
     "Content-Type": "application/json",
@@ -111,6 +134,7 @@ export default function ConnectionForm({
           username: "postgres",
           password: "",
         });
+        setConnectionString("");
         setTestResult(null);
         onConnectionSaved?.(newConn);
       } else {
@@ -136,6 +160,20 @@ export default function ConnectionForm({
           New PostgreSQL Connection
         </h2>
       )}
+
+      <div className="mb-6 flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">
+          Paste Connection String (Auto-fill)
+        </label>
+        <input
+          id="conn-string"
+          type="text"
+          value={connectionString}
+          onChange={handleConnectionStringChange}
+          placeholder="postgresql://user:password@localhost:5432/my_database"
+          className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary w-full focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
