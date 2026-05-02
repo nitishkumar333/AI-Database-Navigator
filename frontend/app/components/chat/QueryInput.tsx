@@ -109,7 +109,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
       {groupDetails && (
         <div className="w-full flex flex-wrap gap-1.5 px-1 pb-1">
           <span
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/20 text-accent text-xs font-medium border border-accent/40 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-background text-accent text-xs font-medium border border-accent/40 shadow-sm"
           >
             📚 {groupDetails.name}
             <span className="text-[10px] opacity-80">({groupDetails.tables.length} tables)</span>

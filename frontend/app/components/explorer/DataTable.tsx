@@ -58,7 +58,6 @@ const DataTable: React.FC<DataTableProps> = ({
     selectedRow !== null
       ? {
           ...containerStyle,
-          minHeight: "450px",
           height: "auto",
         }
       : containerStyle;

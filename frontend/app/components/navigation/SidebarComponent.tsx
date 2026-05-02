@@ -78,7 +78,7 @@ const SidebarComponent: React.FC = () => {
         },
       },
       {
-        title: "Settings",
+        title: "Database Connections",
         mode: ["settings"],
         icon: <MdOutlineSettingsInputComponent />,
         onClick: () => {
@@ -166,10 +166,7 @@ const SidebarComponent: React.FC = () => {
         </SidebarGroup>
 
         <Separator />
-
-        {currentPage === "chat" && <HomeSubMenu />}
-        {currentPage === "knowledge" && <SettingsSubMenu />}
-        {currentPage === "settings" && <SettingsSubMenu />}
+        <HomeSubMenu />
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
