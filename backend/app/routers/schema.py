@@ -7,6 +7,9 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
+from app.services.redis_client import redis_client
+import json
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(prefix="/api/schema", tags=["Schema Explorer"])
 
@@ -47,6 +50,12 @@ def get_columns(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    cache_key = f"table_schema:user:{current_user.id}:connection:{conn_id}:table:{table_name}"
+    cached_data = redis_client.get(cache_key)
+    if cached_data:
+        print("Cache hit for", cache_key)
+        return cached_data
+
     conn = _get_connection(conn_id, current_user, db)
     engine = get_user_engine(conn)
     inspector = inspect(engine)
@@ -74,6 +83,9 @@ def get_columns(
             "is_primary_key": col["name"] in pk_columns,
             "foreign_key": fk_map.get(col["name"]),
         })
+
+    redis_client.set(cache_key, json.dumps(jsonable_encoder(result)))
+
     return result
 
 
@@ -84,6 +96,12 @@ def preview_table(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    cache_key = f"preview:user:{current_user.id}:connection:{conn_id}:table:{table_name}"
+    cached_data = redis_client.get(cache_key)
+    if cached_data:
+        print("Cache hit for", cache_key)
+        return cached_data
+
     conn = _get_connection(conn_id, current_user, db)
     engine = get_user_engine(conn)
 
@@ -95,29 +113,8 @@ def preview_table(
         result = connection.execute(text(f'SELECT * FROM "{safe_name}" LIMIT 10'))
         columns = list(result.keys())
         rows = [dict(zip(columns, row)) for row in result.fetchall()]
+    
+    response = {"columns": columns, "rows": rows}
+    redis_client.set(cache_key, json.dumps(jsonable_encoder(response)))
 
-    return {"columns": columns, "rows": rows}
-
-
-@router.get("/{conn_id}/relationships")
-def get_relationships(
-    conn_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    conn = _get_connection(conn_id, current_user, db)
-    engine = get_user_engine(conn)
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-
-    relationships = []
-    for table in tables:
-        fks = inspector.get_foreign_keys(table)
-        for fk in fks:
-            relationships.append({
-                "from_table": table,
-                "from_columns": fk.get("constrained_columns", []),
-                "to_table": fk.get("referred_table"),
-                "to_columns": fk.get("referred_columns", []),
-            })
-    return relationships
+    return response
