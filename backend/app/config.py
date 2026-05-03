@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-to-a-secure-random-key-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
-    DATABASE_URL: str = "sqlite:///./app_metadata.db"
+    DATABASE_URL: str = ""
     GEMINI_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
 
