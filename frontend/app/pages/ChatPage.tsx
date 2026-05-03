@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { motion } from "framer-motion";
 
 import { Query, Message, ResultPayload, ResponsePayload } from "@/app/types/chat";
-import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductData";
+import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
 import { MdChatBubbleOutline } from "react-icons/md";
 
 import QueryInput from "../components/chat/QueryInput";
