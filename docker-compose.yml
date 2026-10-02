@@ -34,6 +34,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Seed (one-shot) ─────────────────────────
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/shop
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "seed_shop.py"]
+
   # ── Backend (FastAPI) ───────────────────────
   backend:
     build:
@@ -54,6 +67,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
 
   # ── Frontend (Next.js) ─────────────────────
   frontend:
