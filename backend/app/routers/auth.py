@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from app.database import get_db
 from app.models.user import User
 from app.utils.security import hash_password, verify_password, create_access_token, get_current_user
+from app.services.guest_service import create_guest_account
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -28,6 +29,7 @@ class UserResponse(BaseModel):
     id: int
     email: str
     username: str
+    is_guest: bool = False
 
     class Config:
         from_attributes = True
@@ -61,9 +63,24 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(access_token=token)
 
 
+@router.post("/guest", response_model=TokenResponse)
+@router.post("/guest-login", response_model=TokenResponse)
+def guest_login(db: Session = Depends(get_db)):
+    """Instantly authenticate as a guest user with preloaded DB connection and mock conversations."""
+    guest_user = create_guest_account(db)
+    token = create_access_token(data={"sub": str(guest_user.id)})
+    return TokenResponse(access_token=token)
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    is_guest = current_user.username.startswith("guest_") or current_user.email.endswith("@sqlnav.demo")
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        is_guest=is_guest,
+    )
 
 
 @router.get("/onboarding-status")

@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     GEMINI_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
+    
+    # Guest user preloaded DB connection config
+    GUEST_DB_HOST: str = "localhost"
+    GUEST_DB_PORT: int = 5432
+    GUEST_DB_NAME: str = "shop"
+    GUEST_DB_USER: str = "postgres"
+    GUEST_DB_PASSWORD: str = "password"
 
     class Config:
         env_file = ".env"

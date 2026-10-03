@@ -13,6 +13,7 @@ export type AuthUser = {
   id: number;
   email: string;
   username: string;
+  is_guest?: boolean;
 };
 
 export type OnboardingStatus = {
@@ -33,6 +34,7 @@ export const AuthContext = createContext<{
     username: string,
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
+  guestLogin: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   getToken: () => string;
   clearAuth: () => void;
@@ -45,6 +47,7 @@ export const AuthContext = createContext<{
   onboardingStatus: null,
   login: async () => ({ ok: false }),
   register: async () => ({ ok: false }),
+  guestLogin: async () => ({ ok: false }),
   logout: () => {},
   getToken: () => "",
   clearAuth: () => {},
@@ -191,6 +194,43 @@ export const AuthProvider = ({
     }
   };
 
+  const guestLogin = async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      // Clear any previous connection/KB selections so fresh guest defaults are selected
+      localStorage.removeItem("selected_connection_id");
+      localStorage.removeItem("selected_knowledge_base_id");
+
+      const response = await fetch(`${host}/api/auth/guest-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const newToken = data.access_token;
+        localStorage.setItem("auth_token", newToken);
+        setToken(newToken);
+        // Fetch user info
+        const meRes = await fetch(`${host}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${newToken}` },
+        });
+        if (meRes.ok) {
+          const userData: AuthUser = await meRes.json();
+          setUser(userData);
+        }
+        await fetchOnboardingStatus(newToken);
+        return { ok: true };
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        return {
+          ok: false,
+          error: errData.detail || "Guest login failed",
+        };
+      }
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("selected_connection_id");
@@ -218,6 +258,7 @@ export const AuthProvider = ({
         onboardingStatus,
         login,
         register,
+        guestLogin,
         logout,
         getToken,
         clearAuth,

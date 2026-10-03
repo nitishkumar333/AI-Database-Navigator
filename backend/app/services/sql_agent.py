@@ -46,6 +46,7 @@ def create_sql_tool(agent_instance):
         1. sql_query must be a valid PostgreSQL SELECT query
         2. Use proper table and column names from the schema
         3. Add appropriate LIMIT clause if the query could return many rows
+        4. Prioritize and include image URL columns (e.g., image_url, image, thumbnail) whenever present in the queried tables
 
         Args:
             sql_query: Single SQL query string to execute
@@ -88,8 +89,15 @@ class SQLAgent:
     def generate_system_prompt(self, schema_context):
         return f"""You are an AI agent with capability to generate SQL queries. You can use tool `execute_sql_query` to generate a PostgreSQL SELECT query and answer the user's question based on the query result.
 
-        DATABASE SCHEMA:
-        {schema_context}"""
+CRITICAL QUERY INSTRUCTIONS:
+1. Always prioritize and include columns containing image URLs (such as `image_url`, `image`, `img`, `thumbnail`, `photo`, `picture`, `avatar`, etc.) in the SELECT list whenever the queried tables or joined tables contain them, so that the final SQL query result includes image links.
+2. When using GROUP BY or aggregations on tables with image columns, ensure the image column is preserved in the output (e.g., include it in the GROUP BY or use MAX/MIN or an appropriate aggregate).
+3. Generate only valid PostgreSQL SELECT queries. Do not generate DDL/DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
+4. Use clear column aliases where helpful and add an appropriate LIMIT clause if many rows could be returned.
+5. In your final natural language response, provide a clear, concise summary of the findings.
+
+DATABASE SCHEMA:
+{schema_context}"""
     
     def generate_response(self, state: UserState) -> dict:
         system_prompt = self.system_prompt
@@ -101,12 +109,15 @@ class SQLAgent:
         )
 
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash-lite",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
         runnable_llm = assistant_prompt | llm.bind_tools([self.execute_sql_query])
         response = runnable_llm.invoke({"conversation": state["messages"]})
+        print('='*50)
+        print(response)
+        print('='*50)
         return {**state,"messages": response}
     
     def build_workflow(self):

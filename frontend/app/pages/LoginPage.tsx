@@ -11,16 +11,19 @@ import {
   IoLockClosedOutline,
   IoEyeOutline,
   IoEyeOffOutline,
+  IoSparklesOutline,
+  IoArrowForward,
 } from "react-icons/io5";
 
 export default function LoginPage() {
-  const { login, register } = useContext(AuthContext);
+  const { login, register, guestLogin } = useContext(AuthContext);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,6 +47,16 @@ export default function LoginPage() {
       setError(result.error || "Something went wrong");
     }
     setLoading(false);
+  };
+
+  const handleGuestLogin = async () => {
+    setError("");
+    setGuestLoading(true);
+    const result = await guestLogin();
+    if (!result.ok) {
+      setError(result.error || "Failed to log in as guest. Please try again.");
+      setGuestLoading(false);
+    }
   };
 
   const switchMode = () => {
@@ -118,6 +131,60 @@ export default function LoginPage() {
                 </p>
               </div>
             </motion.div>
+
+            {/* Guest Login Button */}
+            <motion.button
+              type="button"
+              id="guest-login-btn"
+              onClick={handleGuestLogin}
+              disabled={guestLoading || loading}
+              className="group relative w-full py-3 px-4 rounded-xl border border-accent/40 bg-accent/10 hover:bg-accent/20 hover:border-accent/60 text-primary transition-all duration-300 flex items-center justify-between overflow-hidden shadow-sm hover:shadow-lg hover:shadow-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={{ scale: guestLoading || loading ? 1 : 1.01 }}
+              whileTap={{ scale: guestLoading || loading ? 1 : 0.99 }}
+            >
+              {/* Animated sheen highlight */}
+              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-accent/15 to-transparent pointer-events-none" />
+
+              {guestLoading ? (
+                <div className="w-full flex items-center justify-center gap-2 text-accent py-1">
+                  <FaSpinner className="animate-spin" size={16} />
+                  <span className="text-sm font-semibold tracking-wide">
+                    Setting up demo workspace...
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
+                      <IoSparklesOutline size={18} />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-primary">
+                          Login as Guest
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        Preloaded shop database & sample chats
+                      </span>
+                    </div>
+                  </div>
+                  <IoArrowForward
+                    className="text-muted-foreground group-hover:text-accent group-hover:translate-x-1 transition-all"
+                    size={18}
+                  />
+                </>
+              )}
+            </motion.button>
+
+            {/* Divider */}
+            <div className="relative my-6 flex items-center justify-center">
+              <div className="border-t border-foreground/30 w-full" />
+              <span className="bg-background px-3 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                OR
+              </span>
+              <div className="border-t border-foreground/30 w-full" />
+            </div>
 
             {/* Mode tabs */}
             <div className="flex rounded-xl bg-background/60 p-1 mb-6 border border-foreground/30">
@@ -251,10 +318,10 @@ export default function LoginPage() {
               {/* Submit */}
               <motion.button
                 type="submit"
-                disabled={loading}
+                disabled={loading || guestLoading}
                 className="w-full tracking-wider py-3.5 rounded-xl bg-gradient-to-r from-accent to-accent/80 text-background font-semibold text-sm hover:shadow-lg hover:shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
-                whileHover={{ scale: loading ? 1 : 1.01 }}
-                whileTap={{ scale: loading ? 1 : 0.99 }}
+                whileHover={{ scale: loading || guestLoading ? 1 : 1.01 }}
+                whileTap={{ scale: loading || guestLoading ? 1 : 0.99 }}
               >
                 {loading ? (
                   <FaSpinner className="animate-spin" size={16} />

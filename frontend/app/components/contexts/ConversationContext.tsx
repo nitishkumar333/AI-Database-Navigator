@@ -16,6 +16,7 @@ import { RouterContext } from "./RouterContext";
 import { AuthContext } from "./AuthContext";
 import { host } from "../host";
 import { QueryContext } from "./SocketContext";
+import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
 
 export const ConversationContext = createContext<{
   conversations: Conversation[];
@@ -134,9 +135,18 @@ export const ConversationProvider = ({
 
       if (fullConversations.length > 0) {
         setConversations(fullConversations);
+        // If a conversation was specified in URL, use it, otherwise select the first conversation
+        const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+        const urlConvId = params?.get("conversation");
+        const initialConv = (urlConvId && fullConversations.find(c => c.id === urlConvId)) || fullConversations[0];
+        setCurrentConversation(initialConv.id);
+        if (currentPage === "chat") {
+          changePage("chat", { conversation: initialConv.id }, true);
+        }
+      } else {
+        // No conversations yet — start a fresh empty conversation ("Ask Anything" screen)
+        startNewConversation();
       }
-      // Always start with a fresh empty conversation ("Ask Anything" screen)
-      startNewConversation();
     } catch (e) {
       console.error("Failed to fetch conversations:", e);
       startNewConversation();
@@ -188,29 +198,52 @@ export const ConversationProvider = ({
             meta = JSON.parse(msg.metadata_json || "{}");
           } catch {}
 
-          // If there are rows, add a table result message
+          // If there are rows, add a product or table result message
           if (
             msg.message_type === "result" &&
             meta.success &&
             meta.rows &&
             meta.rows.length > 0
           ) {
-            frontendMessages.push({
-              type: "result",
-              id: uuidv4(),
-              conversation_id: detail.id,
-              user_id: id || "",
-              query_id: queryId,
-              payload: {
-                type: "table",
-                code: {
-                  language: "sql",
-                  title: "Generated SQL",
-                  text: meta.generated_sql || "",
-                },
-                objects: meta.rows.slice(0, 100),
-              } as ResultPayload,
-            });
+            const columns = meta.columns || Object.keys(meta.rows[0] || {});
+            const { isProduct, fieldMapping } = detectProductData(meta.rows, columns);
+
+            if (isProduct) {
+              const products = mapRowsToProducts(meta.rows, fieldMapping);
+              frontendMessages.push({
+                type: "result",
+                id: uuidv4(),
+                conversation_id: detail.id,
+                user_id: id || "",
+                query_id: queryId,
+                payload: {
+                  type: "product",
+                  code: {
+                    language: "sql",
+                    title: "Generated SQL",
+                    text: meta.generated_sql || "",
+                  },
+                  objects: products,
+                } as ResultPayload,
+              });
+            } else {
+              frontendMessages.push({
+                type: "result",
+                id: uuidv4(),
+                conversation_id: detail.id,
+                user_id: id || "",
+                query_id: queryId,
+                payload: {
+                  type: "table",
+                  code: {
+                    language: "sql",
+                    title: "Generated SQL",
+                    text: meta.generated_sql || "",
+                  },
+                  objects: meta.rows.slice(0, 100),
+                } as ResultPayload,
+              });
+            }
           }
 
           // Text response

@@ -179,9 +179,18 @@ const SidebarComponent: React.FC = () => {
                   </span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-primary font-medium truncate">
-                    {user?.username || "User"}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-primary font-medium truncate">
+                      {user?.is_guest || user?.username?.startsWith("guest_")
+                        ? "Guest User"
+                        : user?.username || "User"}
+                    </p>
+                    {(user?.is_guest || user?.username?.startsWith("guest_")) && (
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent font-semibold flex-shrink-0">
+                        Demo
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-muted-foreground truncate">
                     {user?.email || ""}
                   </p>
