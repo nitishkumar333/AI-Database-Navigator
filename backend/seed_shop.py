@@ -11,38 +11,28 @@ Tables created and populated:
   • order_items     – line items inside each order
   • payments        – payment records linked to orders
   • coupons         – discount codes
-
-Usage
------
-1. Install dependencies:
-       pip install psycopg2-binary faker requests
-
-2. Set your Postgres connection string as an environment variable:
-       export DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
-
-   Or edit DB_URL directly in this file.
-
-3. Run:
-       python seed_ecommerce.py
 """
 
 import os
 import sys
 import random
+import time
 import requests
 import psycopg2
+from psycopg2 import sql
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.extras import execute_values
 from faker import Faker
 from datetime import datetime, timedelta
+from urllib.parse import urlparse, urlunparse
 
 # ──────────────────────────────────────────────
 # CONFIG  –  edit or set env var DATABASE_URL
 # ──────────────────────────────────────────────
 DB_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:password@localhost:5432/ecommerce"
+    "postgresql://postgres:password@localhost:5432/shop"
 )
-
 NUM_USERS       = 40
 NUM_ORDERS      = 80   # spread across users
 REVIEWS_PER_PRODUCT = 3
@@ -53,6 +43,53 @@ random.seed(42)
 
 
 # ══════════════════════════════════════════════
+# STEP 0 – Ensure Database Exists
+# ══════════════════════════════════════════════
+
+def ensure_database_exists(db_url: str) -> None:
+    """Ensure the target database exists in Postgres, creating it if needed."""
+    try:
+        parsed = urlparse(db_url)
+        target_db = parsed.path.lstrip("/")
+        if not target_db:
+            return
+
+        candidate_dbs = ["postgres", "template1"]
+        default_db = os.getenv("POSTGRES_DB")
+        if default_db and default_db not in candidate_dbs:
+            candidate_dbs.insert(0, default_db)
+
+        maint_conn = None
+        for m_db in candidate_dbs:
+            try:
+                maint_url = urlunparse(parsed._replace(path=f"/{m_db}"))
+                maint_conn = psycopg2.connect(maint_url)
+                break
+            except Exception:
+                continue
+
+        if not maint_conn:
+            print("   ⚠️  Could not connect to maintenance database to verify target DB.")
+            return
+
+        maint_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = maint_conn.cursor()
+        try:
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (target_db,))
+            if not cur.fetchone():
+                print(f"   🔨 Database '{target_db}' does not exist. Creating it …")
+                cur.execute(sql.SQL("CREATE DATABASE {};").format(sql.Identifier(target_db)))
+                print(f"   ✓ Database '{target_db}' created successfully.")
+            else:
+                print(f"   ✓ Database '{target_db}' exists.")
+        finally:
+            cur.close()
+            maint_conn.close()
+    except Exception as err:
+        print(f"   ⚠️  Database check/creation notice: {err}")
+
+
+# ══════════════════════════════════════════════
 # STEP 1 – Fetch real product data (with images)
 # ══════════════════════════════════════════════
 
@@ -60,7 +97,7 @@ def fetch_real_products() -> list[dict]:
     """Pull all 20 products from FakeStoreAPI – includes real hosted image URLs."""
     print("⬇  Fetching real product data from fakestoreapi.com …")
     try:
-        resp = requests.get("https://fakestoreapi.com/products", timeout=15)
+        resp = requests.get("https://fakestoreapi.com/products", timeout=5)
         resp.raise_for_status()
         products = resp.json()
         print(f"   ✓ Got {len(products)} products with real image URLs.")
@@ -478,12 +515,22 @@ def print_summary(conn):
 def main():
     api_products = fetch_real_products()
 
+    print(f"\n🔌 Ensuring target database exists …")
+    ensure_database_exists(DB_URL)
+
     print(f"\n🔌 Connecting to Postgres …  ({DB_URL[:40]}…)")
-    try:
-        conn = psycopg2.connect(DB_URL)
-    except Exception as exc:
-        print(f"   ✗ Connection failed: {exc}")
-        sys.exit(1)
+    conn = None
+    retries = 5
+    for attempt in range(1, retries + 1):
+        try:
+            conn = psycopg2.connect(DB_URL)
+            break
+        except Exception as exc:
+            if attempt == retries:
+                print(f"   ✗ Connection failed after {retries} attempts: {exc}")
+                sys.exit(1)
+            print(f"   ⚠️  Connection attempt {attempt} failed ({exc}). Retrying in 2s …")
+            time.sleep(2)
 
     try:
         seed(conn, api_products)
@@ -494,7 +541,8 @@ def main():
         print(f"\n✗  Error during seeding: {exc}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
