@@ -42,6 +42,7 @@ services:
     restart: "no"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/shop
+      POSTGRES_DB: ${POSTGRES_DB:-sqlnav}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +63,11 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      GUEST_DB_HOST: postgres
+      GUEST_DB_PORT: 5432
+      GUEST_DB_NAME: shop
+      GUEST_DB_USER: ${POSTGRES_USER:-postgres}
+      GUEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
     depends_on:
       postgres:
         condition: service_healthy
