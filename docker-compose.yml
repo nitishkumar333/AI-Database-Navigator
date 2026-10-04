@@ -69,6 +69,9 @@ services:
       GUEST_DB_NAME: shop
       GUEST_DB_USER: ${POSTGRES_USER:-postgres}
       GUEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - ./backend:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +90,16 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: ["npm", "run", "dev"]
     depends_on:
       - backend
 
