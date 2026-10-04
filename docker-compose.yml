@@ -60,6 +60,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-sqlnav}
       SECRET_KEY: ${SECRET_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REDIS_HOST: redis
       REDIS_PORT: 6379

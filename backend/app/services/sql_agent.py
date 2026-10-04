@@ -109,7 +109,7 @@ DATABASE SCHEMA:
         )
 
         llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash-lite",
+            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
@@ -146,13 +146,19 @@ DATABASE SCHEMA:
         except ResourceExhausted as e:
             raise HTTPException(status_code=429, detail="LLM API rate limit exceeded. Please try again later.")
         except Exception as e:
+            print(f"Error executing SQL agent workflow: {e}")
+            import traceback
+            traceback.print_exc()
+            is_rate_limit = "429" in str(e) or "ResourceExhausted" in str(type(e).__name__)
+            error_message = "Error: LLM rate limit exceeded. Please try again later." if is_rate_limit else f"Error: {e}"
             return {
                 "success": False,
                 "question": user_input,
-                "generated_sql": "",
-                "columns": [],
-                "rows": [],
-                "response_text": "Error: LLM rate limit exceeded."
+                "generated_sql": self.generated_sql or "",
+                "columns": self.columns or [],
+                "rows": self.rows or [],
+                "error": error_message,
+                "response_text": error_message,
             }
         return {
             "success": True,

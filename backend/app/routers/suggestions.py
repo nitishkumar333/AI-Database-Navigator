@@ -96,7 +96,7 @@ def get_initial_suggestions(
         )
         prompt = initial_suggestions_prompt(schema_context)
         llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash-lite",
+            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
@@ -136,7 +136,7 @@ def get_conversation_suggestions(
         history_text = "\n".join(history_lines) if history_lines else "No previous conversation."
         prompt = conversation_suggestions_prompt(schema_context, history_text)
         llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash-lite",
+            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )

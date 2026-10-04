@@ -148,7 +148,7 @@ export default function ChatPage() {
     // Add text response (summary/status)
     const statusText = result.success
       ? result.response_text
-      : `❌ ${result.error || "Query failed"}`;
+      : `❌ ${result.error || result.response_text || "Query failed"}`;
 
     const textMessage: Message = {
       type: "text",
