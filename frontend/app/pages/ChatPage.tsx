@@ -149,7 +149,7 @@ export default function ChatPage() {
     const statusText = result.success
       ? result.response_text
       : `❌ ${result.error || "Query failed"}`;
-    
+
     const textMessage: Message = {
       type: "text",
       id: uuidv4(),
@@ -256,7 +256,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
-      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 gap-5 bg-background border-b border-foreground pb-2">
+      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 pt-0 gap-5 bg-background border-b border-foreground pb-2">
         <div className="flex gap-2 items-center justify-center fade-in">
           <p className="text-primary text-sm font-medium opacity-80">
             {currentTitle && currentTitle != "New Conversation"
@@ -285,7 +285,7 @@ export default function ChatPage() {
       {currentConversation != null && <Separator className="w-full hidden" />}
 
       <div className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-center items-center">
-        <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] h-[80vh]">
+        <div className="flex flex-col w-full md:w-[80vw] lg:w-[65vw] h-[80vh]">
           {currentQuery &&
             Object.entries(currentQuery)
               .sort((a, b) => a[1].index - b[1].index)
@@ -322,7 +322,7 @@ export default function ChatPage() {
             handleSendQuery={handleSendQuery}
             addDisplacement={addDisplacement}
             addDistortion={addDistortion}
-            selectSettings={() => {}}
+            selectSettings={() => { }}
             selectedConnectionId={selectedConnectionId}
             onConnectionChange={(connId) => {
               setSelectedConnectionId(connId);
@@ -349,129 +349,129 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-      {Object.keys(currentQuery).length === 0 && (
-        <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in pb-5 md:pb-0">
-          <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
-            <p
-              className="text-left text-3xl font-semibold"
-              style={{
-                background: "linear-gradient(90deg, #2d8a5e, #41ba7fff, #4dc98dff, #79eeb1ff, #49BC84, #3da874, #2d8a5e)",
-                backgroundSize: "200% 100%",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-                animation: "gradientShift 3s ease-in-out infinite",
-              }}
-            >
-              Ask Anything
-            </p>
-            <Button
-              variant="default"
-              className="w-10"
-              onClick={() => {
-                clearSuggestionsCache();
-                loadSuggestions(true);
-              }}
-            >
-              <IoRefresh />
-            </Button>
-          </div>
-
-          {loadingSuggestions ? (
-            <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-1">
-              {[72, 85, 60, 78].map((width, index) => (
-                <div
-                  key={index}
-                  className="flex flex-col gap-2 px-4 pt-2 pb-2"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="skeleton h-[14px] w-[14px] rounded-sm shrink-0" />
-                    <div
-                      className="skeleton h-[14px] rounded"
-                      style={{ width: `${width}%` }}
-                    />
-                  </div>
-                  <div className="skeleton h-px w-full opacity-50" />
-                </div>
-              ))}
+        {Object.keys(currentQuery).length === 0 && (
+          <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in pb-5 md:pb-0">
+            <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
+              <p
+                className="text-left text-3xl font-semibold"
+                style={{
+                  background: "linear-gradient(90deg, #2d8a5e, #41ba7fff, #4dc98dff, #79eeb1ff, #49BC84, #3da874, #2d8a5e)",
+                  backgroundSize: "200% 100%",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  animation: "gradientShift 3s ease-in-out infinite",
+                }}
+              >
+                Ask Anything
+              </p>
+              <Button
+                variant="default"
+                className="w-10"
+                onClick={() => {
+                  clearSuggestionsCache();
+                  loadSuggestions(true);
+                }}
+              >
+                <IoRefresh />
+              </Button>
             </div>
-          ) : (
-            <motion.div
-              className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-3 mb-12"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
-            >
-              {randomPrompts.map((prompt, index) => (
-                <motion.button
-                  key={index + "prompt"}
-                  onClick={() => handleSendQuery(prompt)}
-                  className="whitespace-normal px-4 pt-2 text-left h-auto hover:bg-foreground text-sm rounded-lg transition-all duration-200 ease-in-out flex flex-col items-start justify-start overflow-hidden relative group"
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    duration: 0.2,
-                    delay: index * 0.03,
-                    ease: "easeOut",
-                  }}
-                  whileHover={{
-                    scale: 1.02,
-                    y: -2,
-                    transition: { duration: 0.1 },
-                  }}
-                  whileTap={{
-                    scale: 0.98,
-                    y: 0,
-                  }}
-                >
-                  <div className="flex items-center justify-start gap-2 relative z-10 w-full min-w-0">
+
+            {loadingSuggestions ? (
+              <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-1">
+                {[72, 85, 60, 78].map((width, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col gap-2 px-4 pt-2 pb-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="skeleton h-[14px] w-[14px] rounded-sm shrink-0" />
+                      <div
+                        className="skeleton h-[14px] rounded"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                    <div className="skeleton h-px w-full opacity-50" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-3 mb-12"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
+              >
+                {randomPrompts.map((prompt, index) => (
+                  <motion.button
+                    key={index + "prompt"}
+                    onClick={() => handleSendQuery(prompt)}
+                    className="whitespace-normal px-4 pt-2 text-left h-auto hover:bg-foreground text-sm rounded-lg transition-all duration-200 ease-in-out flex flex-col items-start justify-start overflow-hidden relative group"
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{
+                      duration: 0.2,
+                      delay: index * 0.03,
+                      ease: "easeOut",
+                    }}
+                    whileHover={{
+                      scale: 1.02,
+                      y: -2,
+                      transition: { duration: 0.1 },
+                    }}
+                    whileTap={{
+                      scale: 0.98,
+                      y: 0,
+                    }}
+                  >
+                    <div className="flex items-center justify-start gap-2 relative z-10 w-full min-w-0">
+                      <motion.div
+                        whileHover={{
+                          scale: 1.1,
+                          rotate: [0, -10, 10, -5, 5, 0],
+                          transition: {
+                            duration: 0.5,
+                            ease: "easeInOut",
+                            times: [0, 0.2, 0.4, 0.6, 0.8, 1],
+                          },
+                        }}
+                      >
+                        <MdChatBubbleOutline size={14} />
+                      </motion.div>
+                      <motion.p
+                        className="text-primary text-sm truncate"
+                        initial={{ opacity: 0.8 }}
+                        whileHover={{
+                          opacity: 1,
+                          transition: { duration: 0.2 },
+                        }}
+                      >
+                        {prompt}
+                      </motion.p>
+                    </div>
                     <motion.div
+                      className="border-b border-foreground w-full pt-2 origin-left"
+                      initial={{ scaleX: 0, opacity: 0.3 }}
                       whileHover={{
-                        scale: 1.1,
-                        rotate: [0, -10, 10, -5, 5, 0],
-                        transition: {
-                          duration: 0.5,
-                          ease: "easeInOut",
-                          times: [0, 0.2, 0.4, 0.6, 0.8, 1],
-                        },
+                        scaleX: 1,
+                        opacity: 1,
+                        transition: { duration: 0.3, ease: "easeOut" },
                       }}
-                    >
-                      <MdChatBubbleOutline size={14} />
-                    </motion.div>
-                    <motion.p
-                      className="text-primary text-sm truncate"
-                      initial={{ opacity: 0.8 }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg opacity-0"
                       whileHover={{
                         opacity: 1,
-                        transition: { duration: 0.2 },
+                        transition: { duration: 0.3 },
                       }}
-                    >
-                      {prompt}
-                    </motion.p>
-                  </div>
-                  <motion.div
-                    className="border-b border-foreground w-full pt-2 origin-left"
-                    initial={{ scaleX: 0, opacity: 0.3 }}
-                    whileHover={{
-                      scaleX: 1,
-                      opacity: 1,
-                      transition: { duration: 0.3, ease: "easeOut" },
-                    }}
-                  />
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg opacity-0"
-                    whileHover={{
-                      opacity: 1,
-                      transition: { duration: 0.3 },
-                    }}
-                  />
-                  <div className="skeleton h-[2px] w-full opacity-50" />
-                </motion.button>
-              ))}
-            </motion.div>
-          )}
-        </div>
-      )}
+                    />
+                    <div className="skeleton h-[2px] w-full opacity-50" />
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -93,7 +93,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   return (
     <div
-      className={`fixed bottom-8 gap-1 flex items-center justify-center flex-col transition-all duration-300 "md:w-[60vw] lg:w-[45vw] w-full p-2 md:p-0 lg:p-0" `}
+      className={`fixed bottom-8 gap-1 flex items-center justify-center flex-col transition-all duration-300 "md:w-[80vw] lg:w-[65vw] w-full p-2 md:p-0 lg:p-0" `}
     >
       <div className="w-full flex justify-between items-center gap-2 mb-2">
         {currentStatus != "" ? (
@@ -105,28 +105,11 @@ const QueryInput: React.FC<QueryInputProps> = ({
           <div></div>
         )}
       </div>
-      {/* Selected KB pill */}
-      {groupDetails && (
-        <div className="w-full flex flex-wrap gap-1.5 px-1 pb-1">
-          <span
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-background text-accent text-xs font-medium border border-accent/40 shadow-sm"
-          >
-            📚 {groupDetails.name}
-            <span className="text-[10px] opacity-80">({groupDetails.tables.length} tables)</span>
-            <button
-              onClick={() => onKnowledgeBaseChange(null)}
-              className="hover:text-red-400 transition-colors ml-1"
-            >
-              <IoClose size={14} />
-            </button>
-          </span>
-        </div>
-      )}
       <div
         className={`w-full flex gap-2 rounded-xl text-primary placeholder:text-secondary`}
       >
         <div
-          className={`flex w-full bg-background_alt border border-foreground_alt p-2 rounded-xl items-center flex-col`}
+          className={`flex w-full bg-background_alt border border-foreground_alt p-2 rounded-xl items-center`}
         >
           <textarea
             disabled={!selectedKnowledgeBaseId}
@@ -137,7 +120,8 @@ const QueryInput: React.FC<QueryInputProps> = ({
                   ? "Ask a follow up question..."
                   : "What will you ask today?"
             }
-            className={`w-full p-2 bg-transparent ${!selectedKnowledgeBaseId ? "cursor-not-allowed opacity-50" : ""} placeholder:text-secondary outline-none text-sm leading-tight min-h-[5vh] max-h-[10vh] rounded-xl flex items-center justify-center`}
+            className={`w-full p-2 bg-transparent ${!selectedKnowledgeBaseId ? "cursor-not-allowed opacity-50" : ""
+              } placeholder:text-secondary outline-none text-sm rounded-xl resize-none`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -147,10 +131,10 @@ const QueryInput: React.FC<QueryInputProps> = ({
               }
             }}
             style={{
-              paddingTop: query_length === 0 ? "8px" : "6px",
-              display: "flex",
-              alignItems: "center",
-              resize: "none",
+              height: "44px",
+              lineHeight: "28px",
+              paddingTop: "8px",
+              paddingBottom: "8px",
             }}
           />
           <div className="flex justify-end gap-1 w-full">

@@ -70,7 +70,7 @@ const ResultItemDisplay: React.FC<ResultItemDisplayProps> = ({
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-3">
-      {(message.payload as ResultPayload).code && (
+      {/* {(message.payload as ResultPayload).code && (
         <CodeDisplay
           payload={[message.payload as ResultPayload]}
           merged={false}
@@ -82,7 +82,7 @@ const ResultItemDisplay: React.FC<ResultItemDisplayProps> = ({
             }
           }}
         />
-      )}
+      )} */}
       {showCode && (
         <div className="w-full mt-2">
           <CodeView
@@ -148,11 +148,11 @@ const RenderChat: React.FC<RenderChatProps> = ({
     const output: (
       | Message
       | {
-          type: "merged_result";
-          id: string;
-          originalMessage: Message;
-          payloadsToMerge: ResultPayload[];
-        }
+        type: "merged_result";
+        id: string;
+        originalMessage: Message;
+        payloadsToMerge: ResultPayload[];
+      }
     )[] = [];
     const messagesToProcess = displayMessages.filter(
       (m) => m.type !== "User" && m.type !== "suggestion"
@@ -346,14 +346,14 @@ const RenderChat: React.FC<RenderChatProps> = ({
                             <div className="w-full flex flex-col justify-start items-start ">
                               {(message.payload as ResponsePayload).type ===
                                 "response" && (
-                                <TextDisplay
-                                  key={`${index}-${message.id}-response`}
-                                  payload={
-                                    (message.payload as ResponsePayload)
-                                      .objects as TextPayload[]
-                                  }
-                                />
-                              )}
+                                  <TextDisplay
+                                    key={`${index}-${message.id}-response`}
+                                    payload={
+                                      (message.payload as ResponsePayload)
+                                        .objects as TextPayload[]
+                                    }
+                                  />
+                                )}
                             </div>
                           )}
                         {/* Error Messages */}

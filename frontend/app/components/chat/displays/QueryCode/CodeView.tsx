@@ -28,7 +28,10 @@ const CodeView: React.FC<CodeDisplayProps> = ({
     <div className="flex flex-col gap-2 overflow-hidden chat-animation">
       <div className="w-full flex justify-between items-center">
         <div className="flex gap-2 items-center">
-          <p>Source Code</p>
+          <div className="flex items-center gap-2">
+            <FaCode size={14} className="text-highlight flex-shrink-0" />
+            <p className="text-secondary text-sm">Source Code</p>
+          </div>
         </div>
         <Button
           variant={"ghost"}
