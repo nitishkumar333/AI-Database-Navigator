@@ -12,7 +12,7 @@ import { ToastProvider } from "./components/contexts/ToastContext";
 
 import { Toaster } from "@/components/ui/toaster";
 
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { RouterProvider } from "./components/contexts/RouterContext";
 
 import { ThemeProvider } from "./components/contexts/ThemeContext";
@@ -90,8 +90,7 @@ export default function RootLayout({
                         <ConversationProvider>
                           <SidebarProvider>
                             <SidebarComponent />
-                            <main className="flex flex-1 min-w-0 flex-col md:flex-row w-full gap-2 md:gap-6 items-start justify-start p-2 pt-0 md:p-6 md:pt-1 overflow-hidden">
-                              <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt z-50" />
+                            <main className="flex flex-1 min-w-0 flex-col w-full h-full items-start justify-start p-2 pt-0 md:p-6 md:pt-1 overflow-hidden">
                               {children}
                             </main>
                           </SidebarProvider>

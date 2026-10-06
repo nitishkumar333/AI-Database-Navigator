@@ -9,6 +9,7 @@ import { ToastContext } from "../components/contexts/ToastContext";
 import { host } from "../components/host";
 import ConnectionForm from "../components/shared/ConnectionForm";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { RouterContext } from "../components/contexts/RouterContext";
 import {
@@ -88,7 +89,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 lg:p-6">
+    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -97,11 +98,14 @@ export default function SettingsPage() {
       >
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Settings</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage your database connections
-            </p>
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
+            <div>
+              <h1 className="text-2xl font-bold text-primary">Settings</h1>
+              <p className="text-sm text-muted-foreground">
+                Manage your database connections
+              </p>
+            </div>
           </div>
           <Button
             onClick={() => setShowAddForm(!showAddForm)}

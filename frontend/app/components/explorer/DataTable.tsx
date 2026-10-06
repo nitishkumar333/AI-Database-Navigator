@@ -91,7 +91,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   return (
                     <th
                       key={key}
-                      className={`min-w-[150px] select-none border-b border-foreground_alt px-3 py-3 font-medium transition-colors ${sortable
+                      className={`min-w-[150px] select-none border-b border-r border-foreground_alt px-3 py-3 font-medium transition-colors ${sortable
                         ? "cursor-pointer hover:bg-foreground_alt"
                         : "cursor-default"
                         }`}
@@ -129,7 +129,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   className={`group transition-colors hover:bg-foreground_alt ${rowIndex % 2 === 1 ? "bg-background_alt/50" : ""
                     }`}
                 >
-                  <td className="border-b border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
+                  <td className="border-b border-r border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
                     {rowIndex + 1}
                   </td>
                   {Object.keys(header).map((key, colIndex) => {
@@ -140,7 +140,7 @@ const DataTable: React.FC<DataTableProps> = ({
                       <td
                         key={`${rowIndex}-${colIndex}`}
                         onClick={() => setSelectedRow(rowIndex)}
-                        className="max-w-[250px] cursor-pointer truncate border-b border-foreground_alt px-3 py-3 text-sm"
+                        className="max-w-[250px] cursor-pointer truncate border-b border-r border-foreground_alt px-3 py-3 text-sm"
                       >
                         {value !== undefined && value !== null ? (
                           typeof value === "object" ? (

@@ -262,7 +262,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
 
   return (
     <div
-      className={`flex justify-start items-start w-full p-4 pt-0 transition-all  duration-300`}
+      className={`flex justify-start items-start w-full md:p-0 sm:p-4 pt-0 transition-all  duration-300`}
     >
       {currentView === "chat" && (
         <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">

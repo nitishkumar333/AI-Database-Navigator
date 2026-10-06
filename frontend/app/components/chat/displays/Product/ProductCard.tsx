@@ -64,9 +64,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 + i * 0.1 }}
-        className={`text-sm transition-colors duration-200 ${
-          i < Math.round(rating) ? "text-alt_color_b" : "text-secondary/30"
-        }`}
+        className={`text-sm transition-colors duration-200 ${i < Math.round(rating) ? "text-alt_color_b" : "text-secondary/30"
+          }`}
       >
         ★
       </motion.span>
@@ -82,12 +81,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
       whileTap={tapVariants}
       className="group relative w-full h-full"
     >
+      {/* Even padding + even gap between image and content */}
       <div
-        className="flex flex-row sm:flex-col bg-background_alt border border-secondary/10 rounded-xl cursor-pointer shadow-sm hover:shadow-xl transition-shadow duration-300 h-full overflow-hidden"
+        className="flex flex-row sm:flex-col items-center sm:items-stretch gap-3 sm:gap-4 p-2 sm:p-4 bg-background_alt border border-secondary/10 rounded-xl cursor-pointer shadow-sm hover:shadow-xl transition-shadow duration-300 h-full overflow-hidden"
         onClick={() => handleOpen(product)}
       >
-        {/* Image Container - responsive sizing and layout */}
-        <div className="relative w-16 h-16 sm:w-full sm:h-auto sm:aspect-square overflow-hidden bg-secondary/5 rounded-lg flex-shrink-0 m-2 sm:m-0">
+        {/* Image Container - smaller, fixed size, centered */}
+        <div className="relative w-16 h-16 sm:w-40 sm:h-28 lg:w-56 lg:h-32 sm:mx-auto overflow-hidden bg-secondary/5 rounded-lg flex-shrink-0">
           {!imageLoaded && !imageError && (
             <Skeleton className="absolute inset-0 w-full h-full" />
           )}
@@ -96,9 +96,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <motion.img
               src={product.image}
               alt={product.name}
-              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
-                imageLoaded ? "opacity-100" : "opacity-0"
-              }`}
+              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${imageLoaded ? "opacity-100" : "opacity-0"
+                }`}
               onLoad={() => setImageLoaded(true)}
               onError={() => {
                 setImageError(true);
@@ -110,9 +109,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
           {imageError && (
             <div className="absolute inset-0 flex items-center justify-center bg-secondary/10">
-              <div className="text-secondary/50 text-center p-4">
-                <div className="text-2xl mb-2">📷</div>
-                <div className="text-xs">Image unavailable</div>
+              <div className="text-secondary/50 text-center p-2">
+                <div className="text-xl mb-1">📷</div>
+                <div className="text-[10px]">Image unavailable</div>
               </div>
             </div>
           )}
@@ -121,8 +120,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
 
-        {/* Content Container */}
-        <div className="flex flex-col flex-1 py-2 pr-2 sm:p-3 lg:p-4 gap-1 sm:gap-2 lg:gap-3 min-w-0">
+        {/* Content Container - fills remaining space, evenly spaced */}
+        <div className="flex flex-col flex-1 w-full gap-1 sm:gap-2 min-w-0">
           {/* Product Name */}
           <motion.h3
             className="text-xs sm:text-sm font-semibold text-primary line-clamp-1 sm:line-clamp-2 leading-tight"
@@ -145,7 +144,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             </motion.p>
           )}
 
-          {/* Price and Rating Container */}
+          {/* Price and Rating Container - pinned to bottom so rows align across cards */}
           <div className="flex items-center justify-between mt-auto">
             {/* Price */}
             <motion.div
@@ -187,7 +186,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             Array.isArray(product.tags) &&
             product.tags.length > 0 && (
               <motion.div
-                className="hidden lg:flex flex-wrap gap-1 mt-2"
+                className="hidden lg:flex flex-wrap gap-1"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}

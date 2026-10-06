@@ -8,6 +8,7 @@ import { ToastContext } from "../components/contexts/ToastContext";
 import { host } from "../components/host";
 import KnowledgeBaseForm from "../components/shared/KnowledgeBaseForm";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
   GoDatabase,
@@ -99,7 +100,7 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 lg:p-6">
+    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -113,14 +114,17 @@ export default function KnowledgeBasePage() {
           transition={{ duration: 0.45, delay: 0.1 }}
           className="flex items-center justify-between"
         >
-          <div>
-            <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
-              <HiOutlineBookOpen className="text-accent" size={28} />
-              Knowledge Bases
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create named collections of tables to focus the AI&apos;s context during chats.
-            </p>
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
+            <div>
+              <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
+                <HiOutlineBookOpen className="text-accent" size={28} />
+                Knowledge Bases
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create named collections of tables to focus the AI&apos;s context during chats.
+              </p>
+            </div>
           </div>
         </motion.div>
 
@@ -148,11 +152,10 @@ export default function KnowledgeBasePage() {
                 onClick={() => {
                   setSelectedConnection(conn);
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 text-sm ${
-                  selectedConnection?.id === conn.id
-                    ? "border-accent bg-accent/10 text-accent shadow-sm shadow-accent/10"
-                    : "border-foreground hover:border-accent/40 text-primary hover:bg-foreground/30"
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 text-sm ${selectedConnection?.id === conn.id
+                  ? "border-accent bg-accent/10 text-accent shadow-sm shadow-accent/10"
+                  : "border-foreground hover:border-accent/40 text-primary hover:bg-foreground/30"
+                  }`}
               >
                 <GoDatabase size={16} />
                 <span className="font-medium">{conn.name}</span>
@@ -240,7 +243,7 @@ export default function KnowledgeBasePage() {
                         >
                           <div className="flex flex-col gap-1.5 min-w-0">
                             <h3 className="text-primary text-base font-medium flex items-center gap-2">
-                               📚 {group.name}
+                              📚 {group.name}
                             </h3>
                             <div className="flex flex-wrap gap-1.5 mt-1">
                               {group.tables.slice(0, 8).map((t, tIdx) => (
@@ -255,7 +258,7 @@ export default function KnowledgeBasePage() {
                                 </motion.span>
                               ))}
                               {group.tables.length > 8 && (
-                                 <span className="px-2 py-0.5 rounded-full bg-foreground border border-foreground-muted text-[10px] text-muted-foreground">
+                                <span className="px-2 py-0.5 rounded-full bg-foreground border border-foreground-muted text-[10px] text-muted-foreground">
                                   +{group.tables.length - 8} more
                                 </span>
                               )}

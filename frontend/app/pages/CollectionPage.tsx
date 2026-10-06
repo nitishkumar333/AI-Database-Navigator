@@ -15,6 +15,7 @@ import {
 import { FaSpinner } from "react-icons/fa";
 import { useSearchParams } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 type TableInfo = {
   name: string;
@@ -204,6 +205,7 @@ export default function CollectionPage() {
       >
         {/* Header */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
           <button
             onClick={() => changePage("settings", {}, true)}
             className="text-muted-foreground hover:text-primary transition-colors"

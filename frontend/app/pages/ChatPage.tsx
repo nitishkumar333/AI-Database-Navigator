@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from "uuid";
 import { IoRefresh } from "react-icons/io5";
 
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { Separator } from "@/components/ui/separator";
 import { CollectionContext } from "../components/contexts/CollectionContext";
@@ -256,15 +257,16 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
-      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 md:py-1 lg:py-2 lg:px-0 p-4 pt-0 gap-5 bg-background border-b border-foreground">
-        <div className="flex gap-2 items-center justify-center fade-in">
-          <p className="text-primary text-sm font-medium opacity-80">
+      <div className="flex w-full justify-between items-center lg:sticky z-20 p-4 gap-3 md:gap-5 bg-background border-b border-foreground">
+        <div className="flex gap-2 items-center justify-start fade-in min-w-0">
+          <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
+          <p className="text-primary text-sm font-medium opacity-80 truncate">
             {currentTitle && currentTitle != "New Conversation"
               ? currentTitle
               : "New Conversation"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <CollectionSelection
             selectedConnectionId={selectedConnectionId}
             onConnectionChange={(connId) => {
@@ -284,8 +286,8 @@ export default function ChatPage() {
       </div>
       {currentConversation != null && <Separator className="w-full hidden" />}
 
-      <div className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-center items-center">
-        <div className="flex flex-col w-full md:w-[80vw] lg:w-[65vw] h-[80vh]">
+      <div className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-start items-center">
+        <div className="flex flex-col w-[90vw] md:w-[85vw] lg:w-[70vw] min-h-[70vh]">
           {currentQuery &&
             Object.entries(currentQuery)
               .sort((a, b) => a[1].index - b[1].index)
@@ -311,7 +313,7 @@ export default function ChatPage() {
               ))}
           {currentQuery && !(Object.keys(currentQuery).length === 0) && (
             <div>
-              <hr className="w-full border-t border-transparent my-4 mb-20" />
+              <hr className="w-full border-t border-transparent my-4 mb-24 md:mb-28" />
             </div>
           )}
         </div>
