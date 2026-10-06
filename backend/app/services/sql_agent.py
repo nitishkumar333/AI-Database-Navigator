@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
@@ -127,7 +128,11 @@ DATABASE SCHEMA:
         graph.set_entry_point("generate_response")
         graph.add_conditional_edges("generate_response", tools_condition)
         graph.add_edge("tools", "generate_response")
-        conn = sqlite3.connect("checkpoints.sqlite", check_same_thread=False)
+        checkpoint_path = getattr(settings, "CHECKPOINT_DB_PATH", "checkpoints.sqlite")
+        dir_name = os.path.dirname(checkpoint_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        conn = sqlite3.connect(checkpoint_path, check_same_thread=False)
         memory = SqliteSaver(conn)
         return graph.compile(checkpointer=memory)
 

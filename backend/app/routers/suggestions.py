@@ -84,27 +84,29 @@ def get_initial_suggestions(
 ):
     """Generate initial prompt suggestions based on the knowledge base schema."""
     try:
-        cache_key = f"initial_suggestions:user:{current_user.id}:connection:{req.connection_id}:kb:{req.knowledge_base_id or 'all'}"
+        # cache_key = f"initial_suggestions:user:{current_user.id}:connection:{req.connection_id}:kb:{req.knowledge_base_id or 'all'}"
         
-        if not req.force_refresh:
-            cached_suggestions = redis_client.get(cache_key)
-            if cached_suggestions:
-                return SuggestionsResponse(suggestions=cached_suggestions)
+        # if not req.force_refresh:
+        #     cached_suggestions = redis_client.get(cache_key)
+        #     if cached_suggestions:
+        #         return SuggestionsResponse(suggestions=cached_suggestions)
 
-        schema_context = _get_schema_for_request(
-            req.connection_id, req.knowledge_base_id, current_user, db
-        )
-        prompt = initial_suggestions_prompt(schema_context)
-        llm = ChatGoogleGenerativeAI(
-            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0,
-        )
-        structured_llm = llm.with_structured_output(SuggestionList)
-        result: SuggestionList = structured_llm.invoke(prompt)
-        suggestions = result.suggestions[:4] if result.suggestions else _DEFAULT_SUGGESTIONS
+        # schema_context = _get_schema_for_request(
+        #     req.connection_id, req.knowledge_base_id, current_user, db
+        # )
+        # prompt = initial_suggestions_prompt(schema_context)
+        # llm = ChatGoogleGenerativeAI(
+        #     model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
+        #     google_api_key=settings.GEMINI_API_KEY,
+        #     temperature=0,
+        # )
+        # structured_llm = llm.with_structured_output(SuggestionList)
+        # result: SuggestionList = structured_llm.invoke(prompt)
+        # suggestions = result.suggestions[:4] if result.suggestions else _DEFAULT_SUGGESTIONS
+
+        suggestions = _DEFAULT_SUGGESTIONS
         
-        redis_client.set(cache_key, suggestions, ex=3600)
+        # redis_client.set(cache_key, suggestions, ex=3600)
         
         return SuggestionsResponse(suggestions=suggestions)
     except HTTPException:
@@ -121,29 +123,29 @@ def get_conversation_suggestions(
 ):
     """Generate follow-up suggestions based on schema + conversation history."""
     try:
-        schema_context = _get_schema_for_request(
-            req.connection_id, req.knowledge_base_id, current_user, db
-        )
+        # schema_context = _get_schema_for_request(
+        #     req.connection_id, req.knowledge_base_id, current_user, db
+        # )
 
-        # Build conversation history string (last 5 exchanges max)
-        history_lines = []
-        for entry in req.conversation_history[-5:]:
-            role = entry.get("role", "user").capitalize()
-            content = entry.get("content", "")
-            if len(content) > 200:
-                content = content[:200] + "..."
-            history_lines.append(f"{role}: {content}")
-        history_text = "\n".join(history_lines) if history_lines else "No previous conversation."
-        prompt = conversation_suggestions_prompt(schema_context, history_text)
-        llm = ChatGoogleGenerativeAI(
-            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0,
-        )
-        structured_llm = llm.with_structured_output(SuggestionList)
-        result: SuggestionList = structured_llm.invoke(prompt)
-        suggestions = result.suggestions[:3] if result.suggestions else _DEFAULT_SUGGESTIONS
-        return SuggestionsResponse(suggestions=suggestions)
+        # # Build conversation history string (last 5 exchanges max)
+        # history_lines = []
+        # for entry in req.conversation_history[-5:]:
+        #     role = entry.get("role", "user").capitalize()
+        #     content = entry.get("content", "")
+        #     if len(content) > 200:
+        #         content = content[:200] + "..."
+        #     history_lines.append(f"{role}: {content}")
+        # history_text = "\n".join(history_lines) if history_lines else "No previous conversation."
+        # prompt = conversation_suggestions_prompt(schema_context, history_text)
+        # llm = ChatGoogleGenerativeAI(
+        #     model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
+        #     google_api_key=settings.GEMINI_API_KEY,
+        #     temperature=0,
+        # )
+        # structured_llm = llm.with_structured_output(SuggestionList)
+        # result: SuggestionList = structured_llm.invoke(prompt)
+        # suggestions = result.suggestions[:3] if result.suggestions else _DEFAULT_SUGGESTIONS
+        return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
     except HTTPException:
         raise
     except Exception as e:

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     GUEST_DB_NAME: str = "shop"
     GUEST_DB_USER: str = "postgres"
     GUEST_DB_PASSWORD: str = "password"
+    CHECKPOINT_DB_PATH: str = "checkpoints.sqlite"
 
     class Config:
         env_file = ".env"

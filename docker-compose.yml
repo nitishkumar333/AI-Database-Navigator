@@ -69,6 +69,7 @@ services:
       GUEST_DB_NAME: shop
       GUEST_DB_USER: ${POSTGRES_USER:-postgres}
       GUEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      CHECKPOINT_DB_PATH: ${CHECKPOINT_DB_PATH:-/tmp/checkpoints.sqlite}
     volumes:
       - ./backend:/app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
