@@ -44,9 +44,9 @@ const DataTable: React.FC<DataTableProps> = ({
   const containerStyle =
     stickyHeaders && maxHeight
       ? {
-          maxHeight,
-          overflowY: "auto" as const,
-        }
+        maxHeight,
+        overflowY: "auto" as const,
+      }
       : {};
 
   const containerClassName = stickyHeaders
@@ -57,8 +57,8 @@ const DataTable: React.FC<DataTableProps> = ({
   const dynamicContainerStyle =
     selectedRow !== null
       ? {
-          ...containerStyle,
-        }
+        ...containerStyle,
+      }
       : containerStyle;
 
   return (
@@ -72,51 +72,64 @@ const DataTable: React.FC<DataTableProps> = ({
       }}
     >
       {/* Scrollable wrapper */}
-      <div className="overflow-x-auto w-full max-w-full">
+      <div className="w-full max-w-full overflow-x-auto">
         {selectedRow === null ? (
-          <table className="table-auto w-full whitespace-nowrap">
+          <table className="w-full table-auto whitespace-nowrap border-separate border-spacing-0 overflow-auto no-scrollbar">
             <thead
-              className={stickyHeaders ? "sticky top-0 bg-background z-10" : ""}
+              className={
+                stickyHeaders
+                  ? "sticky top-0 z-10 bg-background_alt backdrop-blur"
+                  : "bg-background_alt"
+              }
             >
-              <tr className="text-left text-secondary text-sm">
-                <th className="p-2">#</th>
-                {Object.keys(header).map((key) => (
-                  <th
-                    key={key}
-                    className="cursor-pointer p-2 items-center gap-2 min-w-[150px]"
-                    onClick={() =>
-                      setSortOn && header[key] != "uuid" && setSortOn(key)
-                    }
-                  >
-                    <div className="flex flex-row items-center gap-2 text-secondary ">
-                      {header[key] === "text" || header[key] === "text[]" ? (
-                        <IoText className="w-4 h-4" />
-                      ) : header[key] === "number" ? (
-                        <PiListNumbers className="w-4 h-4" />
-                      ) : header[key] === "boolean" ? (
-                        <TbToggleLeft className="w-4 h-4" />
-                      ) : header[key] === "uuid" ? (
-                        <PiIdentificationBadge className="w-4 h-4" />
-                      ) : header[key] === "object" ||
-                        header[key] === "object[]" ? (
-                        <FaBoxArchive className="w-4 h-4" />
-                      ) : null}
-                      <p className="text-sm text-primary">{key}</p>
-                      {sortOn === key && <span>{ascending ? "↑" : "↓"}</span>}
-                    </div>
-                  </th>
-                ))}
+              <tr className="text-left text-sm text-secondary">
+                <th className="w-12 border-b border-foreground_alt px-3 py-3 text-center font-medium">
+                  #
+                </th>
+                {Object.keys(header).map((key) => {
+                  const sortable = !!setSortOn && header[key] !== "uuid";
+                  return (
+                    <th
+                      key={key}
+                      className={`min-w-[150px] select-none border-b border-foreground_alt px-3 py-3 font-medium transition-colors ${sortable
+                        ? "cursor-pointer hover:bg-foreground_alt"
+                        : "cursor-default"
+                        }`}
+                      onClick={() => sortable && setSortOn(key)}
+                    >
+                      <div className="flex flex-row items-center gap-2 text-secondary">
+                        {header[key] === "text" || header[key] === "text[]" ? (
+                          <IoText className="h-4 w-4 opacity-70" />
+                        ) : header[key] === "number" ? (
+                          <PiListNumbers className="h-4 w-4 opacity-70" />
+                        ) : header[key] === "boolean" ? (
+                          <TbToggleLeft className="h-4 w-4 opacity-70" />
+                        ) : header[key] === "uuid" ? (
+                          <PiIdentificationBadge className="h-4 w-4 opacity-70" />
+                        ) : header[key] === "object" ||
+                          header[key] === "object[]" ? (
+                          <FaBoxArchive className="h-4 w-4 opacity-70" />
+                        ) : null}
+                        <p className="text-sm font-medium text-primary">{key}</p>
+                        {sortOn === key && (
+                          <span className="text-xs text-primary">
+                            {ascending ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {data.map((item, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  className={`hover:bg-foreground_alt ${
-                    rowIndex % 2 === 1 ? "bg-background_alt" : ""
-                  }`}
+                  className={`group transition-colors hover:bg-foreground_alt ${rowIndex % 2 === 1 ? "bg-background_alt/50" : ""
+                    }`}
                 >
-                  <td className="px-2 py-2 text-sm text-secondary">
+                  <td className="border-b border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
                     {rowIndex + 1}
                   </td>
                   {Object.keys(header).map((key, colIndex) => {
@@ -127,26 +140,33 @@ const DataTable: React.FC<DataTableProps> = ({
                       <td
                         key={`${rowIndex}-${colIndex}`}
                         onClick={() => setSelectedRow(rowIndex)}
-                        className="truncate px-2 py-2 text-sm cursor-pointer max-w-[250px]"
+                        className="max-w-[250px] cursor-pointer truncate border-b border-foreground_alt px-3 py-3 text-sm"
                       >
                         {value !== undefined && value !== null ? (
                           typeof value === "object" ? (
-                            <span className="text-primary">
+                            <span className="rounded-md bg-foreground_alt px-1.5 py-0.5 font-mono text-xs text-primary">
                               {JSON.stringify(value, null, 0)}
                             </span>
                           ) : isBoolean ? (
                             <span
-                              className={`font-mono text-xs ${
-                                value ? "text-green-400 " : "text-red-400 "
-                              }`}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-xs ${value
+                                ? "bg-green-500/10 text-green-400"
+                                : "bg-red-500/10 text-red-400"
+                                }`}
                             >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${value ? "bg-green-400" : "bg-red-400"
+                                  }`}
+                              />
                               {String(value)}
                             </span>
                           ) : (
                             <span className="text-primary">{value}</span>
                           )
                         ) : value === null ? (
-                          <span className="text-secondary italic">null</span>
+                          <span className="text-xs italic text-secondary">
+                            null
+                          </span>
                         ) : (
                           ""
                         )}
@@ -159,7 +179,7 @@ const DataTable: React.FC<DataTableProps> = ({
           </table>
         ) : (
           <motion.div
-            className="flex flex-col w-full relative"
+            className="relative flex w-full flex-col p-2"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}

@@ -256,7 +256,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
-      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 lg:p-0 p-4 pt-0 gap-5 bg-background border-b border-foreground pb-2">
+      <div className="flex w-full justify-between items-center lg:sticky z-20 top-0 md:py-1 lg:py-2 lg:px-0 p-4 pt-0 gap-5 bg-background border-b border-foreground">
         <div className="flex gap-2 items-center justify-center fade-in">
           <p className="text-primary text-sm font-medium opacity-80">
             {currentTitle && currentTitle != "New Conversation"

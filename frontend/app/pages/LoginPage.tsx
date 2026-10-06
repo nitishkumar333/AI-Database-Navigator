@@ -113,9 +113,9 @@ export default function LoginPage() {
         className="relative w-full max-w-md mx-4"
       >
         {/* Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-background_alt/90 border border-foreground/60 backdrop-blur-xl shadow-2xl shadow-black/5 dark:shadow-black/40">
+        <div className="relative overflow-hidden rounded-2xl">
           {/* Accent top bar */}
-          <div className="h-1 w-full bg-gradient-to-r from-accent via-highlight to-accent" />
+          {/* <div className="h-1 w-full bg-gradient-to-r from-accent via-highlight to-accent" /> */}
 
           <div className="p-8 md:p-10">
             {/* Logo & Title */}
@@ -130,11 +130,11 @@ export default function LoginPage() {
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-primary font-heading">
-                  SQLNav
+                  SQL, Simplified
                 </h1>
-                <p className="text-sm text-muted-foreground mt-1">
+                {/* <p className="text-sm text-muted-foreground mt-1">
                   Natural Language → SQL Platform
-                </p>
+                </p> */}
               </div>
             </motion.div>
 
@@ -170,9 +170,9 @@ export default function LoginPage() {
                           Login as Guest
                         </span>
                       </div>
-                      <span className="text-[11px] text-muted-foreground">
+                      {/* <span className="text-[11px] text-muted-foreground">
                         Preloaded shop database & sample chats
-                      </span>
+                      </span> */}
                     </div>
                   </div>
                   <IoArrowForward
@@ -200,11 +200,10 @@ export default function LoginPage() {
                   setMode("login");
                   setError("");
                 }}
-                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  mode === "login"
-                    ? "bg-foreground/50 text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-primary"
-                }`}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${mode === "login"
+                  ? "bg-foreground/50 text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-primary"
+                  }`}
               >
                 Sign In
               </button>
@@ -214,11 +213,10 @@ export default function LoginPage() {
                   setMode("register");
                   setError("");
                 }}
-                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  mode === "register"
-                    ? "bg-foreground/50 text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-primary"
-                }`}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${mode === "register"
+                  ? "bg-foreground/50 text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-primary"
+                  }`}
               >
                 Create Account
               </button>
@@ -340,7 +338,7 @@ export default function LoginPage() {
             </form>
 
             {/* Switch mode link */}
-            <p className="text-center text-sm text-muted-foreground mt-6">
+            {/* <p className="text-center text-sm text-muted-foreground mt-6">
               {mode === "login"
                 ? "Don't have an account? "
                 : "Already have an account? "}
@@ -351,7 +349,7 @@ export default function LoginPage() {
               >
                 {mode === "login" ? "Create one" : "Sign in"}
               </button>
-            </p>
+            </p> */}
           </div>
         </div>
       </motion.div>

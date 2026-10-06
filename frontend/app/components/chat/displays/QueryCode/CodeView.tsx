@@ -46,27 +46,27 @@ const CodeView: React.FC<CodeDisplayProps> = ({
       </div>
       {payload.map((item, index) => (
         <div key={index} className="w-full">
-          <div className="relative">
-            <div className="overflow-y-scroll">
-              <div className="absolute top-2 right-0 p-3 flex gap-1">
-                <CopyToClipboardButton copyText={(item.code?.text || item.metadata?.code?.text || '')} />
-              </div>
-              <SyntaxHighlighter
-                language={item.code?.language || item.metadata?.code?.language || 'sql'}
-                wrapLongLines={true}
-                showLineNumbers={true}
-                style={isLight ? oneLight : oneDark}
-                customStyle={{
-                  backgroundColor: isLight ? "#f8fafc" : "#141414",
-                  color: isLight ? "#0f172a" : "#f2f2f2",
-                  border: isLight ? "1px solid #cbd5e1" : "1px solid #2e2e2e",
-                  width: "100%",
-                  maxHeight: "calc(70vh - 2rem)",
-                }}
-                className="rounded-lg overflow-y-scroll"
-              >
-                {item.code?.text || item.metadata?.code?.text || 'No code available'}
-              </SyntaxHighlighter>
+          <div className="flex">
+            <SyntaxHighlighter
+              language={item.code?.language || item.metadata?.code?.language || 'sql'}
+              wrapLongLines={true}
+              showLineNumbers={true}
+              style={isLight ? oneLight : oneDark}
+              customStyle={{
+                backgroundColor: isLight ? "#f8fafc" : "#141414",
+                color: isLight ? "#0f172a" : "#f2f2f2",
+                border: isLight ? "1px solid #cbd5e1" : "1px solid #2e2e2e",
+                width: "100%",
+                // maxHeight: "calc(70vh - 2rem)",
+                overflowX: "auto",
+                overflowY: "hidden",
+              }}
+              className="rounded-lg"
+            >
+              {item.code?.text || item.metadata?.code?.text || 'No code available'}
+            </SyntaxHighlighter>
+            <div className="flex items-center ml-2">
+              <CopyToClipboardButton copyText={(item.code?.text || item.metadata?.code?.text || '')} />
             </div>
           </div>
         </div>
