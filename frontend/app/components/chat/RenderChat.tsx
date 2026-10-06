@@ -17,14 +17,12 @@ import UserMessageDisplay from "./displays/SystemMessages/UserMessageDisplay";
 import ErrorMessageDisplay from "./displays/SystemMessages/ErrorMessageDisplay";
 import TextDisplay from "./displays/Generic/TextDisplay";
 import WarningDisplay from "./displays/SystemMessages/WarningDisplay";
-import CodeDisplay from "./components/ViewCodeButton";
 import InfoMessageDisplay from "./displays/SystemMessages/InfoMessageDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QueryContext } from "../contexts/SocketContext";
 import RateLimitMessageDisplay from "./displays/SystemMessages/RateLimitMessageDisplay";
 import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
 import RenderDisplay from "./RenderDisplay";
-import MergeDisplays from "./MergeDisplays";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
 import { DisplayProvider } from "../contexts/DisplayContext";
@@ -63,26 +61,12 @@ interface ResultItemDisplayProps {
 const ResultItemDisplay: React.FC<ResultItemDisplayProps> = ({
   message,
   index,
-  handleViewChange,
   handleResultPayloadChange,
 }) => {
   const [showCode, setShowCode] = useState(true);
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-3">
-      {/* {(message.payload as ResultPayload).code && (
-        <CodeDisplay
-          payload={[message.payload as ResultPayload]}
-          merged={false}
-          handleViewChange={(view) => {
-            if (view === "code") {
-              setShowCode(!showCode);
-            } else {
-              handleViewChange(view, null);
-            }
-          }}
-        />
-      )} */}
       {showCode && (
         <div className="w-full mt-2">
           <CodeView
@@ -314,27 +298,12 @@ const RenderChat: React.FC<RenderChatProps> = ({
                       _payload={message.payload as ResultPayload}
                     >
                       <div key={key} className="w-full flex">
-                        {/* Merged Result Messages */}
-                        {item.type === "merged_result" && (
-                          <div className="w-full flex flex-row justify-start items-start gap-3">
-                            <MergeDisplays
-                              payloadsToMerge={item.payloadsToMerge}
-                              baseKey={`${index}-${item.id}`}
-                              messageId={item.id}
-                              handleViewChange={handleViewChange}
-                              handleResultPayloadChange={
-                                handleResultPayloadChange
-                              }
-                            />
-                          </div>
-                        )}
                         {/* Result Messages */}
                         {item.type !== "merged_result" &&
                           message.type === "result" && (
                             <ResultItemDisplay
                               message={message as Message}
                               index={index}
-                              handleViewChange={handleViewChange}
                               handleResultPayloadChange={
                                 handleResultPayloadChange
                               }

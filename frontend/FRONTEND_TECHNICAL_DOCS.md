@@ -101,7 +101,6 @@ frontend/
 |   |   ├── chat/                # Chat interface components
 |   |   |   ├── QueryInput.tsx        # Text area input + send button (bottom of chat)
 |   |   |   ├── RenderChat.tsx        # Main chat message list renderer
-|   |   |   ├── MergeDisplays.tsx     # Merges multiple result displays
 |   |   |   ├── RenderDisplay.tsx     # Routes a display to its component
 |   |   |   |
 |   |   |   ├── components/           # Chat UI sub-components
@@ -111,7 +110,6 @@ frontend/
 |   |   |   |   ├── DisplayPagination.tsx   # Pagination through result pages
 |   |   |   |   ├── KnowledgeBaseSelection.tsx # KB group selector in chat
 |   |   |   |   ├── MarkdownFormat.tsx      # Renders markdown with syntax highlighting
-|   |   |   |   ├── MergedDisplayTabs.tsx   # Tabs when multiple displays are merged
 |   |   |   |   └── ViewCodeButton.tsx      # Show/hide generated SQL code
 |   |   |   |
 |   |   |   └── displays/             # Result display components by type
