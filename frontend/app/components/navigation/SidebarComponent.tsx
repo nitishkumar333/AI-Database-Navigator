@@ -37,6 +37,8 @@ import { RouterContext } from "../contexts/RouterContext";
 import { CollectionContext } from "../contexts/CollectionContext";
 import { SessionContext } from "../contexts/SessionContext";
 
+import ThemeToggle from "../shared/ThemeToggle";
+
 const SidebarComponent: React.FC = () => {
   const { backendOnline } = useContext(QueryContext);
   const { changePage, currentPage } = useContext(RouterContext);
@@ -107,7 +109,7 @@ const SidebarComponent: React.FC = () => {
             <img
               src={`${public_path}logo.svg`}
               alt="SQLNav"
-              className="w-5 h-5"
+              className="w-5 h-5 dark:invert-0 invert transition-all"
             />
             <p className="text-sm font-bold text-primary">SQLNav</p>
           </div>
@@ -196,13 +198,16 @@ const SidebarComponent: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={logout}
-                className="p-2 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
-                title="Logout"
-              >
-                <IoLogOutOutline size={16} />
-              </button>
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <ThemeToggle variant="icon" size="sm" />
+                <button
+                  onClick={logout}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
+                  title="Logout"
+                >
+                  <IoLogOutOutline size={16} />
+                </button>
+              </div>
             </div>
           </SidebarMenuItem>
         </SidebarMenu>

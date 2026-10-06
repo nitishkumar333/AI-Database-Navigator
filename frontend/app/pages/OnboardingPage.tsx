@@ -14,6 +14,8 @@ import { MdChatBubbleOutline } from "react-icons/md";
 import { FaSpinner } from "react-icons/fa";
 import { IoCheckmarkCircle } from "react-icons/io5";
 
+import ThemeToggle from "../components/shared/ThemeToggle";
+
 type Connection = {
   id: number;
   name: string;
@@ -110,6 +112,11 @@ export default function OnboardingPage() {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background z-50 overflow-y-auto py-8">
+      {/* Floating Theme Toggle */}
+      <div className="absolute top-4 right-4 z-50">
+        <ThemeToggle variant="pill" />
+      </div>
+
       {/* Subtle background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div

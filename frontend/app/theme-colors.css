@@ -1,0 +1,183 @@
+/* =============================================================================
+   SQLNav - THEME COLOR CONFIGURATION
+   =============================================================================
+   This file is your central place to customize colors for both LIGHT and DARK modes.
+   Any changes saved here will immediately reflect across the entire application!
+
+   HOW TO EDIT:
+   - Colors are defined in HSL format: <hue> <saturation>% <lightness>%
+     (Do NOT include the "hsl()" wrapper here, just the values: e.g., "210 20% 98%")
+   
+   HANDY HEX -> HSL REFERENCE:
+   - Pure White:   #ffffff  ->  0 0% 100%
+   - Pure Black:   #000000  ->  0 0% 0%
+   - Slate 50:     #f8fafc  ->  210 40% 98%
+   - Slate 100:    #f1f5f9  ->  210 40% 96%
+   - Slate 200:    #e2e8f0  ->  214 32% 91%
+   - Slate 300:    #cbd5e1  ->  214 32% 88%
+   - Slate 500:    #64748b  ->  215 16% 47%
+   - Slate 900:    #0f172a  ->  222 47% 11%
+   - Emerald:      #10b981  ->  151 55% 42%
+   - Sky Blue:     #0ea5e9  ->  202 85% 48%
+   - Crimson:      #ef4444  ->  353 75% 50%
+   - Amber:        #f59e0b  ->  28 85% 44%
+   ============================================================================= */
+
+/* =============================================================================
+   1. LIGHT MODE COLOR PALETTE
+   ============================================================================= */
+:root,
+.light,
+[data-theme="light"] {
+  /* Browser UI color scheme */
+  color-scheme: light;
+
+  /* ── Core Surfaces & Text ──────────────────────────────────────────────── */
+  /* Main page canvas background (#f8fafc - soft, clean, non-glaring off-white) */
+  --background: 210 25% 98%;
+
+  /* Cards, modals, sidebars, query input area (#ffffff - pure crisp white) */
+  --background_alt: 0 0% 100%;
+
+  /* Borders, dividers, subtle outlines, active item backgrounds (#cbd5e1) */
+  --foreground: 214 32% 88%;
+
+  /* Hover states for buttons, menu items, table rows (#f1f5f9) */
+  --foreground_alt: 210 20% 93%;
+
+  /* Primary text, titles, headings, active labels (#0f172a - rich dark slate) */
+  --primary: 222 47% 11%;
+
+  /* Secondary / muted text, icons, timestamps (#64748b - balanced slate) */
+  --secondary: 215 16% 47%;
+
+  /* Placeholder text, subtle hints, captions */
+  --muted-foreground: 215 16% 47%;
+
+  /* ── Brand & Accent Colors ─────────────────────────────────────────────── */
+  /* SQLNav Brand Accent - emerald green calibrated for crisp light contrast (#15803d) */
+  --accent: 151 60% 36%;
+
+  /* High-contrast text on accent badges and buttons */
+  --accent-foreground: 151 80% 20%;
+
+  /* Soft pastel green tint for selected items, demo badge, success badges */
+  --background_accent: 151 55% 94%;
+
+  /* Sky blue for links, code highlights, and info badges (#0284c7) */
+  --highlight: 202 85% 42%;
+
+  /* ── Semantic & Status Colors ──────────────────────────────────────────── */
+  /* Warning amber (#d97706) */
+  --warning: 28 85% 44%;
+
+  /* Error crimson (#dc2626) */
+  --error: 353 75% 50%;
+
+  /* Soft red tint for error alerts & delete buttons */
+  --background_error: 353 80% 96%;
+
+  /* Additional accents */
+  --alt_color_a: 172 75% 36%;
+  --alt_color_b: 71 65% 35%;
+
+  /* ── Radix & UI Component Tokens ───────────────────────────────────────── */
+  --border: 214 32% 88%;
+  --input: 214 32% 88%;
+  --ring: 151 60% 36%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --muted: 210 20% 94%;
+  --destructive: 353 75% 50%;
+  --destructive-foreground: 0 0% 98%;
+
+  /* Chart colors for data visualizations */
+  --chart-1: 151 60% 36%;
+  --chart-2: 202 85% 42%;
+  --chart-3: 28 85% 44%;
+  --chart-4: 262 70% 50%;
+  --chart-5: 353 75% 50%;
+
+  --radius: 0.5rem;
+}
+
+/* =============================================================================
+   2. DARK MODE COLOR PALETTE
+   ============================================================================= */
+.dark,
+[data-theme="dark"] {
+  /* Browser UI color scheme */
+  color-scheme: dark;
+
+  /* ── Core Surfaces & Text ──────────────────────────────────────────────── */
+  /* Main page canvas background (#0d0d0d - deep charcoal) */
+  --background: 0 0% 5%;
+
+  /* Cards, modals, sidebars, query input area (#121212 - elevated dark) */
+  --background_alt: 0 0% 7%;
+
+  /* Borders, dividers, subtle outlines, active item backgrounds (#2e2e2e) */
+  --foreground: 0 0% 18%;
+
+  /* Hover states for buttons, menu items, table rows (#333333) */
+  --foreground_alt: 0 0% 20%;
+
+  /* Primary text, titles, headings, active labels (#f2f2f2 - bright near-white) */
+  --primary: 0 0% 95%;
+
+  /* Secondary / muted text, icons, timestamps (#808080 - medium grey) */
+  --secondary: 0 0% 50%;
+
+  /* Placeholder text, subtle hints, captions */
+  --muted-foreground: 0 0% 45.1%;
+
+  /* ── Brand & Accent Colors ─────────────────────────────────────────────── */
+  /* SQLNav Brand Accent - vibrant neon-emerald (#47c385) */
+  --accent: 151 46% 51%;
+
+  /* Text on accent */
+  --accent-foreground: 134 80% 32%;
+
+  /* Dark emerald tint for selected items & demo badge */
+  --background_accent: 151 52% 28%;
+
+  /* Sky blue for links, code highlights, and info badges (#5dade2) */
+  --highlight: 202 54% 59%;
+
+  /* ── Semantic & Status Colors ──────────────────────────────────────────── */
+  /* Warning orange (#e06d1a) */
+  --warning: 18 72% 49%;
+
+  /* Error crimson (#a7384a) */
+  --error: 353 49% 44%;
+
+  /* Dark red tint for error alerts & delete buttons */
+  --background_error: 340 52% 25%;
+
+  /* Additional accents */
+  --alt_color_a: 172 83% 55%;
+  --alt_color_b: 71 61% 64%;
+
+  /* ── Radix & UI Component Tokens ───────────────────────────────────────── */
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 151 46% 51%;
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 95%;
+  --popover: 0 0% 7%;
+  --popover-foreground: 0 0% 95%;
+  --muted: 0 0% 15%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  /* Chart colors for data visualizations */
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
+
+  --radius: 0.5rem;
+}

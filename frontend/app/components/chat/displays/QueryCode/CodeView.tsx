@@ -2,11 +2,12 @@
 
 import { ResultPayload } from "@/app/types/chat";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import CopyToClipboardButton from "@/app/components/navigation/CopyButton";
 import { IoClose } from "react-icons/io5";
 import { FaCode } from "react-icons/fa6";
+import { useTheme } from "@/app/components/contexts/ThemeContext";
 
 interface CodeDisplayProps {
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -21,7 +22,9 @@ const CodeView: React.FC<CodeDisplayProps> = ({
   payload,
   handleViewChange,
 }) => {
-  console.log(payload, 'payload CodeView')
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === "light";
+
   if (!payload) return null;
 
   return (
@@ -52,10 +55,11 @@ const CodeView: React.FC<CodeDisplayProps> = ({
                 language={item.code?.language || item.metadata?.code?.language || 'sql'}
                 wrapLongLines={true}
                 showLineNumbers={true}
-                style={oneDark}
+                style={isLight ? oneLight : oneDark}
                 customStyle={{
-                  backgroundColor: "#202020",
-                  color: "#f2f2f2",
+                  backgroundColor: isLight ? "#f8fafc" : "#141414",
+                  color: isLight ? "#0f172a" : "#f2f2f2",
+                  border: isLight ? "1px solid #cbd5e1" : "1px solid #2e2e2e",
                   width: "100%",
                   maxHeight: "calc(70vh - 2rem)",
                 }}

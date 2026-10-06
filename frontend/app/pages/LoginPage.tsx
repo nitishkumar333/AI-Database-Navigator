@@ -14,6 +14,7 @@ import {
   IoSparklesOutline,
   IoArrowForward,
 } from "react-icons/io5";
+import ThemeToggle from "../components/shared/ThemeToggle";
 
 export default function LoginPage() {
   const { login, register, guestLogin } = useContext(AuthContext);
@@ -66,10 +67,15 @@ export default function LoginPage() {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background z-50 overflow-hidden">
+      {/* Floating Theme Toggle */}
+      <div className="absolute top-4 right-4 z-50">
+        <ThemeToggle variant="pill" />
+      </div>
+
       {/* Animated background gradient orbs */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
-          className="absolute w-[600px] h-[600px] rounded-full opacity-[0.03]"
+          className="absolute w-[600px] h-[600px] rounded-full opacity-[0.03] dark:opacity-[0.03]"
           style={{
             background:
               "radial-gradient(circle, hsl(151 46% 51%) 0%, transparent 70%)",
@@ -84,7 +90,7 @@ export default function LoginPage() {
           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute w-[500px] h-[500px] rounded-full opacity-[0.03]"
+          className="absolute w-[500px] h-[500px] rounded-full opacity-[0.03] dark:opacity-[0.03]"
           style={{
             background:
               "radial-gradient(circle, hsl(202 54% 59%) 0%, transparent 70%)",
@@ -107,7 +113,7 @@ export default function LoginPage() {
         className="relative w-full max-w-md mx-4"
       >
         {/* Card */}
-        <div className="relative overflow-hidden rounded-2xl border-foreground/60 backdrop-blur-xl shadow-black/30">
+        <div className="relative overflow-hidden rounded-2xl bg-background_alt/90 border border-foreground/60 backdrop-blur-xl shadow-2xl shadow-black/5 dark:shadow-black/40">
           {/* Accent top bar */}
           <div className="h-1 w-full bg-gradient-to-r from-accent via-highlight to-accent" />
 

@@ -17,6 +17,7 @@ import {
   GoTrash,
 } from "react-icons/go";
 import { FaSpinner } from "react-icons/fa";
+import ThemeToggle from "../components/shared/ThemeToggle";
 
 type Connection = {
   id: number;
@@ -112,6 +113,17 @@ export default function SettingsPage() {
         </div>
 
         <Separator />
+
+        {/* Appearance Settings */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl bg-background_alt border border-foreground/70">
+          <div className="flex flex-col">
+            <h2 className="text-base font-semibold text-primary">Appearance</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Customize your workspace theme
+            </p>
+          </div>
+          <ThemeToggle variant="segmented" />
+        </div>
 
         {/* Add Connection Form */}
         {showAddForm && (
