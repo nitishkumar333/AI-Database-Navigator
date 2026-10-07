@@ -84,7 +84,7 @@ backend/
     |   ├── connections.py       # CRUD for DB connections
     |   ├── schema.py            # GET tables, columns, preview from user's DB
     |   ├── knowledge.py         # CRUD for knowledge base groups
-    |   ├── query.py             # POST /chat (NL to SQL), POST /{id}/execute-sql
+    |   ├── query.py             # POST /chat (NL to SQL)
     |   ├── history.py           # GET query history
     |   ├── conversations.py     # CRUD for chat conversations
     |   └── suggestions.py       # AI-generated query suggestions
@@ -92,14 +92,14 @@ backend/
     ├── services/                # Business logic / AI integrations
     |   ├── __init__.py
     |   ├── sql_agent.py         # LangGraph + Gemini SQL agent (core AI loop)
-    |   ├── validate_sql.py      # SQL safety validation + schema EXPLAIN + execution
+    |   ├── validate_sql.py      # SafeSqlExecutor: AST validation (sqlglot) + EXPLAIN + read-only transaction sandbox
     |   ├── rate_limiter.py      # Sliding-window rate limiter (Redis sorted sets)
     |   └── redis_client.py      # Redis wrapper (get/set/delete with JSON auto-encode)
     |
     └── utils/                   # Cross-cutting helpers
         ├── __init__.py
         ├── security.py          # JWT, Argon2, Fernet encryption, get_current_user
-        ├── db_manager.py        # SQLAlchemy engine cache for user DBs, test_connection
+        ├── db_manager.py        # SQLAlchemy engine cache, schema context builder, table caching, SQL refinement
         ├── prompts.py           # LLM prompt templates (suggestions)
         └── sql_guard.py         # SQL allowlist/blocklist regex + table name sanitizer
 ```
@@ -288,7 +288,6 @@ This is the **core** router for NL-to-SQL.
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/chat` | JWT | Main NL-to-SQL endpoint. Accepts question, connection_id, knowledge_base_id, conversation_id, query_id. Runs rate limit, resolves connection, builds schema context, runs SQL agent, saves to history + conversation. |
-| POST | `/{conn_id}/execute-sql` | JWT | Execute a raw SQL string provided by user (from View Code / edit mode). Validates and runs via execute_raw_sql. Saves to history. |
 
 **ChatRequest schema:**
 
@@ -369,12 +368,13 @@ generate_response (Gemini 2.5 Flash with schema in system prompt)
      |
      +-- tool_call? YES --> execute_sql_query tool
      |                           |
-     |                     ValidateSqlQuery.validate()
-     |                     is_safe + schema_validated?
-     |                     Execute via SQLAlchemy
-     |                     Returns rows/columns
+     |                     SafeSqlExecutor.run()
+     |                     - Layer 1: sqlglot AST validation (SELECT/CTE root only)
+     |                     - Layer 2: Schema validation via EXPLAIN in read-only tx
+     |                     - Layer 3: Read-only transaction execution (10s timeout, max 50 rows)
+     |                     Returns QueryResult (to_llm_string compact JSON)
      |
-     |<---- Tool result fed back to LLM
+     |<---- Tool result fed back to LLM (JSON rows or error)
      |
      +-- tool_call? NO --> Final response text
      |
@@ -385,10 +385,10 @@ Return { success, generated_sql, columns, rows, response_text }
 **Key internals:**
 
 - `SQLAgent.__init__(engine, schema_context)` — builds system prompt with DB schema.
-- `generate_system_prompt(schema_context)` — embeds full schema into the LLM system message.
+- `generate_system_prompt(schema_context)` — embeds full schema into the LLM system message with instructions to preserve image URL columns.
 - `build_workflow()` — creates LangGraph `StateGraph` with generate_response → tools → conditional edges. Uses `SqliteSaver` checkpointer with `checkpoints.sqlite` for multi-turn memory.
 - `run_query(user_input, conversation_id)` — invokes the graph with `thread_id=conversation_id` to maintain per-conversation context.
-- `execute_sql_query` tool (created by `create_sql_tool`) — validates SQL via `ValidateSqlQuery` then executes.
+- `execute_sql_query` tool (created by `create_sql_tool`) — validates and executes SQL via `SafeSqlExecutor(agent_instance.engine, max_rows=50)`. Stores generated SQL and result rows on success, and returns `result.to_llm_string()` (or driver error string if validation/execution fails).
 
 **To change the LLM model:** Change `model="gemini-2.5-flash"` in `generate_response()`.
 
@@ -400,34 +400,63 @@ Return { success, generated_sql, columns, rows, response_text }
 
 ### `app/services/validate_sql.py`
 
-**Class: `ValidateSqlQuery`**
+**Class: `SafeSqlExecutor`**
 
-Two-phase SQL safety system before any execution:
+Validates and executes LLM-generated read-only SQL queries against user databases using a three-layer defense-in-depth model:
 
-**Phase 1 — `_is_query_safe(sql)`** (regex + sqlparse structural check):
-- Allows only `SELECT` / `UNKNOWN` (CTEs) statement types.
-- Blocklist keywords: `INSERT`, `UPDATE`, `DELETE`, `DROP`, `CREATE`, `ALTER`, `TRUNCATE`, `REPLACE`, `MERGE`, `GRANT`, `REVOKE`, `EXEC`, `EXECUTE`, `CALL`, `INTO`.
-- Checks for `SELECT INTO` pattern separately.
-- Checks comments for dangerous keywords.
+```
+               Incoming SQL String
+                        |
+                        v
+   Layer 1: AST Structural & Security Check (sqlglot)
+   - Single statement only
+   - Allowed root: SELECT, UNION, INTERSECT, EXCEPT (CTEs supported)
+   - Deep traversal blocklist: INSERT, UPDATE, DELETE, MERGE, DROP, etc.
+   - Forbidden functions: pg_sleep, set_config, dblink, lo_*, etc.
+                        | (Passed)
+                        v
+   Layer 2: Schema Validation via EXPLAIN
+   - Executes EXPLAIN <sql> against the database
+   - Verifies tables, columns, aliases, types exist without running query
+                        | (Passed)
+                        v
+   Layer 3: Transaction-Level Sandboxed Execution
+   - SET TRANSACTION READ ONLY (engine-level write lock)
+   - SET LOCAL statement_timeout = 10000 (10s runaway query protection)
+   - Fetch max_rows + 1 (50 rows) for memory-safe truncation detection
+                        |
+                        v
+               QueryResult Dataclass
+   - .to_llm_string() serializes compact JSON + truncation advice
+```
 
-**Phase 2 — `_validate_against_schema(sql)`**:
-- Runs `EXPLAIN {sql}` against the actual DB to validate table/column references without executing.
+**Dataclasses:**
 
-**Phase 3 — `_execute_sql_query(sql)`**:
-- Executes validated query, returns `{ success, columns, rows }`.
+- **`ValidationResult`**: `sql: str`, `is_valid: bool`, `reason: str`, `validation_query: Optional[str] = None` (the `EXPLAIN` query).
+- **`QueryResult`**: `sql: str`, `success: bool`, `columns: List[str]`, `rows: List[Dict[str, Any]]`, `truncated: bool`, `error: Optional[str]`.
+  - `to_llm_string()`: Produces compact JSON (`columns`, `row_count`, `rows`) safely serializing Decimal, datetime, UUID, etc. If `truncated=True`, appends a note: `"Output truncated to the first {len(rows)} rows. Add a LIMIT or a more specific filter."`
 
-**Standalone helper functions:**
+**Defense-in-Depth Layers:**
 
-| Function | Description |
-|---|---|
-| `refine_sql_from_markdown(text)` | Strips markdown code fences, normalizes whitespace, ensures trailing semicolon |
-| `get_all_table_names(engine)` | Returns table names from DB, Redis cached (1h) using URL MD5 hash |
-| `get_schema_context(engine, table_names)` | Builds human-readable schema string with column types, PK/FK info. Redis cached (1h) using URL+tables MD5 hash |
-| `execute_raw_sql(engine, sql)` | Validates then executes user-provided SQL (used by execute-sql endpoint) |
+1. **Layer 1 — AST Check (`_check_structure` using `sqlglot`)**:
+   - Parses with `sqlglot.parse(sql, read="postgres")`.
+   - Rejects empty queries, syntax errors, and multi-statement queries (blocks semicolon chaining).
+   - Root allowlist (`_ALLOWED_ROOTS`): Statement root must be `exp.Select`, `exp.Union`, `exp.Intersect`, or `exp.Except` (`WITH ... SELECT` CTEs parse as Select roots).
+   - Deep node inspection (`_FORBIDDEN_NODES`): Recursively inspects every node to block data modification or locking anywhere in the query: `Insert`, `Update`, `Delete`, `Merge`, `Create`, `Drop`, `Alter`, `AlterTable`, `TruncateTable`, `Command`, `Copy`, `Set`, `Into`, `Lock` (blocks e.g. `WITH d AS (DELETE ...) SELECT ...`, `SELECT ... INTO`, `FOR UPDATE`).
+   - Dangerous functions blocklist (`_FORBIDDEN_FUNCTIONS` & `_FORBIDDEN_FUNCTION_PREFIXES`): Blocks `pg_sleep`, `pg_sleep_for`, `pg_sleep_until`, `set_config`, `nextval`, `setval`, `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf`, and prefixes `pg_read_`, `pg_ls_`, `pg_advisory_`, `lo_`, `dblink`, `query_to_`.
 
-**To change what queries are allowed:** Modify `_is_query_safe()` dangerous_keywords list or `allowed_types` list.
+2. **Layer 2 — Schema Validation via EXPLAIN (`_check_against_schema`)**:
+   - Runs `EXPLAIN {sql}` inside a read-only transaction.
+   - Verifies all table and column names against the live PostgreSQL catalog without scanning or reading table rows.
 
-**To change schema representation for the LLM:** Modify `get_schema_context()` — it builds the string fed into the agent's system prompt.
+3. **Layer 3 — Sandboxed Execution (`_execute` & `_read_only_connection`)**:
+   - Runs in a managed transaction context manager:
+     - `SET TRANSACTION READ ONLY` — hard database-engine enforcement against data mutation.
+     - `SET LOCAL statement_timeout = {int(self.timeout_ms)}` (default 10,000ms / 10s) — terminates expensive or locking operations.
+   - Result fetching: Fetches `self.max_rows + 1` (default 50) to detect whether results were truncated, preventing unbounded memory consumption.
+   - Driver error sanitization (`_clean_error`): Extracts `getattr(exc, "orig", exc)` to strip verbose SQLAlchemy wrapper noise and return concise database driver errors.
+
+> **Note:** Helper functions previously located in this module (`refine_sql_from_markdown`, `get_all_table_names`, `get_schema_context`) are now centralized in `app.utils.db_manager`.
 
 ---
 
@@ -493,8 +522,11 @@ The Fernet key is loaded from `settings.ENCRYPTION_KEY`. If empty, a new key is 
 | Function | Description |
 |---|---|
 | `get_user_engine(connection)` | Returns (or creates) a SQLAlchemy engine for a user's DB. Cached in TTLCache(maxsize=100, ttl=3600). Decrypts password from connection object. |
-| `test_connection(host, port, db_name, username, password)` | Test DB connectivity (runs SELECT 1). Returns { success, message }. |
+| `test_connection(host, port, db_name, username, password)` | Test DB connectivity (runs SELECT 1). Returns `{ success, message }`. |
 | `remove_engine(conn_id)` | Disposes and removes cached engine for a connection (called on delete). |
+| `refine_sql_from_markdown(text_input)` | Strips markdown code blocks (````sql`), flattens newline and tab escape characters to spaces, normalizes punctuation spacing, and ensures trailing semicolon. |
+| `get_all_table_names(engine)` | Introspects DB table names via `sqlalchemy.inspect`. Redis cached for 1h (`tables:{url_md5}`). |
+| `get_schema_context(engine, table_names)` | Introspects columns, types, PRIMARY KEYs, and foreign keys (`FOREIGN KEY (...) REFERENCES ...(...)`) to build a formatted schema string for LLM system prompts. Redis cached for 1h (`schema:{url+tables_md5}`). |
 
 The engine cache (`_engine_cache`) prevents creating new connection pools on every request.
 
@@ -513,7 +545,7 @@ Two lambda prompt templates:
 
 ### `app/utils/sql_guard.py`
 
-- `validate_sql(sql)` — blocklist check + SELECT-only enforcement + auto-adds `LIMIT 1000`. Simpler guard than `ValidateSqlQuery`.
+- `validate_sql(sql)` — blocklist check + SELECT-only enforcement + auto-adds `LIMIT 1000`. Lightweight regex guard used for table preview queries.
 - `sanitize_table_name(name)` — strips non-alphanumeric/underscore characters to prevent injection in table name interpolation (used in `schema.py` preview endpoint).
 
 ---
@@ -538,10 +570,10 @@ Frontend POST /api/query/chat
 4. Resolve table_filter from knowledge_base_id  [DB query for KnowledgeBase.tables list]
          |
          v
-5. get_all_table_names(engine)                  [validate_sql.py - Redis cached]
+5. get_all_table_names(engine)                  [db_manager.py - Redis cached]
          |
          v
-6. get_schema_context(engine, context_tables)   [validate_sql.py - Redis cached]
+6. get_schema_context(engine, context_tables)   [db_manager.py - Redis cached]
          |
          v
 7. SQLAgent(engine, schema_context).run_query() [sql_agent.py]
@@ -550,12 +582,12 @@ Frontend POST /api/query/chat
          |
    7b. Gemini decides to call execute_sql_query tool with generated SQL
          |
-   7c. ValidateSqlQuery.validate_sql_query(sql)
-         |    - _is_query_safe() - regex checks
-         |    - _validate_against_schema() - EXPLAIN validation
+   7c. SafeSqlExecutor.run(sql)                 [validate_sql.py]
+         |    - Layer 1: sqlglot AST validation (_check_structure)
+         |    - Layer 2: Schema validation via EXPLAIN in read-only tx (_check_against_schema)
+         |    - Layer 3: Execute in read-only tx with 10s timeout & 50-row limit (_execute)
          |
-   7d. ValidateSqlQuery._execute_sql_query(sql)
-         |    - SQLAlchemy execute - returns columns, rows
+   7d. Tool returns compact JSON string via QueryResult.to_llm_string() (or clean driver error)
          |
    7e. Tool result fed back to Gemini
          |
@@ -593,8 +625,8 @@ GET  /api/auth/onboarding-status { onboarding_complete: true }
 | Authentication | JWT Bearer tokens (HS256), 24h expiry |
 | Password storage | Argon2 (via passlib) — one-way hash |
 | DB credential storage | Fernet symmetric encryption — reversible (needed for connection) |
-| SQL injection prevention | sql_guard.sanitize_table_name() + ValidateSqlQuery blocklist + EXPLAIN validation |
-| Data mutation prevention | Only SELECT queries allowed; _is_query_safe() blocks all DML/DDL |
+| SQL injection prevention | sql_guard.sanitize_table_name() + SafeSqlExecutor AST validation (sqlglot) + EXPLAIN validation |
+| Data mutation prevention | Multi-layer defense: AST tree check blocks all DML/DDL/locking nodes & functions; DB transaction enforcement via SET TRANSACTION READ ONLY; execution bounded by statement_timeout |
 | Rate limiting | Sliding window on both IP and user ID |
 | CORS | Configured in main.py; currently allows wildcard — tighten for production |
 
@@ -638,11 +670,12 @@ main.py
 +-- app.routers.schema         <- models.connection, utils.db_manager, services.redis_client
 +-- app.routers.knowledge      <- models.knowledge, utils.security, services.redis_client
 +-- app.routers.query          <- models.*, utils.security, utils.db_manager,
-|                                 services.sql_agent, services.validate_sql, services.rate_limiter
+|                                 services.sql_agent, services.rate_limiter
 +-- app.routers.history        <- models.query_history, utils.security
 +-- app.routers.conversations  <- models.conversation, utils.security
-+-- app.routers.suggestions    <- models.*, utils.db_manager, services.validate_sql,
-                                  services.redis_client, utils.prompts
++-- app.routers.suggestions    <- models.*, utils.db_manager, services.redis_client, utils.prompts
++-- app.services.sql_agent     <- services.validate_sql (SafeSqlExecutor)
++-- app.services.validate_sql  <- utils.db_manager (refine_sql_from_markdown), sqlglot
 ```
 
 ---
@@ -658,13 +691,16 @@ main.py
 | Add a new API endpoint | Create/edit the relevant router file in `routers/`, add app.include_router() in main.py |
 | Add a new database table | Create file in `models/`, add import to `database.py::init_db()` |
 | Change rate limit thresholds | `services/rate_limiter.py` - RATE_LIMIT_MAX_REQUESTS / RATE_LIMIT_WINDOW_SECS |
-| Add a new allowed SQL query type | `services/validate_sql.py` - allowed_types list in _is_query_safe() |
+| Add a new allowed SQL query type | `services/validate_sql.py` - `_ALLOWED_ROOTS` or `_FORBIDDEN_NODES` in SafeSqlExecutor |
+| Change forbidden SQL functions or prefixes | `services/validate_sql.py` - `_FORBIDDEN_FUNCTIONS` or `_FORBIDDEN_FUNCTION_PREFIXES` |
+| Change query execution timeout or row limit | `services/validate_sql.py` - SafeSqlExecutor timeout_ms / max_rows, OR `services/sql_agent.py` create_sql_tool() |
 | Add support for non-PostgreSQL DBs | `utils/db_manager.py` - get_user_db_url() (change postgresql:// prefix), `models/connection.py` (add db_type field) |
 | Change Redis TTL for caching | Edit the ex= parameter in the relevant redis_client.set() call |
 | Change which tables LLM sees | `routers/query.py` - chat_query() table filtering logic |
 | Change CORS origins | `main.py` - allow_origins=[...] |
 | Disable rate limiting | Remove check_rate_limit() call from routers/query.py::chat_query() |
 | Add a new tool to the SQL agent | Define with @tool in services/sql_agent.py, add to build_workflow() ToolNode and llm.bind_tools([...]) |
-| Change schema display format for LLM | `services/validate_sql.py` - get_schema_context() function |
+| Change schema display format for LLM | `utils/db_manager.py` - get_schema_context() function |
+| Modify markdown SQL cleanup logic | `utils/db_manager.py` - refine_sql_from_markdown() function |
 | Change number of preview rows | `routers/schema.py` - LIMIT clause in preview_table() |
 | Change max rows stored in conversation | `routers/query.py` - rows[:50] slice in chat_query() |

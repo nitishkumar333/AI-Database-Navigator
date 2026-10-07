@@ -10,11 +10,11 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from .validate_sql import ValidateSqlQuery
 from langgraph.prebuilt import ToolNode
 from langchain_core.runnables import RunnableLambda
 from google.api_core.exceptions import ResourceExhausted
 from fastapi import HTTPException
+from app.services.validate_sql import SafeSqlExecutor
 
 from app.config import get_settings
 settings = get_settings()
@@ -55,20 +55,19 @@ def create_sql_tool(agent_instance):
         Returns:
             Result of sql query execution on database
         """
-        try:
-            validation = ValidateSqlQuery(agent_instance.engine)
-            result = validation.validate_sql_query(sql_query)
-        except Exception as e:
-            return str(e)
 
-        if result['validation_result'].get('is_safe') and result['validation_result'].get('schema_validated'):
-            result = validation._execute_sql_query(sql_query)
-            agent_instance.generated_sql = result.get('sql_query', sql_query)
-            agent_instance.columns = result.get('columns', [])
-            agent_instance.rows = result.get('rows', [])
-            return result
-        else:
-            return result['validation_result'].get('explanation', "SQL query is not safe to execute.")
+        executor = SafeSqlExecutor(agent_instance.engine, max_rows=50)
+        result = executor.run(sql_query)
+
+        if not result.success:
+            return f"Error: {result.error}"
+
+        # Only store state for queries that actually ran.
+        agent_instance.generated_sql = result.sql
+        agent_instance.columns = result.columns
+        agent_instance.rows = result.rows
+
+        return result.to_llm_string()
 
     return execute_sql_query
 
@@ -116,9 +115,6 @@ DATABASE SCHEMA:
         )
         runnable_llm = assistant_prompt | llm.bind_tools([self.execute_sql_query])
         response = runnable_llm.invoke({"conversation": state["messages"]})
-        print('='*50)
-        print(response)
-        print('='*50)
         return {**state,"messages": response}
     
     def build_workflow(self):

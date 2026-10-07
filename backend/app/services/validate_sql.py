@@ -1,292 +1,200 @@
-import time
-import re
-import sqlparse
-from typing import Dict, Any, Tuple
+from __future__ import annotations
+ 
+import json, re, sqlparse, hashlib
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 from sqlalchemy import text, inspect
-import hashlib
-from app.config import get_settings
+from sqlalchemy import text
+from sqlalchemy.engine import Connection, Engine
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
 from app.services.redis_client import redis_client
+from app.utils.db_manager import refine_sql_from_markdown
+import sqlglot
 
-settings = get_settings()
+# --------------------------------------------------------------------------- #
+# Policy
+# --------------------------------------------------------------------------- #
+ 
+# The only statement shapes allowed at the root of the parsed query.
+# (WITH ... SELECT parses as a Select, so CTEs are covered.)
+_ALLOWED_ROOTS = (exp.Select, exp.Union, exp.Intersect, exp.Except)
+ 
+# Node types that must not appear anywhere in the tree. This catches
+# data-modifying CTEs (WITH d AS (DELETE ... RETURNING *) SELECT ...),
+# SELECT ... INTO, and SELECT ... FOR UPDATE. Names are resolved with getattr
+# because some of them differ between sqlglot versions.
+_FORBIDDEN_NODES = tuple(
+    getattr(exp, name)
+    for name in (
+        "Insert", "Update", "Delete", "Merge",
+        "Create", "Drop", "Alter", "AlterTable", "TruncateTable",
+        "Command", "Copy", "Set",
+        "Into", "Lock",
+    )
+    if hasattr(exp, name)
+)
+ 
+# Functions that can sleep, touch the filesystem, run arbitrary SQL, or
+# change server/session state.
+_FORBIDDEN_FUNCTIONS = {
+    "pg_sleep", "pg_sleep_for", "pg_sleep_until",
+    "set_config", "nextval", "setval",
+    "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf",
+}
+_FORBIDDEN_FUNCTION_PREFIXES = (
+    "pg_read_", "pg_ls_", "pg_advisory_", "lo_", "dblink", "query_to_",
+)
+ 
+# --------------------------------------------------------------------------- #
+# Result types
+# --------------------------------------------------------------------------- #
+ 
+@dataclass
+class ValidationResult:
+    sql: str                                  # cleaned SQL (markdown fences removed)
+    is_valid: bool
+    reason: str
+    validation_query: Optional[str] = None    # the EXPLAIN statement, if reached
+ 
+ 
+@dataclass
+class QueryResult:
+    sql: str
+    success: bool
+    columns: List[str] = field(default_factory=list)
+    rows: List[Dict[str, Any]] = field(default_factory=list)
+    truncated: bool = False
+    error: Optional[str] = None
+ 
+    def to_llm_string(self) -> str:
+        """Compact JSON the agent can read. Handles Decimal/datetime/UUID etc."""
+        payload: Dict[str, Any] = {
+            "columns": self.columns,
+            "row_count": len(self.rows),
+            "rows": self.rows,
+        }
+        if self.truncated:
+            payload["note"] = (
+                f"Output truncated to the first {len(self.rows)} rows. "
+                "Add a LIMIT or a more specific filter."
+            )
+        return json.dumps(payload, default=str, ensure_ascii=False)
+ 
+ 
+# --------------------------------------------------------------------------- #
+# Validator / executor
+# --------------------------------------------------------------------------- #
 
-class ValidateSqlQuery:
-    def __init__(self, engine):
+class SafeSqlExecutor:
+    """
+    Validates and runs LLM-generated, read-only PostgreSQL queries.
+ 
+    Layers of defence:
+      1. AST check (sqlglot): exactly one statement, SELECT-like root, no
+         forbidden nodes, no forbidden functions.
+      2. EXPLAIN against the real database to catch bad tables/columns.
+      3. Every database call runs in a READ ONLY transaction with a statement
+         timeout, so a parser mistake in (1) still can't write anything.
+ 
+    For production, also connect with a database role that only has SELECT.
+    """
+
+    def __init__(self, engine: Engine, *, max_rows: int = 50, timeout_ms: int = 10_000):
         self.engine = engine
+        self.max_rows = max_rows
+        self.timeout_ms = timeout_ms
+    
+    def validate(self, sql_query: str) -> ValidationResult:
+        sql = refine_sql_from_markdown(sql_query).strip().rstrip(";").strip()
+ 
+        error = self._check_structure(sql)
+        if error:
+            return ValidationResult(sql, False, error)
+ 
+        validation_query = f"EXPLAIN {sql}"
+        error = self._check_against_schema(validation_query)
+        if error:
+            return ValidationResult(sql, False, error, validation_query)
+ 
+        return ValidationResult(sql, True, "Query is safe to execute", validation_query)
 
-    def validate_sql_query(self, sql_query: str) -> Dict[str, Any]:
-        print("validate_sql_query", sql_query)
-        sql_query = refine_sql_from_markdown(sql_query)
-        print("refine_sql_from_markdown", sql_query)
-        result = {
-            'sql_query': sql_query,
-            'validation_query': None,
-            'validation_result': {}
-        }
-        
-        # Step 1: Parse and validate the query structure
-        is_safe, reason = self._is_query_safe(sql_query)
-        
-        if not is_safe:
-            result['validation_result'] = {
-                'is_safe': False,
-                'explanation': reason,
-                'schema_validated': False
-            }
-            return result
-        
-        # Step 2: Validate against database schema
-        schema_valid, schema_reason, validation_query = self._validate_against_schema(sql_query)
-        result['validation_query'] = validation_query
-        print("schema_valid", schema_valid)
-        print("schema_reason", schema_reason)
-        print("validation_query", validation_query)
-        if not schema_valid:
-            result['validation_result'] = {
-                'is_safe': False,
-                'explanation': schema_reason,
-                'schema_validated': False
-            }
-            return result
-        
-        result['validation_result'] = {
-            'is_safe': True,
-            'explanation': 'Query is safe to execute',
-            'schema_validated': True
-        }
+    def run(self, sql_query: str) -> QueryResult:
+        """Validate, then execute. Never raises for bad SQL; check `.success`."""
+        validation = self.validate(sql_query)
+        if not validation.is_valid:
+            return QueryResult(sql=validation.sql, success=False, error=validation.reason)
+        return self._execute(validation.sql)
 
-        return result
-
-    def _is_query_safe(self, sql_query: str) -> Tuple[bool, str]:
-        """
-        Check if the query is a safe read-only query.
-        
-        Returns:
-            Tuple of (is_safe: bool, reason: str)
-        """
-        # Parse the SQL query
-        parsed = sqlparse.parse(sql_query)
-        
-        if not parsed:
-            return False, "Empty or invalid SQL query"
-        
-        # Get the first statement
-        statement = parsed[0]
-        
-        # Get the query type
-        query_type = statement.get_type()
-        
-        # List of allowed statement types (read-only operations)
-        allowed_types = ['SELECT', 'UNKNOWN']  # UNKNOWN might be SELECT with CTEs
-        
-        # List of dangerous keywords that modify data
-        dangerous_keywords = [
-            'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER',
-            'TRUNCATE', 'REPLACE', 'MERGE', 'GRANT', 'REVOKE',
-            'EXEC', 'EXECUTE', 'CALL', 'INTO'
-        ]
-        
-        # Check statement type
-        if query_type not in allowed_types:
-            return False, f"Query type '{query_type}' is not allowed. Only SELECT queries are permitted."
-        
-        # Check for dangerous keywords in the query
-        query_upper = sql_query.upper()
-        for keyword in dangerous_keywords:
-            # Use word boundaries to avoid false positives (e.g., "DELETED_AT" column)
-            pattern = r'\b' + keyword + r'\b'
-            if re.search(pattern, query_upper):
-                return False, f"Dangerous keyword '{keyword}' detected. Query may modify data."
-        
-        # Check for SELECT INTO which can create tables
-        if re.search(r'\bSELECT\b.*\bINTO\b', query_upper):
-            return False, "SELECT INTO is not allowed as it creates new tables."
-        
-        # Additional security checks
-        comment_pattern = r'(/\*.*?\*/|--.*?$)'
-        if re.search(comment_pattern, sql_query, re.MULTILINE | re.DOTALL):
-            # Allow comments but warn if they contain dangerous keywords
-            comments = re.findall(comment_pattern, sql_query, re.MULTILINE | re.DOTALL)
-            for comment in comments:
-                for keyword in dangerous_keywords:
-                    if keyword in comment.upper():
-                        return False, f"Suspicious keyword '{keyword}' found in comment."
-        
-        return True, "Query structure is safe"
-
-    def _validate_against_schema(self, sql_query: str) -> Tuple[bool, str, str]:
-        """
-        Validate the query against the actual database schema using EXPLAIN.
-        
-        Returns:
-            Tuple of (is_valid: bool, reason: str, validation_query: str)
-        """
-        # Use EXPLAIN to validate without executing
-        validation_query = f"EXPLAIN {sql_query}"
-        
+    @staticmethod
+    def _check_structure(sql: str) -> Optional[str]:
+        """Return an error message, or None if the query passes."""
+        if not sql:
+            return "Empty SQL query."
+ 
         try:
-            with self.engine.connect() as connection:
-                connection.execute(text(validation_query))
-            
-            return True, "Query validated against database schema", validation_query
-        
-        except Exception as e:
-            error_msg = str(e)
-            
-            # Parse common PostgreSQL errors
-            if 'relation' in error_msg.lower() and 'does not exist' in error_msg.lower():
-                return False, f"Schema validation failed: Table does not exist - {error_msg}", validation_query
-            elif 'column' in error_msg.lower() and 'does not exist' in error_msg.lower():
-                return False, f"Schema validation failed: Column does not exist - {error_msg}", validation_query
-            else:
-                return False, f"Schema validation failed: {error_msg}", validation_query
+            statements = [s for s in sqlglot.parse(sql, read="postgres") if s is not None]
+        except SqlglotError as exc:
+            return f"Could not parse SQL: {exc}"
+ 
+        if not statements:
+            return "Empty or invalid SQL query."
+        if len(statements) > 1:
+            return "Only a single SQL statement is allowed."
+ 
+        tree = statements[0]
+ 
+        if not isinstance(tree, _ALLOWED_ROOTS):
+            return (
+                f"Statement type '{type(tree).__name__.upper()}' is not allowed. "
+                "Only SELECT queries are permitted."
+            )
+ 
+        forbidden = tree.find(*_FORBIDDEN_NODES)
+        if forbidden is not None:
+            return (
+                f"'{type(forbidden).__name__.upper()}' is not allowed. "
+                "The query may modify data or take locks."
+            )
+ 
+        for func in tree.find_all(exp.Func):
+            name = (func.name if isinstance(func, exp.Anonymous) else func.sql_name()).lower()
+            if name in _FORBIDDEN_FUNCTIONS or name.startswith(_FORBIDDEN_FUNCTION_PREFIXES):
+                return f"Function '{name}' is not allowed."
+ 
+        return None
 
-    def _execute_sql_query(self, sql_query: str) -> dict:
+    def _check_against_schema(self, validation_query: str) -> Optional[str]:
         try:
-            with self.engine.connect() as connection:
-                query_result = connection.execute(text(sql_query))
-                columns = list(query_result.keys())
-                print("columns", columns)
-                rows = [dict(zip(columns, row)) for row in query_result.fetchall()]
-                print("rows", rows)
+            with self._read_only_connection() as conn:
+                conn.execute(text(validation_query))
+        except Exception as exc:
+            return f"Schema validation failed: {self._clean_error(exc)}"
+        return None
 
-            return {
-                "success": True,
-                "columns": columns,
-                "rows": rows,
-            }
-        except Exception as error:
-            return {
-                "success": False,
-                "error": str(error),
-            }
-
-def refine_sql_from_markdown(text_input: str) -> str:
-    # Remove markdown code block syntax (```sql, ```, etc.)
-    text_input = re.sub(r'```sql\s*', '', text_input)
-    text_input = re.sub(r'```\s*', '', text_input)
-    
-    # Replace \n literals with actual spaces
-    text_input = text_input.replace('\\n', ' ')
-    
-    # Replace actual newlines with spaces
-    text_input = text_input.replace('\n', ' ')
-    
-    # Replace tabs with spaces
-    text_input = text_input.replace('\t', ' ')
-    
-    # Remove extra whitespace (multiple spaces to single space)
-    text_input = re.sub(r'\s+', ' ', text_input)
-    
-    # Clean up whitespace around parentheses and commas
-    text_input = re.sub(r'\s*\(\s*', '(', text_input)
-    text_input = re.sub(r'\s*\)\s*', ')', text_input)
-    text_input = re.sub(r'\s*,\s*', ', ', text_input)
-    text_input = re.sub(r'\s*;\s*', ';', text_input)
-    
-    # Trim leading/trailing whitespace
-    text_input = text_input.strip()
-    
-    # Ensure semicolon at the end if missing
-    if text_input and not text_input.endswith(';'):
-        text_input += ';'
-
-    return text_input
-
-def get_all_table_names(engine) -> list:
-    url_str = str(engine.url)
-    url_hash = hashlib.md5(url_str.encode()).hexdigest()
-    cache_key = f"tables:{url_hash}"
-    
-    cached_tables = redis_client.get(cache_key)
-    if cached_tables:
-        return cached_tables
-        
-    inspector = inspect(engine)
-    all_tables = inspector.get_table_names()
-    
-    redis_client.set(cache_key, all_tables, ex=3600)
-    return all_tables
-
-def get_schema_context(engine, table_names: list) -> str:
-    """Build schema context string for the given tables."""
-    url_str = str(engine.url)
-    table_names_sorted = sorted(table_names)
-    tables_hash = hashlib.md5((url_str + ":" + ",".join(table_names_sorted)).encode()).hexdigest()
-    cache_key = f"schema:{tables_hash}"
-    
-    cached_schema = redis_client.get(cache_key)
-    if cached_schema:
-        return cached_schema
-
-    inspector = inspect(engine)
-    context_parts = []
-
-    for table_name in table_names:
+    def _execute(self, sql: str) -> QueryResult:
         try:
-            columns = inspector.get_columns(table_name)
-            pk = inspector.get_pk_constraint(table_name)
-            fks = inspector.get_foreign_keys(table_name)
+            with self._read_only_connection() as conn:
+                cursor = conn.execute(text(sql))
+                columns = list(cursor.keys())
+                fetched = cursor.fetchmany(self.max_rows + 1)
+        except Exception as exc:
+            return QueryResult(sql=sql, success=False, error=self._clean_error(exc))
+ 
+        truncated = len(fetched) > self.max_rows
+        rows = [dict(zip(columns, row)) for row in fetched[: self.max_rows]]
+        return QueryResult(sql=sql, success=True, columns=columns, rows=rows, truncated=truncated)
+    
+    @contextmanager
+    def _read_only_connection(self) -> Iterator[Connection]:
+        """One transaction, read-only, with a statement timeout."""
+        with self.engine.begin() as conn:
+            conn.execute(text("SET TRANSACTION READ ONLY"))
+            conn.execute(text(f"SET LOCAL statement_timeout = {int(self.timeout_ms)}"))
+            yield conn
 
-            col_lines = []
-            pk_cols = pk.get("constrained_columns", []) if pk else []
-            for col in columns:
-                flags = []
-                if col["name"] in pk_cols:
-                    flags.append("PRIMARY KEY")
-                if not col.get("nullable", True):
-                    flags.append("NOT NULL")
-                flag_str = f" ({', '.join(flags)})" if flags else ""
-                col_lines.append(f"    {col['name']} {col['type']}{flag_str}")
-
-            fk_lines = []
-            for fk in fks:
-                fk_lines.append(
-                    f"    FOREIGN KEY ({', '.join(fk['constrained_columns'])}) "
-                    f"REFERENCES {fk['referred_table']}({', '.join(fk['referred_columns'])})"
-                )
-
-            table_def = f"  TABLE {table_name}:\n" + "\n".join(col_lines)
-            if fk_lines:
-                table_def += "\n  Foreign Keys:\n" + "\n".join(fk_lines)
-
-            context_parts.append(table_def)
-        except Exception:
-            context_parts.append(f"  TABLE {table_name}: (unable to read schema)")
-
-    schema_str = "\n\n".join(context_parts)
-    redis_client.set(cache_key, schema_str, ex=3600)
-    return schema_str
-
-
-
-def execute_raw_sql(engine, sql: str) -> dict:
-    """Execute user-edited SQL query."""
-    refined_sql = refine_sql_from_markdown(sql)
-    validation = ValidateSqlQuery(engine)
-    result = validation.validate_sql_query(refined_sql)
-
-    if not (result['validation_result'].get('is_safe') and result['validation_result'].get('schema_validated')):
-        return {
-            "success": False,
-            "sql": refined_sql,
-            "error": result['validation_result'].get('explanation', 'Validation Failed'),
-        }
-
-    try:
-        with engine.connect() as connection:
-            query_result = connection.execute(text(result['sql_query']))
-            columns = list(query_result.keys())
-            rows = [dict(zip(columns, row)) for row in query_result.fetchall()]
-
-        return {
-            "success": True,
-            "sql": result['sql_query'],
-            "columns": columns,
-            "rows": rows,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "sql": result['sql_query'],
-            "error": str(e),
-        }
+    @staticmethod
+    def _clean_error(exc: Exception) -> str:
+        """Prefer the short driver message over SQLAlchemy's long wrapper."""
+        return str(getattr(exc, "orig", exc)).strip()

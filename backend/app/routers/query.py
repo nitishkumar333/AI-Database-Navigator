@@ -12,7 +12,7 @@ from app.models.conversation import Conversation, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.sql_agent import SQLAgent
-from app.services.validate_sql import get_schema_context, get_all_table_names, execute_raw_sql
+from app.utils.db_manager import get_schema_context, get_all_table_names
 from app.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
@@ -166,31 +166,3 @@ def chat_query(
         "connection_name": conn.name,
         "connection_id": conn.id,
     }
-
-
-@router.post("/{conn_id}/execute-sql")
-def execute_sql(
-    conn_id: int,
-    req: SQLExecuteRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Execute user-edited SQL query."""
-    conn = _get_connection(conn_id, current_user, db)
-    engine = get_user_engine(conn)
-
-    result = execute_raw_sql(engine, req.sql)
-
-    # Save to history
-    history = QueryHistory(
-        user_id=current_user.id,
-        connection_id=conn_id,
-        nl_query="[Manual SQL]",
-        generated_sql=req.sql,
-        success=result.get("success", False),
-        error_message=result.get("error", ""),
-    )
-    db.add(history)
-    db.commit()
-
-    return result
