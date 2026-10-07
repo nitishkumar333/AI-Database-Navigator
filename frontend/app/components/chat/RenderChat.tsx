@@ -46,10 +46,6 @@ interface RenderChatProps {
 interface ResultItemDisplayProps {
   message: Message;
   index: number;
-  handleViewChange: (
-    view: "chat" | "code" | "result",
-    payload: ResultPayload[] | null
-  ) => void;
   handleResultPayloadChange: (
     type: string,
     /* eslint-disable @typescript-eslint/no-explicit-any */

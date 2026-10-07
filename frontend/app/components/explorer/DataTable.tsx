@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
 
 import { PiDatabase, PiCheck, PiX } from "react-icons/pi";
 
@@ -11,7 +10,6 @@ interface DataTableProps {
   header: { [key: string]: string };
   stickyHeaders?: boolean;
   maxHeight?: string;
-  loadingData?: boolean;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -19,7 +17,6 @@ const DataTable: React.FC<DataTableProps> = ({
   header,
   stickyHeaders = false,
   maxHeight,
-  loadingData,
 }) => {
   if (!data) return null;
 
@@ -32,19 +29,11 @@ const DataTable: React.FC<DataTableProps> = ({
       : {};
 
   const containerClassName = stickyHeaders
-    ? `flex flex-col w-full transition-all duration-300 ${loadingData ? "opacity-50" : ""}`
-    : `flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full transition-all duration-300 ${loadingData ? "opacity-50" : ""}`;
+    ? "flex flex-col w-full"
+    : "flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full";
 
   return (
-    <motion.div
-      className={containerClassName}
-      style={containerStyle}
-      animate={containerStyle}
-      transition={{
-        duration: 0.4,
-        ease: "easeInOut",
-      }}
-    >
+    <div className={`${containerClassName} chat-animation`} style={containerStyle}>
       {/* Scrollable wrapper */}
       <div className="w-full max-w-full overflow-x-auto">
         <table className="w-full table-auto whitespace-nowrap border-separate border-spacing-0 overflow-auto no-scrollbar">
@@ -59,6 +48,7 @@ const DataTable: React.FC<DataTableProps> = ({
               <th className="w-12 border-b border-r border-foreground_alt px-3 py-3 text-center font-medium">
                 #
               </th>
+
               {Object.keys(header).map((key) => (
                 <th
                   key={key}
@@ -66,22 +56,27 @@ const DataTable: React.FC<DataTableProps> = ({
                 >
                   <div className="flex flex-row items-center gap-2 text-secondary">
                     <PiDatabase className="h-4 w-4 opacity-70" />
-                    <p className="text-sm font-medium text-primary">{key}</p>
+                    <p className="text-sm font-medium text-primary">
+                      {key}
+                    </p>
                   </div>
                 </th>
               ))}
             </tr>
           </thead>
+
           <tbody>
             {data.map((item, rowIndex) => (
               <tr
                 key={rowIndex}
-                className={`group transition-colors ${rowIndex % 2 === 1 ? "bg-background_alt/50" : ""
-                  }`}
+                className={
+                  rowIndex % 2 === 1 ? "bg-background_alt/50" : ""
+                }
               >
                 <td className="border-b border-r border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
                   {rowIndex + 1}
                 </td>
+
                 {Object.keys(header).map((key, colIndex) => {
                   const value = item[key];
                   const isBoolean = typeof value === "boolean";
@@ -128,7 +123,7 @@ const DataTable: React.FC<DataTableProps> = ({
           </tbody>
         </table>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
