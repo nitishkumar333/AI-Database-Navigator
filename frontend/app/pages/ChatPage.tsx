@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useContext } from "react";
+import React, { useEffect, useMemo, useState, useRef, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Query, Message, ResultPayload, ResponsePayload } from "@/app/types/chat";
@@ -23,6 +23,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { Separator } from "@/components/ui/separator";
 import { CollectionContext } from "../components/contexts/CollectionContext";
+
+// Stable reference so memoised values don't change when a conversation has no queries
+const EMPTY_QUERIES: { [key: string]: Query } = {};
 
 export default function ChatPage() {
   const { sendQuery } = useContext(QueryContext);
@@ -50,11 +53,24 @@ export default function ChatPage() {
     return stored ? parseInt(stored, 10) : null;
   });
 
-  const [currentQuery, setCurrentQuery] = useState<{
-    [key: string]: Query;
-  }>({});
-  const [currentTitle, setCurrentTitle] = useState<string>("");
-  const [currentStatus, setCurrentStatus] = useState<string>("");
+  // Derived straight from context (no state + effect), so the empty state and the
+  // chat view switch in the same render instead of one render later.
+  const activeConversation = useMemo(
+    () =>
+      currentConversation
+        ? conversations.find((c) => c.id === currentConversation)
+        : undefined,
+    [currentConversation, conversations]
+  );
+  const currentQuery = activeConversation?.queries ?? EMPTY_QUERIES;
+  const currentStatus = activeConversation?.current ?? "";
+  const currentTitle = activeConversation?.name ?? "";
+
+  const sortedQueries = useMemo(
+    () => Object.entries(currentQuery).sort((a, b) => a[1].index - b[1].index),
+    [currentQuery]
+  );
+  const isEmpty = sortedQueries.length === 0;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -73,7 +89,13 @@ export default function ChatPage() {
 
   const [randomPrompts, setRandomPrompts] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestionsReady, setSuggestionsReady] = useState(false);
   const [isKbLoading, setIsKbLoading] = useState(true);
+
+  // Show the skeleton from the moment a connection exists until the first fetch
+  // finishes, so we never flash an empty list between "idle" and "loading".
+  const showSkeleton =
+    !!selectedConnectionId && (loadingSuggestions || !suggestionsReady);
 
   const handleSendQuery = async (query: string) => {
     if (query.trim() === "" || currentStatus !== "") return;
@@ -181,24 +203,6 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    setCurrentQuery(
-      currentConversation && conversations.length > 0
-        ? conversations.find((c) => c.id === currentConversation)?.queries || {}
-        : {}
-    );
-    setCurrentStatus(
-      currentConversation && conversations.length > 0
-        ? conversations.find((c) => c.id === currentConversation)?.current || ""
-        : ""
-    );
-    setCurrentTitle(
-      currentConversation && conversations.length > 0
-        ? conversations.find((c) => c.id === currentConversation)?.name || ""
-        : ""
-    );
-  }, [currentConversation, conversations]);
-
-  useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({
         behavior: "smooth",
@@ -221,8 +225,10 @@ export default function ChatPage() {
       setRandomPrompts(suggestions);
     } catch {
       setRandomPrompts([]);
+    } finally {
+      setLoadingSuggestions(false);
+      setSuggestionsReady(true);
     }
-    setLoadingSuggestions(false);
   };
 
   useEffect(() => {
@@ -286,75 +292,88 @@ export default function ChatPage() {
       </div>
       {currentConversation != null && <Separator className="w-full hidden" />}
 
-      <AnimatePresence mode="popLayout">
-        <motion.div
-          key={currentConversation || "empty"}
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -40 }}
-          transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-          className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-start items-center"
-        >
-          <div className="flex flex-col w-[90vw] md:w-[85vw] lg:w-[70vw] min-h-[70vh]">
-            {currentQuery &&
-              Object.entries(currentQuery)
-                .sort((a, b) => a[1].index - b[1].index)
-                .map(([queryId, query], index, array) => (
-                  <ChatProvider key={queryId}>
-                    <RenderChat
-                      key={queryId + index}
-                      messages={query.messages}
-                      conversationID={currentConversation || ""}
-                      queryID={queryId}
-                      finished={query.finished}
-                      query_start={query.query_start}
-                      query_end={query.query_end}
-                      _collapsed={index !== array.length - 1}
-                      messagesEndRef={messagesEndRef}
-                      NER={query.NER}
-                      addDisplacement={addDisplacement}
-                      addDistortion={addDistortion}
-                      handleSendQuery={handleSendQuery}
-                      isLastQuery={index === array.length - 1}
-                    />
-                  </ChatProvider>
-                ))}
-            {currentQuery && !(Object.keys(currentQuery).length === 0) && (
-              <div>
-                <hr className="w-full border-t border-transparent my-4 mb-24 md:mb-28" />
-              </div>
-            )}
-          </div>
-          {Object.keys(currentQuery).length === 0 && (
-            <div className="absolute flex flex-col justify-center items-center w-full h-full gap-3 fade-in pb-5 md:pb-0 -translate-y-20">
-              <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
-                <p
-                  className="text-left text-3xl font-semibold"
-                  style={{
-                    background: "linear-gradient(90deg, #2d8a5e, #41ba7fff, #4dc98dff, #79eeb1ff, #49BC84, #3da874, #2d8a5e)",
-                    backgroundSize: "200% 100%",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    animation: "gradientShift 3s ease-in-out infinite",
-                  }}
-                >
-                  Ask Anything
-                </p>
-                <Button
-                  variant="default"
-                  className="w-10"
-                  onClick={() => {
-                    clearSuggestionsCache();
-                    loadSuggestions(true);
-                  }}
-                >
-                  <IoRefresh />
-                </Button>
-              </div>
+      <div className="relative flex flex-col w-full items-center">
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={currentConversation || "empty"}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+            className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-start items-center"
+          >
+            <div className="flex flex-col w-[90vw] md:w-[85vw] lg:w-[70vw] min-h-[70vh]">
+              {sortedQueries.map(([queryId, query], index, array) => (
+                <ChatProvider key={queryId}>
+                  <RenderChat
+                    key={queryId + index}
+                    messages={query.messages}
+                    conversationID={currentConversation || ""}
+                    queryID={queryId}
+                    finished={query.finished}
+                    query_start={query.query_start}
+                    query_end={query.query_end}
+                    _collapsed={index !== array.length - 1}
+                    messagesEndRef={messagesEndRef}
+                    NER={query.NER}
+                    addDisplacement={addDisplacement}
+                    addDistortion={addDistortion}
+                    handleSendQuery={handleSendQuery}
+                    isLastQuery={index === array.length - 1}
+                  />
+                </ChatProvider>
+              ))}
+              {!isEmpty && (
+                <div>
+                  <hr className="w-full border-t border-transparent my-4 mb-24 md:mb-28" />
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
-              {loadingSuggestions ? (
-                <div className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-1">
+      <AnimatePresence>
+        {isEmpty && (
+          <motion.div
+            key="ask-anything"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{ y: -80 }}
+            className="absolute flex flex-col justify-center items-center w-full h-full gap-3 pb-5 md:pb-0"
+          >
+            <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
+              <p
+                className="text-left text-3xl font-semibold"
+                style={{
+                  background: "linear-gradient(90deg, #2d8a5e, #41ba7fff, #4dc98dff, #79eeb1ff, #49BC84, #3da874, #2d8a5e)",
+                  backgroundSize: "200% 100%",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  animation: "gradientShift 3s ease-in-out infinite",
+                }}
+              >
+                Ask Anything
+              </p>
+              <Button
+                variant="default"
+                className="w-10"
+                disabled={loadingSuggestions}
+                onClick={() => {
+                  clearSuggestionsCache();
+                  loadSuggestions(true);
+                }}
+              >
+                <IoRefresh className={loadingSuggestions ? "animate-spin" : ""} />
+              </Button>
+            </div>
+
+            <div className="w-full md:w-[60vw] lg:w-[45vw] min-h-[240px]">
+              {showSkeleton ? (
+                <div className="flex flex-col w-full gap-1">
                   {[72, 85, 60, 78].map((width, index) => (
                     <div
                       key={index}
@@ -372,22 +391,17 @@ export default function ChatPage() {
                   ))}
                 </div>
               ) : (
-                <motion.div
-                  className="flex flex-col w-full md:w-[60vw] lg:w-[45vw] gap-3 mb-12"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ staggerChildren: 0.03, delayChildren: 0.05 }}
-                >
+                <div className="flex flex-col w-full gap-3 mb-12">
                   {randomPrompts.map((prompt, index) => (
                     <motion.button
                       key={index + "prompt"}
                       onClick={() => handleSendQuery(prompt)}
-                      className="whitespace-normal px-4 pt-2 text-left h-auto hover:bg-foreground text-sm rounded-lg transition-all duration-200 ease-in-out flex flex-col items-start justify-start overflow-hidden relative group"
-                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      className="whitespace-normal px-4 pt-2 text-left h-auto hover:bg-foreground text-sm rounded-lg transition-colors duration-200 ease-in-out flex flex-col items-start justify-start overflow-hidden relative group"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{
-                        duration: 0.2,
-                        delay: index * 0.03,
+                        duration: 0.3,
+                        delay: index * 0.08,
                         ease: "easeOut",
                       }}
                       whileHover={{
@@ -414,16 +428,9 @@ export default function ChatPage() {
                         >
                           <MdChatBubbleOutline size={14} />
                         </motion.div>
-                        <motion.p
-                          className="text-primary text-sm truncate"
-                          initial={{ opacity: 0.8 }}
-                          whileHover={{
-                            opacity: 1,
-                            transition: { duration: 0.2 },
-                          }}
-                        >
+                        <p className="text-primary text-sm truncate opacity-80 group-hover:opacity-100 transition-opacity duration-200">
                           {prompt}
-                        </motion.p>
+                        </p>
                       </div>
                       <motion.div
                         className="border-b border-foreground w-full pt-2 origin-left"
@@ -444,12 +451,13 @@ export default function ChatPage() {
                       <div className="skeleton h-[2px] w-full opacity-50" />
                     </motion.button>
                   ))}
-                </motion.div>
+                </div>
               )}
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
+
       <div className="w-full justify-center items-center flex z-10">
         <QueryInput
           query_length={Object.keys(currentQuery).length}

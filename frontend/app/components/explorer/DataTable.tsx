@@ -33,7 +33,7 @@ const DataTable: React.FC<DataTableProps> = ({
     : "flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full";
 
   return (
-    <div className={`${containerClassName} chat-animation`} style={containerStyle}>
+    <div className={`${containerClassName} chat-animation-fast`} style={containerStyle}>
       {/* Scrollable wrapper */}
       <div className="w-full max-w-full overflow-x-auto">
         <table className="w-full table-auto whitespace-nowrap border-separate border-spacing-0 overflow-auto no-scrollbar">
