@@ -68,6 +68,7 @@ langchain-google-genai==2.0.4
 langchain-text-splitters==0.3.8
 langgraph==0.2.73
 langgraph-checkpoint==2.0.26
+langgraph-checkpoint-postgres==2.0.21
 langgraph-checkpoint-sqlite==2.0.6
 langgraph-sdk==0.1.74
 langsmith==0.1.147
@@ -104,6 +105,7 @@ posthog==7.11.0
 propcache==0.4.1
 proto-plus==1.27.2
 protobuf==5.29.6
+psycopg[binary]==3.2.3
 psycopg2-binary==2.9.9
 pyasn1==0.6.3
 pyasn1_modules==0.4.2

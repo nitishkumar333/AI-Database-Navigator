@@ -108,7 +108,12 @@ def chat_query(
     schema_context = get_schema_context(engine, context_tables)
 
     sql_agent = SQLAgent(engine, schema_context)
-    result = sql_agent.run_query(req.question, req.conversation_id or str(conn.id))
+    result = sql_agent.run_query(
+        req.question,
+        user_id=current_user.id,
+        conn_id=conn.id,
+        conversation_id=req.conversation_id,
+    )
 
     # Save to history
     history = QueryHistory(
