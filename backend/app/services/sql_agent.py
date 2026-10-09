@@ -148,7 +148,7 @@ class SQLAgent:
 
         # Build the LLM + tool binding once, not on every graph step
         self.llm_with_tools = ChatGoogleGenerativeAI(
-            model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
+            model=getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite"),
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         ).bind_tools([self.execute_sql_query])
