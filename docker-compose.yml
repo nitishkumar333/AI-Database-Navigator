@@ -61,6 +61,10 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      AGENT_MODE: production
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REDIS_HOST: redis
       REDIS_PORT: 6379

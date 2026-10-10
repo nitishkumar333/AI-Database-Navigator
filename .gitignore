@@ -51,3 +51,6 @@ venv/
 __pycache__/
 *.cpython-310.pyc
 *.cpython-312.pyc
+
+# evaluation run outputs
+evaluation/results/

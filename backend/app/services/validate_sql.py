@@ -1,15 +1,13 @@
 from __future__ import annotations
  
-import json, re, sqlparse, hashlib
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple
-from sqlalchemy import text, inspect
+from typing import Any, Dict, Iterator, List, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
-from app.services.redis_client import redis_client
 from app.utils.db_manager import refine_sql_from_markdown
 import sqlglot
 
@@ -47,6 +45,16 @@ _FORBIDDEN_FUNCTION_PREFIXES = (
     "pg_read_", "pg_ls_", "pg_advisory_", "lo_", "dblink", "query_to_",
 )
  
+def _raw_sql(sql: str):
+    """Wrap generated SQL for execution without bind-parameter parsing.
+
+    text() treats ':name' as a bind parameter even inside string literals
+    (e.g. LIKE '_:%:__.___'), which fails with "A value is required for bind
+    parameter". Escaping every colon keeps literals and '::' casts intact.
+    """
+    return text(sql.replace(":", r"\:"))
+
+
 # --------------------------------------------------------------------------- #
 # Result types
 # --------------------------------------------------------------------------- #
@@ -77,8 +85,8 @@ class QueryResult:
         }
         if self.truncated:
             payload["note"] = (
-                f"Output truncated to the first {len(self.rows)} rows. "
-                "Add a LIMIT or a more specific filter."
+                f"Only the first {len(self.rows)} rows are shown; the full "
+                "result has more."
             )
         return json.dumps(payload, default=str, ensure_ascii=False)
  
@@ -168,7 +176,7 @@ class SafeSqlExecutor:
     def _check_against_schema(self, validation_query: str) -> Optional[str]:
         try:
             with self._read_only_connection() as conn:
-                conn.execute(text(validation_query))
+                conn.execute(_raw_sql(validation_query))
         except Exception as exc:
             return f"Schema validation failed: {self._clean_error(exc)}"
         return None
@@ -176,7 +184,7 @@ class SafeSqlExecutor:
     def _execute(self, sql: str) -> QueryResult:
         try:
             with self._read_only_connection() as conn:
-                cursor = conn.execute(text(sql))
+                cursor = conn.execute(_raw_sql(sql))
                 columns = list(cursor.keys())
                 fetched = cursor.fetchmany(self.max_rows + 1)
         except Exception as exc:

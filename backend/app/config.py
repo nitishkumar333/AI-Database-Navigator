@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    LLM_PROVIDER: str = "gemini"  # "gemini" | "groq"
+    # "production": full agent loop (SQL tool -> natural-language answer).
+    # "evaluation": stop as soon as the SQL tool succeeds, skipping the
+    #               final answer-generation LLM call (saves tokens in evals).
+    AGENT_MODE: str = "production"
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
     
     # Guest user preloaded DB connection config
