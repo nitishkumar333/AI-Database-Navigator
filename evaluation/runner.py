@@ -13,6 +13,7 @@ from app.services.sql_agent import AGENT_MODE_EVALUATION, SQLAgent
 from evaluation import metrics
 from evaluation.dataset import Example
 from evaluation.db import ExecResult, build_schema_context, execute_sql
+from evaluation.linking import SchemaLinker, failure_category
 
 logger = logging.getLogger(__name__)
 
@@ -80,18 +81,22 @@ class AgentEvaluator:
         self._agents: dict[str, SQLAgent] = {}
         self._agents_lock = threading.Lock()
         self._gold_cache: dict[int, ExecResult] = {}
+        self._linker: SchemaLinker | None = None
+        self._linker_lock = threading.Lock()
 
     # ── Agent ────────────────────────────────────────────────────────────────
+
+    def _context_tables(self, db_id: str) -> list[str]:
+        """Tables whose schema the evaluator hands to the agent."""
+        if self.opts.full_schema:
+            return sorted({t for ts in self.db_tables.values() for t in ts})
+        return self.db_tables[db_id]
 
     def _agent_for(self, db_id: str) -> SQLAgent:
         key = "__all__" if self.opts.full_schema else db_id
         with self._agents_lock:
             if key not in self._agents:
-                if self.opts.full_schema:
-                    tables = sorted({t for ts in self.db_tables.values() for t in ts})
-                else:
-                    tables = self.db_tables[db_id]
-                schema = build_schema_context(self.engine, tables)
+                schema = build_schema_context(self.engine, self._context_tables(db_id))
                 self._agents[key] = SQLAgent(
                     self.engine, schema, mode=AGENT_MODE_EVALUATION, llm=self.llm
                 )
@@ -142,6 +147,10 @@ class AgentEvaluator:
             "attempted_sql": trace.get("attempted_sql", []),
             "tool_errors": trace.get("tool_errors", []),
             "llm_calls": trace.get("llm_calls", 0),
+            "tool_calls": trace.get("tool_calls", {}),
+            # An agent that retrieves schema itself reports what it looked at;
+            # otherwise it saw everything the evaluator gave it.
+            "context_tables": trace.get("context_tables") or self._context_tables(ex.db_id),
             "usage": trace.get("usage", {}),
             "final_text": trace.get("final_text", "") if not result.get("generated_sql") else "",
             "latency_s": round(latency, 3),
@@ -165,8 +174,23 @@ class AgentEvaluator:
             return [list(r) for r in rows[:limit]], True
         return [list(r) for r in rows], False
 
+    @property
+    def linker(self) -> SchemaLinker:
+        with self._linker_lock:
+            if self._linker is None:
+                self._linker = SchemaLinker.from_engine(self.engine)
+            return self._linker
+
     def score(self, rec: dict) -> dict:
-        """Adds execution results, metrics and a status to a prediction record."""
+        """Adds execution results, metrics, schema-linking analysis, a status
+        and a failure category to a prediction record."""
+        self._score_execution(rec)
+        context = rec.get("context_tables") or self._context_tables(rec["db_id"])
+        rec["linking"] = self.linker.analyze(rec["gold_sql"], rec.get("pred_sql"), context)
+        rec["failure_category"] = failure_category(rec)
+        return rec
+
+    def _score_execution(self, rec: dict) -> dict:
         gold = self._gold(rec["question_id"], rec["gold_sql"])
         # Records from older runs stored 5-row samples instead of outputs.
         rec.pop("gold_sample", None)

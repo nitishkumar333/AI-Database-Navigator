@@ -1,10 +1,12 @@
 """
 Offline evaluation of the SQL agent on BIRD mini-dev (PostgreSQL).
 
-    python -m evaluation check-gold                 # sanity-check dataset + DB, no LLM calls
-    python -m evaluation run --provider groq --sample 50
+    python -m evaluation check-gold --split dev150  # sanity-check dataset + DB, no LLM calls
+    python -m evaluation run --provider groq --split smoke30
     python -m evaluation run --run-name my-run      # resumes an interrupted run
     python -m evaluation score --run-name my-run    # re-score without LLM calls
+    python -m evaluation compare baseline-run new-run   # paired comparison, no LLM calls
+    python -m evaluation make-split --name dev150 --size 150   # freeze a question set
 
 Run from the repository root with the backend virtualenv.
 """
@@ -17,6 +19,7 @@ import os
 import re
 import sys
 import threading
+from collections import Counter
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +33,11 @@ from tqdm import tqdm
 from app.config import get_settings
 from app.services.llm_factory import SUPPORTED_PROVIDERS, create_chat_model, default_model_for
 from evaluation.bootstrap import EVAL_DIR
-from evaluation.dataset import DEFAULT_DATASET, DIFFICULTIES, filter_examples, load_db_tables, load_examples
+from evaluation.compare import compare_runs
+from evaluation.dataset import (
+    DEFAULT_DATASET, DIFFICULTIES, SPLITS_DIR, filter_examples, load_db_tables, load_examples,
+    load_split, make_split,
+)
 from evaluation.db import create_bird_engine, disable_schema_cache, execute_sql
 from evaluation.report import write_report
 from evaluation.runner import AgentEvaluator, RateLimitExhausted, RunOptions
@@ -80,6 +87,7 @@ def _select_examples(args) -> list:
         db_ids=args.db_id,
         difficulties=args.difficulty,
         question_ids=args.question_id,
+        split_ids=load_split(args.split)["question_ids"] if args.split else None,
         sample=args.sample,
         seed=args.seed,
         limit=args.limit,
@@ -105,6 +113,7 @@ def cmd_run(args) -> int:
         "provider": provider,
         "model": model,
         "dataset": Path(args.dataset).name,
+        "split": load_split(args.split)["name"] if args.split else None,
         "use_evidence": not args.no_evidence,
         "full_schema": args.full_schema,
         "float_precision": args.float_precision,
@@ -112,7 +121,7 @@ def cmd_run(args) -> int:
     }
     if config_path.exists() and not args.fresh:
         previous = json.loads(config_path.read_text(encoding="utf-8"))
-        for key in ("provider", "model", "use_evidence", "full_schema"):
+        for key in ("provider", "model", "split", "use_evidence", "full_schema"):
             if previous.get(key) != run_config[key]:
                 print(
                     f"Run '{run_name}' was started with {key}={previous.get(key)!r}, "
@@ -229,6 +238,7 @@ def cmd_score(args) -> int:
         llm=None,
         db_tables=load_db_tables(),
         opts=RunOptions(
+            full_schema=run_config.get("full_schema", False),
             exec_timeout_ms=args.timeout * 1000,
             float_precision=args.float_precision,
             max_output_rows=args.output_rows,
@@ -238,6 +248,68 @@ def cmd_score(args) -> int:
     _write_records(pred_path, records)
     (run_dir / "config.json").write_text(json.dumps(run_config, indent=2), encoding="utf-8")
     _print_summary(write_report(run_dir, records, run_config), run_dir)
+    return 0
+
+
+# ── compare ──────────────────────────────────────────────────────────────────
+
+def cmd_compare(args) -> int:
+    runs = []
+    for name in args.run_names:
+        run_dir = RESULTS_DIR / name
+        records = _read_records(run_dir / PREDICTIONS)
+        if not records:
+            print(f"No predictions found for run '{name}'", file=sys.stderr)
+            return 2
+        if any("linking" not in r for r in records):
+            print(f"Run '{name}' predates schema-linking metrics; "
+                  f"run `python -m evaluation score --run-name {name}` first.", file=sys.stderr)
+            return 2
+        config = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
+        runs.append((name, records, config))
+
+    markdown = compare_runs(runs)
+    print(markdown)
+    if args.out:
+        out = Path(args.out)
+        if not out.is_absolute() and out.parent == Path("."):
+            out = RESULTS_DIR / "comparisons" / out
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(markdown, encoding="utf-8")
+        print(f"Written to {out}")
+    return 0
+
+
+# ── make-split ───────────────────────────────────────────────────────────────
+
+def cmd_make_split(args) -> int:
+    path = SPLITS_DIR / f"{args.name}.json"
+    if path.exists() and not args.force:
+        print(f"{path} exists. Splits are meant to stay frozen; pass --force to replace it.",
+              file=sys.stderr)
+        return 2
+    examples = load_examples(Path(args.dataset))
+    if args.from_split:
+        parent = set(load_split(args.from_split)["question_ids"])
+        examples = [e for e in examples if e.question_id in parent]
+    ids = make_split(examples, args.size, args.seed)
+    picked = [e for e in examples if e.question_id in set(ids)]
+    split = {
+        "name": args.name,
+        "size": len(ids),
+        "seed": args.seed,
+        "dataset": Path(args.dataset).name,
+        "parent_split": args.from_split,
+        "stratified_by": ["db_id", "difficulty"],
+        "counts": {
+            "difficulty": dict(sorted(Counter(e.difficulty for e in picked).items())),
+            "db_id": dict(sorted(Counter(e.db_id for e in picked).items())),
+        },
+        "question_ids": ids,
+    }
+    SPLITS_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(split, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {path}: {len(ids)} questions {split['counts']['difficulty']}")
     return 0
 
 
@@ -288,6 +360,7 @@ def _add_selection_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--db-id", action="append", help="only this BIRD database (repeatable)")
     p.add_argument("--difficulty", action="append", choices=DIFFICULTIES, help="repeatable")
     p.add_argument("--question-id", action="append", type=int, help="repeatable")
+    p.add_argument("--split", help="frozen question set: a name in data/splits/ or a .json path")
     p.add_argument("--sample", type=int, help="stratified random sample of N questions")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--limit", type=int, help="first N questions after other filters")
@@ -323,6 +396,21 @@ def main() -> int:
     score.add_argument("--output-rows", type=int, default=100,
                        help="rows of gold/pred output stored per question (0 = all)")
     score.set_defaults(func=cmd_score)
+
+    compare = sub.add_parser("compare", help="compare runs on their shared questions (no LLM calls)")
+    compare.add_argument("run_names", nargs="+", help="first run is the baseline")
+    compare.add_argument("--out", help="also write the markdown here "
+                                       "(bare file names go to results/comparisons/)")
+    compare.set_defaults(func=cmd_compare)
+
+    split = sub.add_parser("make-split", help="freeze a stratified question set into data/splits/")
+    split.add_argument("--name", required=True)
+    split.add_argument("--size", type=int, required=True)
+    split.add_argument("--seed", type=int, default=42)
+    split.add_argument("--from-split", help="draw from this split instead of the whole dataset")
+    split.add_argument("--dataset", default=str(DEFAULT_DATASET))
+    split.add_argument("--force", action="store_true", help="overwrite an existing split")
+    split.set_defaults(func=cmd_make_split)
 
     check = sub.add_parser("check-gold", help="validate dataset, table mapping and gold SQL")
     _add_selection_args(check)

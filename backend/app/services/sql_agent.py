@@ -357,16 +357,20 @@ class SQLAgent:
     @staticmethod
     def _collect_trace(messages: list) -> dict:
         """Per-turn diagnostics for offline evaluation: every SQL the agent
-        tried, the tool errors it saw, and LLM token usage."""
+        tried, the tool errors it saw, tool calls by name, and LLM token usage."""
         attempted_sql: list[str] = []
         tool_errors: list[str] = []
+        tool_calls: dict[str, int] = {}
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         llm_calls = 0
         for msg in messages:
             if isinstance(msg, AIMessage):
                 llm_calls += 1
                 for call in msg.tool_calls or []:
-                    attempted_sql.append(str(call.get("args", {}).get("sql_query", "")))
+                    name = call.get("name", "")
+                    tool_calls[name] = tool_calls.get(name, 0) + 1
+                    if name == "execute_sql_query":
+                        attempted_sql.append(str(call.get("args", {}).get("sql_query", "")))
                 for key, value in (msg.usage_metadata or {}).items():
                     if key in usage and isinstance(value, int):
                         usage[key] += value
@@ -375,6 +379,7 @@ class SQLAgent:
         return {
             "attempted_sql": attempted_sql,
             "tool_errors":   tool_errors,
+            "tool_calls":    tool_calls,
             "llm_calls":     llm_calls,
             "usage":         usage,
             "final_text":    _normalize_content(messages[-1].content) if messages else "",
