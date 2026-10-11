@@ -209,7 +209,8 @@ class SQLAgent:
             "4. Use DISTINCT when the question asks for unique values or when joins "
             "could repeat the requested rows.\n"
             "5. Use only tables and columns from the schema below. Double-quote "
-            "identifiers that contain uppercase letters or special characters.\n"
+            "identifiers that contain uppercase letters, spaces or special "
+            "characters, or that are reserved words.\n"
             "6. If the question asks to list or show individual records (e.g. "
             "products, people) and their table has an image column (image_url, "
             "image, thumbnail, photo, avatar, ...), also select it so the UI can "
@@ -217,6 +218,22 @@ class SQLAgent:
             "single-value answers.\n"
             "7. Follow any definitions, formulas or hints the user gives.\n"
             "8. If the tool returns an error, fix the query and call it again.\n\n"
+            "READING THE SCHEMA: text after `--` on a column describes it. "
+            "`values:` lists the actual stored values (case-sensitive): filter with "
+            "them exactly. `e.g.` shows example values, `range ~a .. b` is an "
+            "approximate range, row counts are estimates. `-> t.c` marks a join key "
+            "(`(inferred)` = found from the data, not declared). PK* marks part of "
+            "a composite key. A column described as text in a date/number format "
+            "is stored as TEXT: compare it as text in that format (e.g. "
+            "date LIKE '2013%' for 'YYYYMM'), and keep leading zeros of codes.\n\n"
+            "POSTGRESQL PITFALLS:\n"
+            "- SUM over a `real` column returns `real` (about 7 significant "
+            "digits): cast first, e.g. SUM(col::double precision).\n"
+            "- ORDER BY ... DESC puts NULLs first: add NULLS LAST when picking the "
+            "highest/top values.\n"
+            "- Cast numbers stored as text before arithmetic or numeric ordering.\n"
+            "- Text comparison is case-sensitive; use ILIKE only for user-typed "
+            "text that does not match a listed value exactly.\n\n"
             "ANSWER: once the query succeeds, reply with a clear, concise answer "
             "based only on the result. If the result is empty, say so.\n\n"
             "DATABASE SCHEMA:\n" + schema_context
@@ -357,16 +374,20 @@ class SQLAgent:
     @staticmethod
     def _collect_trace(messages: list) -> dict:
         """Per-turn diagnostics for offline evaluation: every SQL the agent
-        tried, the tool errors it saw, and LLM token usage."""
+        tried, the tool errors it saw, tool calls by name, and LLM token usage."""
         attempted_sql: list[str] = []
         tool_errors: list[str] = []
+        tool_calls: dict[str, int] = {}
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         llm_calls = 0
         for msg in messages:
             if isinstance(msg, AIMessage):
                 llm_calls += 1
                 for call in msg.tool_calls or []:
-                    attempted_sql.append(str(call.get("args", {}).get("sql_query", "")))
+                    name = call.get("name", "")
+                    tool_calls[name] = tool_calls.get(name, 0) + 1
+                    if name == "execute_sql_query":
+                        attempted_sql.append(str(call.get("args", {}).get("sql_query", "")))
                 for key, value in (msg.usage_metadata or {}).items():
                     if key in usage and isinstance(value, int):
                         usage[key] += value
@@ -375,6 +396,7 @@ class SQLAgent:
         return {
             "attempted_sql": attempted_sql,
             "tool_errors":   tool_errors,
+            "tool_calls":    tool_calls,
             "llm_calls":     llm_calls,
             "usage":         usage,
             "final_text":    _normalize_content(messages[-1].content) if messages else "",

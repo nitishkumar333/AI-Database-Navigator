@@ -8,7 +8,8 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.utils.security import get_current_user
-from app.utils.db_manager import get_user_engine, get_schema_context, get_all_table_names
+from app.utils.db_manager import get_user_engine, get_all_table_names
+from app.services.schema_index.service import build_schema_context
 from app.services.redis_client import redis_client
 from app.utils.prompts import initial_suggestions_prompt, conversation_suggestions_prompt
 from app.config import get_settings
@@ -73,7 +74,7 @@ def _get_schema_for_request(
             filtered = [t for t in kb.tables if t in all_tables]
             if filtered:
                 context_tables = filtered
-    return get_schema_context(engine, context_tables)
+    return build_schema_context(db, conn, engine, context_tables)
 
 @router.post("/initial", response_model=SuggestionsResponse)
 def get_initial_suggestions(

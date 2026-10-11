@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     #               final answer-generation LLM call (saves tokens in evals).
     AGENT_MODE: str = "production"
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
+
+    # Schema profiling (services/schema_index). Profiling reads catalogs and
+    # planner statistics only; describing spends one LLM call per table.
+    SCHEMA_PROFILING_ENABLED: bool = True
+    SCHEMA_DESCRIBE_ENABLED: bool = True
+    SCHEMA_CHECK_INTERVAL_S: int = 300        # how often to look for schema changes
+    SCHEMA_DESCRIBE_MAX_TABLES: int = 50      # per refresh; the rest follow on later refreshes
     
     # Guest user preloaded DB connection config
     GUEST_DB_HOST: str = "localhost"

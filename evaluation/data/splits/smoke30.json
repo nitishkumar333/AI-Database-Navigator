@@ -1,0 +1,63 @@
+{
+  "name": "smoke30",
+  "size": 30,
+  "seed": 42,
+  "dataset": "bird_minidev_postgresql.csv",
+  "parent_split": "dev150",
+  "stratified_by": [
+    "db_id",
+    "difficulty"
+  ],
+  "counts": {
+    "difficulty": {
+      "challenging": 6,
+      "moderate": 16,
+      "simple": 8
+    },
+    "db_id": {
+      "california_schools": 1,
+      "card_games": 4,
+      "codebase_community": 2,
+      "debit_card_specializing": 2,
+      "european_football_2": 4,
+      "financial": 1,
+      "formula_1": 5,
+      "student_club": 2,
+      "superhero": 4,
+      "thrombosis_prediction": 3,
+      "toxicology": 2
+    }
+  },
+  "question_ids": [
+    72,
+    152,
+    230,
+    327,
+    371,
+    379,
+    405,
+    484,
+    555,
+    584,
+    747,
+    753,
+    769,
+    797,
+    896,
+    904,
+    964,
+    978,
+    989,
+    1040,
+    1058,
+    1105,
+    1122,
+    1162,
+    1241,
+    1256,
+    1356,
+    1401,
+    1472,
+    1483
+  ]
+}
