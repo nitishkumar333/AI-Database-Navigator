@@ -115,7 +115,7 @@ frontend/
 |   |   |       ├── Product/
 |   |   |       |   ├── ProductCard.tsx     # Single product card
 |   |   |       |   ├── ProductDisplay.tsx  # Product grid container
-|   |   |       |   └── ProductView.tsx     # Full product detail view
+|   |   |       |   └── ProductView.tsx     # Full product detail view (opened in a modal)
 |   |   |       ├── QueryCode/
 |   |   |       |   └── CodeView.tsx        # SQL code viewer + copy + execute
 |   |   |       └── SystemMessages/
@@ -149,7 +149,7 @@ frontend/
 ├── components/
 |   └── ui/                      # shadcn/ui component library (Radix UI based)
 |       ├── button.tsx, input.tsx, select.tsx, toast.tsx, toaster.tsx
-|       ├── sidebar.tsx, sheet.tsx, separator.tsx, skeleton.tsx
+|       ├── dialog.tsx, sidebar.tsx, sheet.tsx, separator.tsx, skeleton.tsx
 |       └── dropdown-menu.tsx, hover-card.tsx, tooltip.tsx
 |
 ├── hooks/
@@ -695,6 +695,7 @@ Located in `components/ui/`. All are based on **Radix UI** primitives with Tailw
 |---|---|---|
 | Button | `button.tsx` | All clickable buttons |
 | Input | `input.tsx` | Text inputs in forms |
+| Dialog | `dialog.tsx` | Modal dialogs (product details popup) |
 | Select | `select.tsx` | Dropdown selects |
 | Toast / Toaster | `toast.tsx`, `toaster.tsx` | Notifications |
 | Sidebar | `sidebar.tsx` | Full sidebar component with all sub-parts |

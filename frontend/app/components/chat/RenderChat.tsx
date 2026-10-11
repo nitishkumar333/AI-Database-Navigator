@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useContext, useEffect, useState } from "react";
-import { IoArrowBack } from "react-icons/io5";
 
 import {
   Message,
@@ -26,6 +25,7 @@ import RenderDisplay from "./RenderDisplay";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
 import ProductView from "./displays/Product/ProductView";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface RenderChatProps {
   messages: Message[];
@@ -180,7 +180,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
     <div
       className={`flex justify-start items-start w-full md:p-0 sm:p-4 pt-0 transition-all  duration-300`}
     >
-      {currentView === "chat" && (
+      {(currentView === "chat" || currentView === "result") && (
         <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">
           <div ref={messagesTopRef} />
           {displayMessages
@@ -304,20 +304,30 @@ const RenderChat: React.FC<RenderChatProps> = ({
           )}
         </div>
       )}
-      {currentView === "result" && currentResultPayload && (
-        <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">
-          <button
-            onClick={() => handleViewChange("chat")}
-            className="flex items-center gap-2 text-secondary hover:text-primary transition-colors duration-200 w-fit group"
-          >
-            <IoArrowBack className="text-lg group-hover:-translate-x-1 transition-transform duration-200" />
-            <span className="text-sm font-medium">Back to results</span>
-          </button>
-          {currentResultType === "product" && (
+      <Dialog
+        open={
+          currentView === "result" &&
+          currentResultType === "product" &&
+          !!currentResultPayload
+        }
+        onOpenChange={(open) => {
+          if (!open) handleViewChange("chat");
+        }}
+      >
+        <DialogContent
+          aria-describedby={undefined}
+          className="w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden bg-background_alt border-foreground_alt rounded-2xl p-0"
+        >
+          <DialogTitle className="sr-only">
+            {currentResultPayload?.name ||
+              currentResultPayload?.title ||
+              "Product details"}
+          </DialogTitle>
+          {currentResultPayload && (
             <ProductView product={currentResultPayload} />
           )}
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
