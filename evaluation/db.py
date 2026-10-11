@@ -14,6 +14,12 @@ from app.utils.db_manager import get_schema_context
 
 SCHEMA_FORMATS = ("enriched", "basic")
 
+# The Postgres BIRD dump stores the codebase_community timestamps as timestamptz
+# converted from UTC+8 (the original '2013-07-12 09:08:18' is stored as
+# '2013-07-12 01:08:18+00'). Questions and gold SQL use the original local
+# times, so every session runs in UTC+8 (no DST in the 2009-2014 data).
+BIRD_TIMEZONE = "Asia/Shanghai"
+
 
 def create_bird_engine(db_url: str, pool_size: int = 4) -> Engine:
     # Same read-only / timeout guard rails as production user engines.
@@ -23,7 +29,7 @@ def create_bird_engine(db_url: str, pool_size: int = 4) -> Engine:
         max_overflow=pool_size,
         pool_pre_ping=True,
         connect_args={
-            "options": "-c default_transaction_read_only=on",
+            "options": f"-c default_transaction_read_only=on -c timezone={BIRD_TIMEZONE}",
             "connect_timeout": 10,
         },
     )
