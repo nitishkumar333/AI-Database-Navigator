@@ -8,31 +8,23 @@ export const ChatContext = createContext<{
   getCitationPreview: (id: string) => CitationPreview | null;
   buildRefMap: (messages: Message[]) => void;
   currentView: "chat" | "code" | "result";
-  currentPayload: ResultPayload[] | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   currentResultPayload: any | null;
   currentResultType: string;
-  handleViewChange: (
-    view: "chat" | "code" | "result",
-    payload: ResultPayload[] | null
-  ) => void;
+  handleViewChange: (view: "chat" | "code" | "result") => void;
   handleResultPayloadChange: (
     type: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payload: any,
-    collection_name: string
+    payload: any
   ) => void;
-  currentCollectionName: string;
 }>({
   getCitationPreview: () => null,
   buildRefMap: () => {},
   currentView: "chat",
-  currentPayload: null,
   currentResultPayload: null,
   currentResultType: "",
   handleViewChange: () => {},
   handleResultPayloadChange: () => {},
-  currentCollectionName: "",
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
@@ -70,33 +62,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentView, setCurrentView] = useState<"chat" | "code" | "result">(
     "chat"
   );
-  const [currentPayload, setCurrentPayload] = useState<ResultPayload[] | null>(
-    null
-  );
   const [currentResultPayload, setCurrentResultPayload] = useState<
     /* eslint-disable @typescript-eslint/no-explicit-any */
     any | null
   >(null);
   const [currentResultType, setCurrentResultType] = useState<string>("");
-  const [currentCollectionName, setCurrentCollectionName] =
-    useState<string>("");
-  const handleViewChange = (
-    view: "chat" | "code" | "result",
-    payload: ResultPayload[] | null
-  ) => {
+  const handleViewChange = (view: "chat" | "code" | "result") => {
     setCurrentView(view);
-    setCurrentPayload(payload);
   };
 
   const handleResultPayloadChange = (
     type: string,
-    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any,
-    collection_name: string
+    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any
   ) => {
     setCurrentResultType(type);
     setCurrentResultPayload(payload);
     setCurrentView("result");
-    setCurrentCollectionName(collection_name);
   };
 
   const _createCitationPreview = (
@@ -171,12 +152,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         getCitationPreview,
         buildRefMap,
         currentView,
-        currentPayload,
         currentResultPayload,
         currentResultType,
         handleViewChange,
         handleResultPayloadChange,
-        currentCollectionName,
       }}
     >
       {children}

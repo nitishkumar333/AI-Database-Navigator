@@ -5,8 +5,6 @@ import { Conversation, initialConversation } from "../types";
 import {
   Query,
   Message,
-  TextPayload,
-  SuggestionPayload,
   ResultPayload,
   ResponsePayload,
 } from "@/app/types/chat";
@@ -15,13 +13,11 @@ import { SessionContext } from "./SessionContext";
 import { RouterContext } from "./RouterContext";
 import { AuthContext } from "./AuthContext";
 import { host } from "../host";
-import { QueryContext } from "./SocketContext";
 import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
 
 export const ConversationContext = createContext<{
   conversations: Conversation[];
   currentConversation: string | null;
-  setCurrentConversation: (id: string | null) => void;
   creatingNewConversation: boolean;
   startNewConversation: () => void;
   removeConversation: (id: string) => void;
@@ -39,7 +35,6 @@ export const ConversationContext = createContext<{
     query_id: string
   ) => void;
   finishQuery: (conversationId: string, queryId: string) => void;
-  handleConversationError: (conversationId: string) => void;
   addSuggestionToConversation: (
     conversationId: string,
     queryId: string,
@@ -49,7 +44,6 @@ export const ConversationContext = createContext<{
 }>({
   conversations: [],
   currentConversation: null,
-  setCurrentConversation: () => {},
   creatingNewConversation: false,
   startNewConversation: () => {},
   removeConversation: () => {},
@@ -59,7 +53,6 @@ export const ConversationContext = createContext<{
   addMessageToConversation: () => {},
   addQueryToConversation: () => {},
   finishQuery: () => {},
-  handleConversationError: () => {},
   addSuggestionToConversation: () => {},
 
 });
@@ -490,14 +483,6 @@ export const ConversationProvider = ({
     );
   };
 
-  const handleConversationError = (conversationId: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId ? { ...c, error: true } : c
-      )
-    );
-  };
-
   const addSuggestionToConversation = async (
     conversationId: string,
     queryId: string,
@@ -590,7 +575,6 @@ export const ConversationProvider = ({
       value={{
         conversations,
         currentConversation,
-        setCurrentConversation,
         creatingNewConversation,
         startNewConversation,
         removeConversation,
@@ -600,7 +584,6 @@ export const ConversationProvider = ({
         addMessageToConversation,
         addQueryToConversation,
         finishQuery,
-        handleConversationError,
         addSuggestionToConversation,
       }}
     >

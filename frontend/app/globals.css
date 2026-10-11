@@ -83,18 +83,6 @@ iframe {
   scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
 }
 
-.btn {
-  @apply flex items-center cursor-pointer gap-2 hover:bg-foreground_alt hover:text-primary hover:scale-105 active:scale-95 transition-all duration-300 p-3 rounded-lg;
-}
-
-.btn-static {
-  @apply flex items-center cursor-pointer gap-2 hover:bg-foreground_alt hover:text-primary transition-all duration-300 p-2 rounded-lg;
-}
-
-.btn-round {
-  @apply flex items-center cursor-pointer justify-start gap-2 hover:bg-foreground_alt hover:text-primary hover:scale-105 active:scale-95 transition-all duration-300 p-2 rounded-full;
-}
-
 @keyframes dropAndBounce {
   0% {
     transform: translateY(100%);
@@ -188,20 +176,6 @@ iframe {
 
 .fade-in {
   animation: fadeIn 0.5s ease-in-out forwards;
-}
-
-@keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-.fade-out {
-  animation: fadeOut 0.5s ease-in-out forwards;
 }
 
 .markdown-container {

@@ -86,11 +86,6 @@ export type ScatterOrLineDataPoint = {
   label: string | null;
 };
 
-export type ChartValue = {
-  label: string;
-  data: number[];
-};
-
 export type ChunkSpan = {
   start: number;
   end: number;

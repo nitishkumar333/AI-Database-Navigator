@@ -6,7 +6,6 @@ import { QueryContext } from "../contexts/SocketContext";
 import { AuthContext } from "../contexts/AuthContext";
 
 import { MdChatBubbleOutline } from "react-icons/md";
-import { GoDatabase } from "react-icons/go";
 import { FaCircle } from "react-icons/fa6";
 import { MdOutlineSettingsInputComponent } from "react-icons/md";
 import { HiOutlineBookOpen } from "react-icons/hi2";
@@ -32,7 +31,6 @@ import {
 
 import { Separator } from "@/components/ui/separator";
 
-import SettingsSubMenu from "./SettingsSubMenu";
 import { RouterContext } from "../contexts/RouterContext";
 import { CollectionContext } from "../contexts/CollectionContext";
 import { SessionContext } from "../contexts/SessionContext";
@@ -42,7 +40,7 @@ import ThemeToggle from "../shared/ThemeToggle";
 const SidebarComponent: React.FC = () => {
   const { backendOnline } = useContext(QueryContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { collections, loadingCollections } = useContext(CollectionContext);
+  const { collections } = useContext(CollectionContext);
   const { unsavedChanges } = useContext(SessionContext);
   const { isAuthenticated, user, logout, onboardingStatus } =
     useContext(AuthContext);

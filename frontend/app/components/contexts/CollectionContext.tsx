@@ -22,14 +22,12 @@ export const CollectionContext = createContext<{
   collections: Collection[];
   connections: Connection[];
   fetchCollections: () => void;
-  loadingCollections: boolean;
   fetchSuggestions: (connectionId: number, knowledgeBaseId?: number | null, forceRefresh?: boolean) => Promise<string[]>;
   clearSuggestionsCache: () => void;
 }>({
   collections: [],
   connections: [],
   fetchCollections: () => {},
-  loadingCollections: false,
   fetchSuggestions: async () => [],
   clearSuggestionsCache: () => {},
 });
@@ -39,13 +37,12 @@ export const CollectionProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { id, fetchCollectionFlag, initialized } = useContext(SessionContext);
+  const { id, fetchCollectionFlag } = useContext(SessionContext);
   const { showSuccessToast } = useContext(ToastContext);
   const { getToken, clearAuth, isAuthenticated, user } = useContext(AuthContext);
   const { backendOnline } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [loadingCollections, setLoadingCollections] = useState(false);
 
   // Cache for suggestions keyed by "connId_kbId"
   const suggestionsCache = useRef<Record<string, string[]>>({});
@@ -77,7 +74,6 @@ export const CollectionProvider = ({
   const fetchCollections = async () => {
     const token = getToken();
     if (!token) return;
-    setLoadingCollections(true);
     try {
       const response = await fetch(`${host}/api/connections`, {
         headers: {
@@ -107,7 +103,6 @@ export const CollectionProvider = ({
     } catch (e) {
       console.error("Failed to fetch collections:", e);
     }
-    setLoadingCollections(false);
   };
 
   const fetchSuggestions = async (
@@ -166,7 +161,6 @@ export const CollectionProvider = ({
         collections,
         connections,
         fetchCollections,
-        loadingCollections,
         fetchSuggestions,
         clearSuggestionsCache,
       }}

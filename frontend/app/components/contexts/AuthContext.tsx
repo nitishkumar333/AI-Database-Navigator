@@ -24,7 +24,6 @@ export type OnboardingStatus = {
 
 export const AuthContext = createContext<{
   user: AuthUser | null;
-  token: string;
   isAuthenticated: boolean;
   isLoading: boolean;
   onboardingStatus: OnboardingStatus | null;
@@ -41,7 +40,6 @@ export const AuthContext = createContext<{
   refreshOnboardingStatus: () => Promise<OnboardingStatus | null>;
 }>({
   user: null,
-  token: "",
   isAuthenticated: false,
   isLoading: true,
   onboardingStatus: null,
@@ -252,7 +250,6 @@ export const AuthProvider = ({
     <AuthContext.Provider
       value={{
         user,
-        token,
         isAuthenticated,
         isLoading,
         onboardingStatus,

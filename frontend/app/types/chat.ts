@@ -46,11 +46,6 @@ export type NERPayload = {
   noun_spans: [number, number][];
 };
 
-export type TitlePayload = {
-  title: string;
-  error: string;
-};
-
 export type UserPromptPayload = {
   prompt: string;
 };
@@ -117,11 +112,6 @@ export type ResultPayload = {
 export type TextWithCitationsPayload = {
   text: string;
   ref_ids: string[];
-};
-
-export type CodeMetadata = {
-  metadata: any;
-  code: CodePayload;
 };
 
 export type CodePayload = {

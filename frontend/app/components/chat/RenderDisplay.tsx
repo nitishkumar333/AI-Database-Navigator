@@ -1,10 +1,9 @@
-import React, { useContext } from "react";
+import React from "react";
 import { ResultPayload } from "@/app/types/chat";
 import { ProductPayload } from "@/app/types/displays";
 
 import ProductDisplay from "./displays/Product/ProductDisplay";
 import BoringGenericDisplay from "./displays/Generic/BoringGeneric";
-import { DisplayContext } from "../contexts/DisplayContext";
 
 interface RenderDisplayProps {
   payload: ResultPayload;
@@ -12,8 +11,7 @@ interface RenderDisplayProps {
   messageId: string;
   handleResultPayloadChange: (
     type: string,
-    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any,
-    collection_name: string
+    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any
   ) => void;
 }
 
@@ -24,14 +22,6 @@ const RenderDisplay: React.FC<RenderDisplayProps> = ({
   handleResultPayloadChange,
 }) => {
   const keyBase = `${index}-${messageId}`;
-  const { currentCollectionName } = useContext(DisplayContext);
-
-  const handleResultPayloadChangeWithCollectionName = (
-    type: string,
-    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any
-  ) => {
-    handleResultPayloadChange(type, payload, currentCollectionName);
-  };
   console.log(payload);
   switch (payload.type) {
     case "product":
@@ -40,9 +30,7 @@ const RenderDisplay: React.FC<RenderDisplayProps> = ({
         <ProductDisplay
           key={`${keyBase}-product`}
           products={payload.objects as ProductPayload[]}
-          handleResultPayloadChange={
-            handleResultPayloadChangeWithCollectionName
-          }
+          handleResultPayloadChange={handleResultPayloadChange}
         />
       );
     case "table":

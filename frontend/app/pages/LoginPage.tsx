@@ -60,11 +60,6 @@ export default function LoginPage() {
     }
   };
 
-  const switchMode = () => {
-    setMode(mode === "login" ? "register" : "login");
-    setError("");
-  };
-
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background z-50 overflow-hidden">
       {/* Floating Theme Toggle */}
@@ -114,9 +109,6 @@ export default function LoginPage() {
       >
         {/* Card */}
         <div className="relative overflow-hidden rounded-2xl">
-          {/* Accent top bar */}
-          {/* <div className="h-1 w-full bg-gradient-to-r from-accent via-highlight to-accent" /> */}
-
           <div className="p-8 md:p-10">
             {/* Logo & Title */}
             <motion.div
@@ -132,9 +124,6 @@ export default function LoginPage() {
                 <h1 className="text-2xl font-bold text-primary font-heading">
                   SQL, Simplified
                 </h1>
-                {/* <p className="text-sm text-muted-foreground mt-1">
-                  Natural Language → SQL Platform
-                </p> */}
               </div>
             </motion.div>
 
@@ -170,9 +159,6 @@ export default function LoginPage() {
                           Login as Guest
                         </span>
                       </div>
-                      {/* <span className="text-[11px] text-muted-foreground">
-                        Preloaded shop database & sample chats
-                      </span> */}
                     </div>
                   </div>
                   <IoArrowForward
@@ -336,20 +322,6 @@ export default function LoginPage() {
                 )}
               </motion.button>
             </form>
-
-            {/* Switch mode link */}
-            {/* <p className="text-center text-sm text-muted-foreground mt-6">
-              {mode === "login"
-                ? "Don't have an account? "
-                : "Already have an account? "}
-              <button
-                type="button"
-                onClick={switchMode}
-                className="text-accent hover:text-accent/80 font-medium transition-colors"
-              >
-                {mode === "login" ? "Create one" : "Sign in"}
-              </button>
-            </p> */}
           </div>
         </div>
       </motion.div>

@@ -6,9 +6,6 @@ import { AuthContext } from "../contexts/AuthContext";
 import { ToastContext } from "../contexts/ToastContext";
 import { Button } from "@/components/ui/button";
 import {
-  GoDatabase,
-  GoPlus,
-  GoTrash,
   GoCheck,
   GoX,
   GoSync,
@@ -73,7 +70,7 @@ export default function ConnectionForm({
         
         setFormData((prev) => ({ ...prev, ...updates }));
       }
-    } catch (err) {
+    } catch {
       // Ignore invalid URLs while typing
     }
   };

@@ -25,21 +25,14 @@ import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
 import RenderDisplay from "./RenderDisplay";
 import { ChatContext } from "../contexts/ChatContext";
 import CodeView from "./displays/QueryCode/CodeView";
-import { DisplayProvider } from "../contexts/DisplayContext";
 import ProductView from "./displays/Product/ProductView";
 
 interface RenderChatProps {
   messages: Message[];
   _collapsed: boolean;
-  conversationID: string;
-  queryID: string;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   finished: boolean;
-  query_start: Date;
-  query_end: Date | null;
   NER: NERPayload | null;
-  addDisplacement: (value: number) => void;
-  addDistortion: (value: number) => void;
   handleSendQuery: (query: string) => void;
   isLastQuery: boolean;
 }
@@ -49,8 +42,7 @@ interface ResultItemDisplayProps {
   handleResultPayloadChange: (
     type: string,
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    payload: any,
-    collection_name: string
+    payload: any
   ) => void;
 }
 
@@ -85,14 +77,8 @@ const RenderChat: React.FC<RenderChatProps> = ({
   messages,
   _collapsed,
   messagesEndRef,
-  conversationID,
-  queryID,
   finished,
-  query_start,
-  query_end,
   NER,
-  addDisplacement,
-  addDistortion,
   handleSendQuery,
   isLastQuery,
 }) => {
@@ -102,7 +88,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
   const {
     buildRefMap,
     currentView,
-    currentPayload,
     currentResultPayload,
     currentResultType,
     handleViewChange,
@@ -119,21 +104,11 @@ const RenderChat: React.FC<RenderChatProps> = ({
 
   useEffect(() => {
     setDisplayMessages(messages);
-    addDisplacement(0.1);
-    addDistortion(0.08);
     buildRefMap(messages);
-  }, [messages, addDisplacement, addDistortion]);
+  }, [messages]);
 
   const processedOutputItems = React.useMemo(() => {
-    const output: (
-      | Message
-      | {
-        type: "merged_result";
-        id: string;
-        originalMessage: Message;
-        payloadsToMerge: ResultPayload[];
-      }
-    )[] = [];
+    const output: Message[] = [];
     const messagesToProcess = displayMessages.filter(
       (m) => m.type !== "User" && m.type !== "suggestion"
     );
@@ -141,45 +116,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
     let i = 0;
     while (i < messagesToProcess.length) {
       const currentMessage = messagesToProcess[i];
-
-      if (
-        currentMessage.type === "result" &&
-        (currentMessage.payload as ResultPayload).type &&
-        (currentMessage.payload as ResultPayload).metadata?.collection_name
-      ) {
-        const currentResultPayload = currentMessage.payload as ResultPayload;
-        const group: ResultPayload[] = [currentResultPayload];
-        let j = i + 1;
-
-        while (j < messagesToProcess.length) {
-          const nextMessage = messagesToProcess[j];
-          if (nextMessage.type === "result") {
-            const nextResultPayload = nextMessage.payload as ResultPayload;
-            if (
-              nextResultPayload.type === currentResultPayload.type &&
-              nextResultPayload.metadata?.collection_name
-            ) {
-              group.push(nextResultPayload);
-              j++;
-            } else {
-              break;
-            }
-          } else {
-            break;
-          }
-        }
-
-        if (group.length > 1) {
-          output.push({
-            type: "merged_result",
-            id: currentMessage.id,
-            originalMessage: currentMessage,
-            payloadsToMerge: group,
-          });
-          i = j;
-          continue;
-        }
-      }
 
       if (
         currentMessage.type === "text" &&
@@ -281,81 +217,62 @@ const RenderChat: React.FC<RenderChatProps> = ({
           {!collapsed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-5">
-                {processedOutputItems.map((item, index) => {
-                  const message =
-                    item.type === "merged_result"
-                      ? item.originalMessage
-                      : (item as Message);
+                {processedOutputItems.map((message, index) => {
                   const key = `${index}-${message.id}-processed-item`;
 
                   return (
-                    <DisplayProvider
-                      key={`${index}-${message.id}-display-provider`}
-                      _payload={message.payload as ResultPayload}
-                    >
-                      <div key={key} className="w-full flex">
-                        {/* Result Messages */}
-                        {item.type !== "merged_result" &&
-                          message.type === "result" && (
-                            <ResultItemDisplay
-                              message={message as Message}
-                              index={index}
-                              handleResultPayloadChange={
-                                handleResultPayloadChange
-                              }
-                            />
-                          )}
-                        {/* Text Messages */}
-                        {item.type !== "merged_result" &&
-                          message.type === "text" && (
-                            <div className="w-full flex flex-col justify-start items-start ">
-                              {(message.payload as ResponsePayload).type ===
-                                "response" && (
-                                  <TextDisplay
-                                    key={`${index}-${message.id}-response`}
-                                    payload={
-                                      (message.payload as ResponsePayload)
-                                        .objects as TextPayload[]
-                                    }
-                                  />
-                                )}
-                            </div>
-                          )}
-                        {/* Error Messages */}
-                        {item.type !== "merged_result" &&
-                          ["error", "authentication_error"].includes(
-                            message.type
-                          ) && (
-                            <ErrorMessageDisplay
-                              key={`${index}-${message.id}-error`}
-                              error={(message.payload as TextPayload).text}
-                            />
-                          )}
-                        {item.type !== "merged_result" &&
-                          ["user_timeout_error"].includes(
-                            message.type
-                          ) && (
-                            <InfoMessageDisplay
-                              key={`${index}-${message.id}-info`}
-                              info={(message.payload as TextPayload).text}
-                            />
-                          )}
-                        {item.type !== "merged_result" &&
-                          ["rate_limit_error"].includes(message.type) && (
-                            <RateLimitMessageDisplay
-                              key={`${index}-${message.id}-info`}
-                              payload={message.payload as RateLimitPayload}
-                            />
-                          )}
-                        {item.type !== "merged_result" &&
-                          message.type === "warning" && (
-                            <WarningDisplay
-                              key={`${index}-${message.id}-warning`}
-                              warning={(message.payload as TextPayload).text}
-                            />
-                          )}
-                      </div>
-                    </DisplayProvider>
+                    <div key={key} className="w-full flex">
+                      {/* Result Messages */}
+                      {message.type === "result" && (
+                        <ResultItemDisplay
+                          message={message}
+                          index={index}
+                          handleResultPayloadChange={
+                            handleResultPayloadChange
+                          }
+                        />
+                      )}
+                      {/* Text Messages */}
+                      {message.type === "text" && (
+                        <div className="w-full flex flex-col justify-start items-start ">
+                          {(message.payload as ResponsePayload).type ===
+                            "response" && (
+                              <TextDisplay
+                                key={`${index}-${message.id}-response`}
+                                payload={
+                                  (message.payload as ResponsePayload)
+                                    .objects as TextPayload[]
+                                }
+                              />
+                            )}
+                        </div>
+                      )}
+                      {/* Error Messages */}
+                      {["error", "authentication_error"].includes(message.type) && (
+                        <ErrorMessageDisplay
+                          key={`${index}-${message.id}-error`}
+                          error={(message.payload as TextPayload).text}
+                        />
+                      )}
+                      {["user_timeout_error"].includes(message.type) && (
+                        <InfoMessageDisplay
+                          key={`${index}-${message.id}-info`}
+                          info={(message.payload as TextPayload).text}
+                        />
+                      )}
+                      {["rate_limit_error"].includes(message.type) && (
+                        <RateLimitMessageDisplay
+                          key={`${index}-${message.id}-info`}
+                          payload={message.payload as RateLimitPayload}
+                        />
+                      )}
+                      {message.type === "warning" && (
+                        <WarningDisplay
+                          key={`${index}-${message.id}-warning`}
+                          warning={(message.payload as TextPayload).text}
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -390,7 +307,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
       {currentView === "result" && currentResultPayload && (
         <div className="flex flex-col gap-4 w-full relative z-10 rounded-lg">
           <button
-            onClick={() => handleViewChange("chat", null)}
+            onClick={() => handleViewChange("chat")}
             className="flex items-center gap-2 text-secondary hover:text-primary transition-colors duration-200 w-fit group"
           >
             <IoArrowBack className="text-lg group-hover:-translate-x-1 transition-transform duration-200" />
