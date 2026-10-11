@@ -16,6 +16,7 @@ import {
   GoDatabase,
   GoPlus,
   GoTrash,
+  GoInfo,
 } from "react-icons/go";
 import { FaSpinner } from "react-icons/fa";
 import ThemeToggle from "../components/shared/ThemeToggle";
@@ -33,7 +34,9 @@ type Connection = {
 export default function SettingsPage() {
   const { id } = useContext(SessionContext);
   const { fetchCollections } = useContext(CollectionContext);
-  const { getToken } = useContext(AuthContext);
+  const { getToken, user } = useContext(AuthContext);
+  // The guest account is fixed to the demo shop database.
+  const isGuest = !!user?.is_guest;
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
   const { changePage } = useContext(RouterContext);
 
@@ -103,20 +106,35 @@ export default function SettingsPage() {
             <div>
               <h1 className="text-2xl font-bold text-primary">Settings</h1>
               <p className="text-sm text-muted-foreground">
-                Manage your database connections
+                {isGuest
+                  ? "The guest account uses the demo shop database"
+                  : "Manage your database connections"}
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="gap-2"
-          >
-            <GoPlus size={16} />
-            Add Connection
-          </Button>
+          {!isGuest && (
+            <Button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="gap-2"
+            >
+              <GoPlus size={16} />
+              Add Connection
+            </Button>
+          )}
         </div>
 
         <Separator />
+
+        {isGuest && (
+          <div className="flex items-start gap-3 p-4 rounded-xl border border-accent/30 bg-accent/10 text-sm text-primary">
+            <GoInfo size={16} className="text-accent mt-0.5 flex-shrink-0" />
+            <p>
+              Guest users are not allowed to create or delete database
+              connections. Sign up for an account to connect your own
+              database.
+            </p>
+          </div>
+        )}
 
         {/* Appearance Settings */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl bg-background_alt border border-foreground/70">
@@ -130,7 +148,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Add Connection Form */}
-        {showAddForm && (
+        {showAddForm && !isGuest && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -156,10 +174,12 @@ export default function SettingsPage() {
               <p className="text-muted-foreground text-sm">
                 No database connections yet
               </p>
-              <Button onClick={() => setShowAddForm(true)} className="gap-2">
-                <GoPlus size={14} />
-                Add Your First Connection
-              </Button>
+              {!isGuest && (
+                <Button onClick={() => setShowAddForm(true)} className="gap-2">
+                  <GoPlus size={14} />
+                  Add Your First Connection
+                </Button>
+              )}
             </div>
           ) : (
             connections.map((conn, index) => (
@@ -188,14 +208,16 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteConnection(conn.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                >
-                  <GoTrash size={16} />
-                </Button>
+                {!isGuest && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteConnection(conn.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  >
+                    <GoTrash size={16} />
+                  </Button>
+                )}
               </motion.div>
             ))
           )}

@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 from app.database import get_db
 from app.models.user import User
 from app.utils.security import hash_password, verify_password, create_access_token, get_current_user
-from app.services.guest_service import create_guest_account
+from app.services.guest_service import GUEST_DOMAIN, GUEST_USERNAME, get_guest_account, is_guest
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -37,6 +37,8 @@ class UserResponse(BaseModel):
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if req.email.lower().endswith(GUEST_DOMAIN) or req.username.lower() == GUEST_USERNAME:
+        raise HTTPException(status_code=400, detail="This email or username is reserved")
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     if db.query(User).filter(User.username == req.username).first():
@@ -66,20 +68,19 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/guest", response_model=TokenResponse)
 @router.post("/guest-login", response_model=TokenResponse)
 def guest_login(db: Session = Depends(get_db)):
-    """Instantly authenticate as a guest user with preloaded DB connection and mock conversations."""
-    guest_user = create_guest_account(db)
+    """Log in to the shared guest account (fixed connection to the shop database)."""
+    guest_user = get_guest_account(db)
     token = create_access_token(data={"sub": str(guest_user.id)})
     return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
-    is_guest = current_user.username.startswith("guest_") or current_user.email.endswith("@sqlnav.demo")
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
         username=current_user.username,
-        is_guest=is_guest,
+        is_guest=is_guest(current_user),
     )
 
 

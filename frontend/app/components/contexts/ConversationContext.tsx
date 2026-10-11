@@ -313,6 +313,26 @@ export const ConversationProvider = ({
   };
 
   const removeConversation = async (conversation_id: string) => {
+    // Update the UI first. If the open conversation is deleted, select the one
+    // below it in the sidebar (newest first), or the one above if it was last.
+    const ordered = [...conversations].sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    const index = ordered.findIndex((c) => c.id === conversation_id);
+    const remaining = ordered.filter((c) => c.id !== conversation_id);
+
+    setConversations((prev) => prev.filter((c) => c.id !== conversation_id));
+    if (remaining.length === 0) {
+      startNewConversation();
+    } else if (currentConversation === conversation_id) {
+      const next = remaining[Math.min(index, remaining.length - 1)];
+      setCurrentConversation(next.id);
+      if (currentPage === "chat") {
+        changePage("chat", { conversation: next.id }, true);
+      }
+    }
+
     // Delete on backend
     try {
       const token = getToken();
@@ -324,11 +344,6 @@ export const ConversationProvider = ({
       }
     } catch (e) {
       console.error("Failed to delete conversation on backend:", e);
-    }
-
-    setConversations((prev) => prev.filter((c) => c.id !== conversation_id));
-    if (currentConversation === conversation_id) {
-      setCurrentConversation(null);
     }
   };
 

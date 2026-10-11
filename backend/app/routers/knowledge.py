@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.utils.security import get_current_user
+from app.services.guest_service import is_guest
 from app.services.redis_client import redis_client
 from fastapi.encoders import jsonable_encoder
 import json
@@ -159,6 +160,8 @@ def delete_knowledge_group(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a knowledge base."""
+    if is_guest(current_user):
+        raise HTTPException(status_code=403, detail="Guest users are not allowed to delete knowledge groups")
     kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == group_id).first()
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge Base not found")

@@ -27,7 +27,8 @@ type KnowledgeBaseGroup = {
 
 export default function KnowledgeBasePage() {
   const { connections } = useContext(CollectionContext);
-  const { getToken, clearAuth } = useContext(AuthContext);
+  const { getToken, clearAuth, user } = useContext(AuthContext);
+  const isGuest = !!user?.is_guest;
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
 
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
@@ -264,10 +265,15 @@ export default function KnowledgeBasePage() {
                               )}
                             </div>
                           </div>
-                          <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}>
+                          <motion.div
+                            whileHover={{ scale: isGuest ? 1 : 1.08 }}
+                            whileTap={{ scale: isGuest ? 1 : 0.92 }}
+                            title={isGuest ? "Guest users are not allowed to delete knowledge groups" : undefined}
+                          >
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={isGuest}
                               onClick={() => deleteKnowledgeGroup(group.id)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10 flex-shrink-0 self-start sm:self-center"
                             >
