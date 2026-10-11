@@ -2,7 +2,7 @@
   "name": "smoke30",
   "size": 30,
   "seed": 42,
-  "dataset": "bird_minidev_postgresql.csv",
+  "dataset": "arcwise_plat_postgresql.csv",
   "parent_split": "dev150",
   "stratified_by": [
     "db_id",
