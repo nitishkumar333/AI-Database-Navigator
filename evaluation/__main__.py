@@ -118,6 +118,7 @@ def cmd_run(args) -> int:
         "run_name": run_name,
         "provider": provider,
         "model": model,
+        "thinking": settings.DEEPSEEK_THINKING if provider == "deepseek" else None,
         "dataset": Path(args.dataset).name,
         "split": load_split(args.split)["name"] if args.split else None,
         "use_evidence": not args.no_evidence,
@@ -129,7 +130,7 @@ def cmd_run(args) -> int:
     }
     if config_path.exists() and not args.fresh:
         previous = json.loads(config_path.read_text(encoding="utf-8"))
-        for key in ("provider", "model", "split", "use_evidence", "full_schema",
+        for key in ("provider", "model", "thinking", "split", "use_evidence", "full_schema",
                     "schema_format", "describe"):
             before = previous.get(key, _LEGACY_CONFIG.get(key))
             if before != run_config[key]:
@@ -390,7 +391,7 @@ def main() -> int:
     run = sub.add_parser("run", help="generate SQL with the agent and score it")
     _add_selection_args(run)
     run.add_argument("--provider", choices=SUPPORTED_PROVIDERS, help="default: LLM_PROVIDER")
-    run.add_argument("--model", help="default: GEMINI_MODEL / GROQ_MODEL")
+    run.add_argument("--model", help="default: GEMINI_MODEL / GROQ_MODEL / DEEPSEEK_MODEL")
     run.add_argument("--run-name", help="results folder name; reuse it to resume")
     run.add_argument("--fresh", action="store_true", help="discard existing predictions for this run")
     run.add_argument("--workers", type=int, default=1, help="concurrent questions")

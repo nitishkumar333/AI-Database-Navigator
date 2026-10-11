@@ -63,6 +63,9 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+      DEEPSEEK_THINKING: ${DEEPSEEK_THINKING:-false}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       AGENT_MODE: production
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}

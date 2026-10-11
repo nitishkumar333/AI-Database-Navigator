@@ -1,19 +1,22 @@
 """
 Chat-model factory shared by the SQL agent and the offline evaluation suite.
 
-Provider and model come from settings (LLM_PROVIDER, GEMINI_MODEL / GROQ_MODEL)
-unless explicitly overridden by the caller.
+Provider and model come from settings (LLM_PROVIDER, GEMINI_MODEL / GROQ_MODEL /
+DEEPSEEK_MODEL) unless explicitly overridden by the caller.
 """
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.config import get_settings
 
-SUPPORTED_PROVIDERS = ("gemini", "groq")
+SUPPORTED_PROVIDERS = ("gemini", "groq", "deepseek")
 
 
 def default_model_for(provider: str) -> str:
     settings = get_settings()
-    return settings.GROQ_MODEL if provider == "groq" else settings.GEMINI_MODEL
+    return {
+        "groq": settings.GROQ_MODEL,
+        "deepseek": settings.DEEPSEEK_MODEL,
+    }.get(provider, settings.GEMINI_MODEL)
 
 
 def create_chat_model(
@@ -43,6 +46,22 @@ def create_chat_model(
             model=model,
             api_key=settings.GROQ_API_KEY,
             temperature=temperature,
+            **extra,
+        )
+
+    if provider == "deepseek":
+        from app.services.deepseek_chat import ReasoningChatDeepSeek
+
+        if not settings.DEEPSEEK_API_KEY:
+            raise RuntimeError("DEEPSEEK_API_KEY must be set to use the DeepSeek provider.")
+        # DeepSeek thinks by default. Thinking ignores temperature, so it is
+        # off unless DEEPSEEK_THINKING is set.
+        thinking = "enabled" if settings.DEEPSEEK_THINKING else "disabled"
+        return ReasoningChatDeepSeek(
+            model=model,
+            api_key=settings.DEEPSEEK_API_KEY,
+            temperature=temperature,
+            extra_body={"thinking": {"type": thinking}},
             **extra,
         )
 

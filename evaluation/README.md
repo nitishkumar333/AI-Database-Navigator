@@ -55,7 +55,7 @@ same columns as BIRD (`question_id, db_id, question, evidence, SQL, difficulty`)
 1. Start Postgres: `docker compose up -d postgres` (the `bird` database must exist).
 2. Install packages: `backend/venv/Scripts/pip install -r backend/requirements.txt`
 3. Copy `evaluation/.env.example` to `evaluation/.env` and fill in an API key
-   (`GEMINI_API_KEY` or `GROQ_API_KEY`).
+   (`GEMINI_API_KEY`, `GROQ_API_KEY` or `DEEPSEEK_API_KEY`).
 4. Check that the dataset and database are OK. This uses no API calls:
 
    ```bash
