@@ -7,14 +7,12 @@ import { QueryContext } from "./SocketContext";
 
 export const SessionContext = createContext<{
   id: string | null;
-  initialized: boolean;
   triggerFetchCollection: () => void;
   fetchCollectionFlag: boolean;
   unsavedChanges: boolean;
   updateUnsavedChanges: (unsaved: boolean) => void;
 }>({
   id: "",
-  initialized: false,
   triggerFetchCollection: () => {},
   fetchCollectionFlag: false,
   unsavedChanges: false,
@@ -52,7 +50,6 @@ export const SessionProvider = ({
     <SessionContext.Provider
       value={{
         id,
-        initialized: initialized.current,
         triggerFetchCollection,
         fetchCollectionFlag,
         unsavedChanges,

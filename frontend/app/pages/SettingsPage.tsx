@@ -2,7 +2,6 @@
 
 import React, { useContext, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { SessionContext } from "../components/contexts/SessionContext";
 import { CollectionContext } from "../components/contexts/CollectionContext";
 import { AuthContext } from "../components/contexts/AuthContext";
 import { ToastContext } from "../components/contexts/ToastContext";
@@ -32,7 +31,6 @@ type Connection = {
 };
 
 export default function SettingsPage() {
-  const { id } = useContext(SessionContext);
   const { fetchCollections } = useContext(CollectionContext);
   const { getToken, user } = useContext(AuthContext);
   // The guest account is fixed to the demo shop database.

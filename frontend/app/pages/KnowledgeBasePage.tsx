@@ -34,7 +34,6 @@ export default function KnowledgeBasePage() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [kbGroups, setKbGroups] = useState<KnowledgeBaseGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
-  const [autoDescribing, setAutoDescribing] = useState(false);
 
   const authHeaders = () => ({
     "Content-Type": "application/json",

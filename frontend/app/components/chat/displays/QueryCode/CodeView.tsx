@@ -12,10 +12,7 @@ import { useTheme } from "@/app/components/contexts/ThemeContext";
 interface CodeDisplayProps {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   payload: ResultPayload[];
-  handleViewChange: (
-    view: "chat" | "code" | "result",
-    payload: ResultPayload[] | null
-  ) => void;
+  handleViewChange: (view: "chat" | "code" | "result") => void;
 }
 
 const CodeView: React.FC<CodeDisplayProps> = ({
@@ -39,7 +36,7 @@ const CodeView: React.FC<CodeDisplayProps> = ({
         <Button
           variant={"ghost"}
           className="text-secondary h-9 w-9"
-          onClick={() => handleViewChange("chat", null)}
+          onClick={() => handleViewChange("chat")}
         >
           <IoClose size={12} />
         </Button>

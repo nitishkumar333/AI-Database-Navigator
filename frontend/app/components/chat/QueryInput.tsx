@@ -2,11 +2,8 @@
 
 import React, { useEffect, useState, useContext } from "react";
 import { FaCircle } from "react-icons/fa";
-import { IoArrowUpCircleSharp, IoClose } from "react-icons/io5";
-import { RiFlowChart } from "react-icons/ri";
-import { FaTrash } from "react-icons/fa";
+import { IoArrowUpCircleSharp } from "react-icons/io5";
 import { Button } from "@/components/ui/button";
-import { TbSettings } from "react-icons/tb";
 import { QueryContext } from "../contexts/SocketContext";
 import { host } from "../host";
 
@@ -22,26 +19,16 @@ interface QueryInputProps {
   handleSendQuery: (query: string) => void;
   query_length: number;
   currentStatus: string;
-  addDisplacement: (value: number) => void;
-  addDistortion: (value: number) => void;
-  selectSettings: () => void;
   selectedConnectionId: number | null;
-  onConnectionChange: (connectionId: number | null) => void;
   selectedKnowledgeBaseId: number | null;
-  onKnowledgeBaseChange: (kbId: number | null) => void;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({
   handleSendQuery,
   query_length,
   currentStatus,
-  addDisplacement,
-  addDistortion,
-  selectSettings,
   selectedConnectionId,
-  onConnectionChange,
   selectedKnowledgeBaseId,
-  onKnowledgeBaseChange,
 }) => {
   const [query, setQuery] = useState("");
   const { getToken, clearAuth } = useContext(QueryContext);
@@ -85,11 +72,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
     };
     fetchGroup();
   }, [selectedKnowledgeBaseId, selectedConnectionId]);
-
-  useEffect(() => {
-    addDisplacement(0.035);
-    addDistortion(0.02);
-  }, [query]);
 
   return (
     <>

@@ -21,7 +21,6 @@ import { IoRefresh } from "react-icons/io5";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
-import { Separator } from "@/components/ui/separator";
 import { CollectionContext } from "../components/contexts/CollectionContext";
 
 // Stable reference so memoised values don't change when a conversation has no queries
@@ -41,7 +40,7 @@ export default function ChatPage() {
     conversations,
   } = useContext(ConversationContext);
 
-  const { fetchSuggestions, clearSuggestionsCache, collections, connections } = useContext(CollectionContext);
+  const { fetchSuggestions, clearSuggestionsCache, connections } = useContext(CollectionContext);
 
   // Connection & KB selection state — restore from localStorage on mount
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(() => {
@@ -73,19 +72,6 @@ export default function ChatPage() {
   const isEmpty = sortedQueries.length === 0;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const displacementStrength = useRef(0.0);
-  const distortionStrength = useRef(0.0);
-
-  const addDisplacement = (value: number) => {
-    displacementStrength.current += value;
-    displacementStrength.current = Math.min(displacementStrength.current, 0.1);
-  };
-
-  const addDistortion = (value: number) => {
-    distortionStrength.current += value;
-    distortionStrength.current = Math.min(distortionStrength.current, 0.3);
-  };
 
   const [randomPrompts, setRandomPrompts] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -290,8 +276,6 @@ export default function ChatPage() {
           />
         </div>
       </div>
-      {currentConversation != null && <Separator className="w-full hidden" />}
-
       <div className="relative flex flex-col w-full items-center">
         <AnimatePresence mode="popLayout">
           <motion.div
@@ -308,16 +292,10 @@ export default function ChatPage() {
                   <RenderChat
                     key={queryId + index}
                     messages={query.messages}
-                    conversationID={currentConversation || ""}
-                    queryID={queryId}
                     finished={query.finished}
-                    query_start={query.query_start}
-                    query_end={query.query_end}
                     _collapsed={index !== array.length - 1}
                     messagesEndRef={messagesEndRef}
                     NER={query.NER}
-                    addDisplacement={addDisplacement}
-                    addDistortion={addDistortion}
                     handleSendQuery={handleSendQuery}
                     isLastQuery={index === array.length - 1}
                   />
@@ -463,18 +441,8 @@ export default function ChatPage() {
           query_length={Object.keys(currentQuery).length}
           currentStatus={currentStatus}
           handleSendQuery={handleSendQuery}
-          addDisplacement={addDisplacement}
-          addDistortion={addDistortion}
-          selectSettings={() => { }}
           selectedConnectionId={selectedConnectionId}
-          onConnectionChange={(connId) => {
-            setSelectedConnectionId(connId);
-            if (connId !== selectedConnectionId) {
-              setSelectedKnowledgeBaseId(null);
-            }
-          }}
           selectedKnowledgeBaseId={selectedKnowledgeBaseId}
-          onKnowledgeBaseChange={setSelectedKnowledgeBaseId}
         />
       </div>
     </div>

@@ -12,7 +12,7 @@ interface ThemeToggleProps {
   showLabel?: boolean;
 }
 
-export const ThemeToggle: React.FC<ThemeToggleProps> = ({
+const ThemeToggle: React.FC<ThemeToggleProps> = ({
   variant = "icon",
   className = "",
   size = "md",

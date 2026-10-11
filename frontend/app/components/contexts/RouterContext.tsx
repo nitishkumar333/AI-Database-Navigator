@@ -68,7 +68,6 @@ export const RouterProvider = ({ children }: { children: React.ReactNode }) => {
     } else {
       window.history.pushState(null, "", url);
     }
-    //showSuccessToast("Page changed to " + url);
   };
 
   useEffect(() => {

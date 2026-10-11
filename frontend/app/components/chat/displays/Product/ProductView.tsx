@@ -15,6 +15,9 @@ const HIDDEN_KEYS = new Set([
 // Keys that are used for the hero section (image / title) and handled specially
 const HERO_KEYS = new Set(["image", "name", "title"]);
 
+// Max tags shown per array field, so the modal always fits on screen
+const MAX_TAGS = 8;
+
 interface ProductViewProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   product: Record<string, any>;
@@ -61,25 +64,20 @@ const isUrl = (value: string): boolean => {
 
 /** Renders 0-5 stars for a numeric rating */
 const RatingStars: React.FC<{ rating: number }> = ({ rating }) => (
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-1.5">
     <div className="flex items-center">
       {Array.from({ length: 5 }, (_, i) => (
-        <motion.span
+        <span
           key={i}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.5 + i * 0.05, duration: 0.2 }}
-          className={`text-sm transition-colors duration-200 ${
+          className={`text-sm ${
             i < Math.round(rating) ? "text-alt_color_b" : "text-secondary/30"
           }`}
         >
           ★
-        </motion.span>
+        </span>
       ))}
     </div>
-    <span className="text-sm text-secondary/70 font-light">
-      {rating.toFixed(1)}
-    </span>
+    <span className="text-xs text-secondary">{rating.toFixed(1)}</span>
   </div>
 );
 
@@ -95,19 +93,22 @@ const FieldValue: React.FC<FieldValueProps> = ({ fieldKey, value }) => {
   // --- Arrays → tag pills --------------------------------------------------
   if (Array.isArray(value)) {
     if (value.length === 0) return null;
+    const hidden = value.length - MAX_TAGS;
     return (
-      <div className="flex flex-wrap gap-2">
-        {value.map((item, i) => (
-          <motion.span
+      <div className="flex flex-wrap gap-1.5">
+        {value.slice(0, MAX_TAGS).map((item, i) => (
+          <span
             key={i}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.06, duration: 0.3 }}
-            className="px-4 py-2 bg-secondary/5 text-secondary/70 text-sm rounded-full border border-secondary/10 hover:bg-secondary/10 hover:border-secondary/20 transition-all duration-300"
+            className="px-2.5 py-0.5 bg-secondary/5 text-secondary text-xs rounded-full border border-secondary/10"
           >
             {String(item)}
-          </motion.span>
+          </span>
         ))}
+        {hidden > 0 && (
+          <span className="px-2.5 py-0.5 text-secondary/60 text-xs">
+            +{hidden} more
+          </span>
+        )}
       </div>
     );
   }
@@ -117,20 +118,18 @@ const FieldValue: React.FC<FieldValueProps> = ({ fieldKey, value }) => {
     if (isRatingKey(fieldKey)) return <RatingStars rating={value} />;
     if (isPriceKey(fieldKey))
       return (
-        <span className="text-3xl lg:text-4xl text-primary font-thin tracking-tighter">
+        <span className="text-lg text-primary font-medium">
           {formatPrice(value)}
         </span>
       );
-    return (
-      <span className="text-lg text-primary font-light">{value}</span>
-    );
+    return <span className="text-sm text-primary">{value}</span>;
   }
 
   // --- Booleans --------------------------------------------------------------
   if (typeof value === "boolean") {
     return (
       <span
-        className={`text-sm font-medium px-3 py-1 rounded-full ${
+        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
           value
             ? "bg-green-500/10 text-green-400 border border-green-500/20"
             : "bg-red-500/10 text-red-400 border border-red-500/20"
@@ -151,7 +150,7 @@ const FieldValue: React.FC<FieldValueProps> = ({ fieldKey, value }) => {
         <img
           src={value}
           alt={fieldKey}
-          className="max-h-40 rounded-xl object-cover border border-secondary/10"
+          className="h-16 rounded-lg object-cover border border-secondary/10"
         />
       );
     }
@@ -163,31 +162,37 @@ const FieldValue: React.FC<FieldValueProps> = ({ fieldKey, value }) => {
           href={value}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-alt_color_a hover:underline break-all text-sm"
+          title={value}
+          className="block text-alt_color_a hover:underline truncate text-sm"
         >
           {value}
         </a>
       );
     }
 
-    // Long text → paragraph style
+    // Long text → clamped paragraph (full text on hover)
     if (value.length > 120) {
       return (
-        <p className="text-base text-secondary font-light leading-relaxed">
+        <p
+          title={value}
+          className="text-sm text-secondary leading-relaxed line-clamp-4"
+        >
           {value}
         </p>
       );
     }
 
     return (
-      <span className="text-lg text-primary font-light">{value}</span>
+      <span title={value} className="block text-sm text-primary truncate">
+        {value}
+      </span>
     );
   }
 
   // --- Objects / fallback ----------------------------------------------------
   if (typeof value === "object" && value !== null) {
     return (
-      <pre className="text-xs text-secondary/70 bg-secondary/5 rounded-lg p-3 overflow-x-auto border border-secondary/10">
+      <pre className="text-[11px] text-secondary bg-secondary/5 rounded-lg p-2 max-h-24 overflow-hidden whitespace-pre-wrap break-all border border-secondary/10">
         {JSON.stringify(value, null, 2)}
       </pre>
     );
@@ -239,152 +244,85 @@ const ProductView: React.FC<ProductViewProps> = ({ product }) => {
 
   return (
     <motion.div
-      className="w-full max-w-4xl mx-auto"
-      initial={{ opacity: 0, y: 30 }}
+      className="flex flex-col md:flex-row w-full max-h-[90vh] overflow-hidden"
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
     >
-      <div className="space-y-8">
-        {/* ─── Hero Image ──────────────────────────────────────────────── */}
-        {displayImage && (
-          <motion.div
-            className="relative w-full h-[60vh] lg:h-[70vh] overflow-hidden rounded-3xl bg-gradient-to-br from-secondary/3 to-secondary/8 shadow-2xl shadow-black/10"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              delay: 0.2,
-              duration: 0.8,
-              ease: [0.25, 0.46, 0.45, 0.94],
-            }}
-          >
-            {!imageLoaded && !imageError && (
-              <Skeleton className="absolute inset-0 w-full h-full rounded-3xl" />
-            )}
+      {/* ─── Image ──────────────────────────────────────────────────── */}
+      {displayImage && (
+        <div className="relative shrink-0 w-full h-[28vh] md:h-auto md:w-2/5 md:min-h-[360px] md:max-h-[90vh] bg-secondary/5">
+          {!imageLoaded && !imageError && (
+            <Skeleton className="absolute inset-0 w-full h-full rounded-none" />
+          )}
 
-            {!imageError && (
-              <motion.img
-                src={displayImage}
-                alt={displayName}
-                className={`w-full h-full object-cover transition-transform duration-1000 ease-out hover:scale-105 ${
-                  imageLoaded ? "opacity-100" : "opacity-0"
-                }`}
-                onLoad={() => setImageLoaded(true)}
-                onError={() => {
-                  setImageError(true);
-                  setImageLoaded(true);
-                }}
-                loading="lazy"
-              />
-            )}
+          {!imageError && (
+            <img
+              src={displayImage}
+              alt={displayName}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                imageLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                setImageError(true);
+                setImageLoaded(true);
+              }}
+            />
+          )}
 
-            {imageError && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-secondary/30 text-center p-8">
-                  <div className="text-6xl mb-4 opacity-50">📷</div>
-                  <div className="text-sm opacity-60">Image unavailable</div>
-                </div>
-              </div>
-            )}
-
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-
-            {/* Overlay text */}
-            <div className="absolute inset-0 flex flex-col justify-end p-8 lg:p-12">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.8 }}
-                className="text-white space-y-3"
-              >
-                {displayBrand && (
-                  <p className="text-sm opacity-80 uppercase tracking-[0.25em] font-medium">
-                    {displayBrand}
-                  </p>
-                )}
-                <h1 className="text-4xl lg:text-5xl xl:text-6xl font-extralight leading-[0.9] tracking-tight">
-                  {displayName}
-                </h1>
-              </motion.div>
+          {imageError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary/40">
+              <div className="text-4xl mb-2 opacity-50">📷</div>
+              <div className="text-xs">Image unavailable</div>
             </div>
-          </motion.div>
-        )}
+          )}
+        </div>
+      )}
 
-        {/* ─── Title fallback when no image ────────────────────────── */}
-        {!displayImage && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="space-y-2"
+      {/* ─── Details ────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 min-w-0 flex-1 p-5 md:p-6 overflow-hidden">
+        {/* Title (right padding keeps clear of the dialog close button) */}
+        <div className="space-y-1 pr-8">
+          {displayBrand && (
+            <p className="text-xs text-secondary uppercase tracking-[0.2em] font-medium truncate">
+              {displayBrand}
+            </p>
+          )}
+          <h2
+            title={displayName}
+            className="text-xl md:text-2xl font-light text-primary leading-tight line-clamp-2"
           >
-            {displayBrand && (
-              <p className="text-sm text-secondary/60 uppercase tracking-[0.25em] font-medium">
-                {displayBrand}
-              </p>
-            )}
-            <h1 className="text-4xl lg:text-5xl font-extralight text-primary tracking-tight">
-              {displayName}
-            </h1>
-          </motion.div>
-        )}
+            {displayName}
+          </h2>
+        </div>
 
-        {/* ─── Highlight fields (grid) ─────────────────────────────── */}
+        {/* Highlight fields (compact grid) */}
         {highlightFields.length > 0 && (
-          <motion.div
-            className={`grid gap-8 py-8 border-y border-secondary/10 ${
-              highlightFields.length === 1
-                ? "grid-cols-1"
-                : highlightFields.length === 2
-                ? "grid-cols-1 sm:grid-cols-2"
-                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-            }`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-          >
-            {highlightFields.map(({ key, value }, i) => (
-              <motion.div
-                key={key}
-                className="text-center space-y-3"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + i * 0.08, duration: 0.4 }}
-              >
-                <div className="text-xs text-secondary/40 uppercase tracking-[0.2em] font-medium">
-                  {formatLabel(key)}
-                </div>
-                <div className="flex justify-center">
-                  <FieldValue fieldKey={key} value={value} />
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* ─── Detail fields (stacked) ─────────────────────────────── */}
-        {detailFields.length > 0 && (
-          <motion.div
-            className="space-y-8 px-4 lg:px-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-          >
-            {detailFields.map(({ key, value }, i) => (
-              <motion.div
-                key={key}
-                className="space-y-3"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 + i * 0.1, duration: 0.5 }}
-              >
-                <div className="text-xs text-secondary/40 uppercase tracking-[0.2em] font-medium">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 py-4 border-y border-secondary/10">
+            {highlightFields.map(({ key, value }) => (
+              <div key={key} className="min-w-0 space-y-1">
+                <div className="text-[10px] text-secondary/60 uppercase tracking-[0.15em] font-medium truncate">
                   {formatLabel(key)}
                 </div>
                 <FieldValue fieldKey={key} value={value} />
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
+        )}
+
+        {/* Detail fields (stacked) */}
+        {detailFields.length > 0 && (
+          <div className="flex flex-col gap-3 min-h-0">
+            {detailFields.map(({ key, value }) => (
+              <div key={key} className="min-w-0 space-y-1.5">
+                <div className="text-[10px] text-secondary/60 uppercase tracking-[0.15em] font-medium">
+                  {formatLabel(key)}
+                </div>
+                <FieldValue fieldKey={key} value={value} />
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </motion.div>

@@ -72,7 +72,6 @@ frontend/
 |   ├── globals.css              # Global CSS variables, Tailwind base, animations
 |   ├── getDeviceId.ts           # FingerprintJS hook for device-based session ID
 |   ├── icon.svg                 # App favicon
-|   ├── types.d.ts               # Global type declarations
 |   |
 |   ├── pages/                   # Full-page view components
 |   |   ├── ChatPage.tsx         # Main chat interface (NL to SQL query + results)
@@ -94,8 +93,6 @@ frontend/
 |   |   |   ├── CollectionContext.tsx # DB connections, KB groups, suggestions cache
 |   |   |   ├── ConversationContext.tsx # All chat conversation state + CRUD
 |   |   |   ├── ChatContext.tsx       # (Minimal) chat-specific shared state
-|   |   |   ├── DisplayContext.tsx    # Display state (active display index)
-|   |   |   ├── ProcessingContext.tsx # Query processing flag
 |   |   |   ├── ToastContext.tsx      # Toast notifications + confirm modals
 |   |   |
 |   |   ├── chat/                # Chat interface components
@@ -106,7 +103,6 @@ frontend/
 |   |   |   ├── components/           # Chat UI sub-components
 |   |   |   |   ├── CitationBubble.tsx     # Citation reference bubble
 |   |   |   |   ├── CollectionSelection.tsx # DB connection dropdown in chat
-|   |   |   |   ├── DisplayIcon.tsx         # Icon for display type
 |   |   |   |   ├── DisplayPagination.tsx   # Pagination through result pages
 |   |   |   |   ├── KnowledgeBaseSelection.tsx # KB group selector in chat
 |   |   |   |   ├── MarkdownFormat.tsx      # Renders markdown with syntax highlighting
@@ -119,7 +115,7 @@ frontend/
 |   |   |       ├── Product/
 |   |   |       |   ├── ProductCard.tsx     # Single product card
 |   |   |       |   ├── ProductDisplay.tsx  # Product grid container
-|   |   |       |   └── ProductView.tsx     # Full product detail view
+|   |   |       |   └── ProductView.tsx     # Full product detail view (opened in a modal)
 |   |   |       ├── QueryCode/
 |   |   |       |   └── CodeView.tsx        # SQL code viewer + copy + execute
 |   |   |       └── SystemMessages/
@@ -131,18 +127,12 @@ frontend/
 |   |   |           └── WarningDisplay.tsx             # Warning message bubble
 |   |   |
 |   |   ├── explorer/            # Database schema explorer components
-|   |   |   ├── DataTable.tsx         # Data grid with rich cell rendering
-|   |   |   └── components/
-|   |   |       └── DataCell.tsx      # Individual cell renderer (type-aware formatting)
+|   |   |   └── DataTable.tsx         # Data grid with rich cell rendering
 |   |   |
 |   |   ├── navigation/          # Sidebar + navigation components
 |   |   |   ├── SidebarComponent.tsx  # Main sidebar (nav items, user info, logout)
 |   |   |   ├── HomeSubMenu.tsx       # Conversation list in sidebar
-|   |   |   ├── SettingsSubMenu.tsx   # Settings submenu
-|   |   |   ├── CopyButton.tsx        # Reusable copy-to-clipboard button
-|   |   |   ├── DeleteButton.tsx      # Delete button with confirm dialog
-|   |   |   ├── RateLimitDialog.tsx   # Rate limit info dialog
-|   |   |   └── SidebarButton.tsx     # Generic sidebar button
+|   |   |   └── CopyButton.tsx        # Reusable copy-to-clipboard button
 |   |   |
 |   |   └── shared/              # Shared form components
 |   |       ├── ConnectionForm.tsx    # Form to create/test DB connections
@@ -151,20 +141,16 @@ frontend/
 |   ├── types/                   # TypeScript type definitions
 |   |   ├── chat.ts              # Message, Query, all Payload types
 |   |   ├── displays.ts          # ProductPayload, TicketPayload, ChartPayload types
-|   |   └── objects.ts           # Collection, Model, Settings, Toast types
+|   |   └── objects.ts           # Collection type
 |   |
 |   └── utils/                   # Frontend utilities
 |       └── detectProductdata.ts  # Heuristic detection of product-like query results
 |
 ├── components/
 |   └── ui/                      # shadcn/ui component library (Radix UI based)
-|       ├── button.tsx, card.tsx, dialog.tsx, input.tsx, label.tsx
-|       ├── select.tsx, table.tsx, tabs.tsx, toast.tsx, toaster.tsx
-|       ├── sidebar.tsx, sheet.tsx, separator.tsx, skeleton.tsx
-|       ├── badge.tsx, avatar.tsx, breadcrumb.tsx, carousel.tsx
-|       ├── checkbox.tsx, collapsible.tsx, command.tsx
-|       ├── dropdown-menu.tsx, hover-card.tsx, popover.tsx, tooltip.tsx
-|       └── alert-dialog.tsx
+|       ├── button.tsx, input.tsx, select.tsx, toast.tsx, toaster.tsx
+|       ├── dialog.tsx, sidebar.tsx, sheet.tsx, separator.tsx, skeleton.tsx
+|       └── dropdown-menu.tsx, hover-card.tsx, tooltip.tsx
 |
 ├── hooks/
 |   ├── useMobile.tsx            # Detects mobile viewport
@@ -224,8 +210,7 @@ Contexts are nested in `layout.tsx` in dependency order. Each is a React Context
 
 **State:**
 - `user: AuthUser | null` — `{ id, email, username, is_guest? }`
-- `token: string` — JWT Bearer token (also persisted in `localStorage.auth_token`)
-- `isAuthenticated: boolean` — derived: `!!user && !!token`
+- `isAuthenticated: boolean` — derived: `!!user && !!token` (the JWT is held internally, persisted in `localStorage.auth_token`, and read via `getToken()`)
 - `isLoading: boolean` — true during initial token validation
 - `onboardingStatus: OnboardingStatus | null` — `{ has_connection, has_knowledge_base, onboarding_complete }`
 
@@ -267,7 +252,6 @@ Health check polls `GET /health` every 120 seconds.
 
 **State:**
 - `id: string | null` — device fingerprint ID (FingerprintJS, cached in localStorage)
-- `initialized: boolean` — true after first successful backend connection
 - `fetchCollectionFlag: boolean` — toggled to trigger collection refetch
 - `unsavedChanges: boolean` — tracks if user has unsaved edits (used to guard navigation)
 
@@ -282,7 +266,6 @@ Health check polls `GET /health` every 120 seconds.
 **State:**
 - `collections: Collection[]` — mapped from connections for compatibility.
 - `connections: Connection[]` — list of user's DB connections.
-- `loadingCollections: boolean`
 
 **Key functions:**
 - `fetchCollections()` — GET `/api/connections`, maps to both `connections` and `collections`.
@@ -324,7 +307,6 @@ This is the **largest and most complex context**. It manages all chat state.
 | `addQueryToConversation(convId, query, queryId)` | Lazily creates conversation on backend (first message trigger). Adds user message to state. |
 | `addMessageToConversation(messages, convId, queryId)` | Appends messages to a specific query within a conversation. |
 | `finishQuery(convId, queryId)` | Marks query as finished (sets `finished=true`, `query_end`). |
-| `handleConversationError(convId)` | Sets `error=true` on a conversation. |
 | `addSuggestionToConversation(convId, queryId, connId, kbId)` | POST `/api/suggestions/conversation`, appends suggestion message to conversation. |
 
 **Backend sync:** On mount, fetches all conversation list + full details for each. Calls `rebuildConversation()` to reconstruct frontend data structures from backend message format.
@@ -347,12 +329,6 @@ Provides toast notifications and modal dialogs.
 ### `ChatContext` — `app/components/contexts/ChatContext.tsx`
 
 Minimal context scoped to the ChatPage for sharing local chat state between sub-components.
-
----
-
-### `DisplayContext` — `app/components/contexts/DisplayContext.tsx`
-
-Tracks which display index is currently active (for paginated/merged result views).
 
 ---
 
@@ -489,13 +465,8 @@ interface QueryInputProps {
   handleSendQuery: (query: string) => void;
   query_length: number;
   currentStatus: string;          // "Thinking..." | ""
-  addDisplacement: (n: number) => void;   // Visual effects
-  addDistortion: (n: number) => void;
-  selectSettings: () => void;
   selectedConnectionId: number | null;
-  onConnectionChange: (id: number | null) => void;
   selectedKnowledgeBaseId: number | null;
-  onKnowledgeBaseChange: (id: number | null) => void;
 }
 ```
 
@@ -578,7 +549,7 @@ Main application sidebar. Only renders when `isAuthenticated && onboarding_compl
 
 #### `app/components/navigation/HomeSubMenu.tsx`
 
-Renders the list of conversations in the sidebar. Shows conversation name, allows selection and deletion (via `DeleteButton`).
+Renders the list of conversations in the sidebar. Shows conversation name, allows selection and deletion.
 
 ---
 
@@ -607,18 +578,7 @@ Form for creating a knowledge base group (~10KB).
 
 #### `app/components/explorer/DataTable.tsx`
 
-Rich data table for preview data. Uses `DataCell` for individual cell rendering.
-
-#### `app/components/explorer/components/DataCell.tsx`
-
-Type-aware cell renderer. Detects and formats:
-- URLs → clickable links.
-- Image URLs → inline image previews.
-- Booleans → badge.
-- JSON strings → formatted display.
-- Long text → truncated with expand.
-- Numbers → right-aligned.
-- Dates → formatted.
+Rich data table for preview data.
 
 ---
 
@@ -734,26 +694,16 @@ Located in `components/ui/`. All are based on **Radix UI** primitives with Tailw
 | Component | File | Usage |
 |---|---|---|
 | Button | `button.tsx` | All clickable buttons |
-| Card | `card.tsx` | Content containers |
-| Dialog | `dialog.tsx` | Modal dialogs |
-| AlertDialog | `alert-dialog.tsx` | Confirm dialogs (used by DeleteButton, RouterContext) |
 | Input | `input.tsx` | Text inputs in forms |
-| Label | `label.tsx` | Form labels |
+| Dialog | `dialog.tsx` | Modal dialogs (product details popup) |
 | Select | `select.tsx` | Dropdown selects |
-| Table | `table.tsx` | Data tables |
-| Tabs | `tabs.tsx` | Tab panels (CollectionPage) |
 | Toast / Toaster | `toast.tsx`, `toaster.tsx` | Notifications |
 | Sidebar | `sidebar.tsx` | Full sidebar component with all sub-parts |
 | Sheet | `sheet.tsx` | Slide-in panels |
 | Separator | `separator.tsx` | Visual dividers |
 | Skeleton | `skeleton.tsx` | Loading placeholders |
-| Badge | `badge.tsx` | Status badges |
-| Checkbox | `checkbox.tsx` | KnowledgeBaseForm table selection |
-| Carousel | `carousel.tsx` | (available) |
-| Command | `command.tsx` | Command palette pattern |
 | DropdownMenu | `dropdown-menu.tsx` | Dropdown menus |
 | HoverCard | `hover-card.tsx` | Hover preview cards |
-| Popover | `popover.tsx` | Popovers (ViewCodeButton) |
 | Tooltip | `tooltip.tsx` | Tooltips |
 
 **To add a new shadcn component:** Run `npx shadcn-ui@latest add {component-name}` and it will be added to `components/ui/`.
@@ -964,12 +914,10 @@ Token is retrieved from `AuthContext.getToken()` which falls back to `localStora
 | `remark-gfm` | GitHub-flavored markdown support |
 | `uuid` | UUID generation for conversation/query IDs |
 | `@fingerprintjs/fingerprintjs` | Device fingerprinting for session ID |
-| `recharts` | Charts (bar, line, scatter) |
 | `lucide-react` | Additional icon set |
 | `class-variance-authority` | Component variant styling (shadcn) |
 | `tailwind-merge` | Safe Tailwind class merging |
 | `clsx` | Conditional class names |
-| `embla-carousel-react` | Carousel component |
 
 ---
 
@@ -994,7 +942,7 @@ Token is retrieved from `AuthContext.getToken()` which falls back to `localStora
 | Change rate limit error display | `app/components/chat/displays/SystemMessages/RateLimitMessageDisplay.tsx` |
 | Change SQL code viewer | `app/components/chat/displays/QueryCode/CodeView.tsx` |
 | Change how markdown is rendered | `app/components/chat/components/MarkdownFormat.tsx` |
-| Change DataTable cell rendering | `app/components/explorer/components/DataCell.tsx` |
+| Change DataTable cell rendering | `app/components/explorer/DataTable.tsx` |
 | Add a new shadcn UI component | Run `npx shadcn-ui@latest add {name}`, it goes to `components/ui/` |
 | Change localStorage keys used | Search for `localStorage.getItem`/`localStorage.setItem` across context files |
 | Change backend health check interval | `app/components/contexts/SocketContext.tsx` - setInterval(checkHealth, 120000) |
