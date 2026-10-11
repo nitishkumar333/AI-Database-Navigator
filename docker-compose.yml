@@ -74,6 +74,10 @@ services:
       GUEST_DB_USER: ${POSTGRES_USER:-postgres}
       GUEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
       CHECKPOINT_DB_PATH: ${CHECKPOINT_DB_PATH:-/tmp/checkpoints.sqlite}
+      SCHEMA_PROFILING_ENABLED: ${SCHEMA_PROFILING_ENABLED:-true}
+      SCHEMA_DESCRIBE_ENABLED: ${SCHEMA_DESCRIBE_ENABLED:-true}
+      SCHEMA_DESCRIBE_MAX_TABLES: ${SCHEMA_DESCRIBE_MAX_TABLES:-50}
+      SCHEMA_CHECK_INTERVAL_S: ${SCHEMA_CHECK_INTERVAL_S:-300}
     volumes:
       - ./backend:/app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

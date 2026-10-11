@@ -189,6 +189,10 @@ def init_db():  # Called on startup - creates all tables via Base.metadata.creat
 | `created_at` | DateTime | UTC |
 | `updated_at` | DateTime | UTC, auto-updated |
 
+### `app/models/schema_profile.py` — `SchemaProfileRecord` + `SchemaAnnotation`
+
+See [Schema Profiling](#appservicesschema_index--schema-profiling-ai-context). `schema_profiles` holds the latest profile per connection (unique `connection_id`); `schema_annotations` holds descriptions, unique per `(connection_id, table_name, column_name)` with `column_name = ""` for the table itself.
+
 ### `app/models/query_history.py` — `QueryHistory`
 
 | Column | Type | Notes |
@@ -241,7 +245,7 @@ All routers are mounted in `main.py` via `app.include_router(...)`.
 |---|---|---|---|
 | POST | `/register` | No | Register new user. Returns UserResponse. Validates email/username uniqueness. |
 | POST | `/login` | No | Login. Returns JWT access_token. |
-| POST | `/guest-login` (or `/guest`) | No | Instant guest login. Preloads shop DB connection, knowledge base, and mock conversations. Returns JWT access_token. |
+| POST | `/guest-login` (or `/guest`) | No | One-click login to the shared guest account (created with its shop DB connection, knowledge base and demo conversations on first use). Returns JWT access_token. |
 | GET | `/me` | JWT | Returns current user info (including `is_guest: boolean`). |
 | GET | `/onboarding-status` | JWT | Returns has_connection, has_knowledge_base, onboarding_complete. Used by frontend router. |
 
@@ -263,6 +267,11 @@ All routers are mounted in `main.py` via `app.include_router(...)`.
 | GET | `/{conn_id}/tables` | JWT | Lists all tables with column counts. No cache. |
 | GET | `/{conn_id}/tables/{table_name}/columns` | JWT | Column info + PK + FK. Redis cached. |
 | GET | `/{conn_id}/tables/{table_name}/preview` | JWT | First 10 rows of a table. Redis cached. |
+| GET | `/{conn_id}/profile` | JWT | Schema-profile status and each table's row count and description. |
+| POST | `/{conn_id}/profile/refresh` | JWT | Re-profile in the background (`{"describe": bool}` optional). Returns 202. |
+| GET | `/{conn_id}/tables/{table_name}/details` | JWT | Descriptions (with source: `generated` / `user` / `comment`), sample values, formats, joins. 404 until profiled. |
+| PUT | `/{conn_id}/tables/{table_name}/description` | JWT | Set the table description the agent sees; `""` resets it. |
+| PUT | `/{conn_id}/tables/{table_name}/columns/{column}/description` | JWT | Same for a column. |
 
 Redis cache keys:
 - `table_schema:user:{uid}:connection:{cid}:table:{name}`
@@ -345,14 +354,14 @@ Both use `gemini-2.5-flash` with structured output (`SuggestionList`) for JSON-t
 
 ## 7. Services
 
-### `app/services/guest_service.py` — Guest Workspace Provisioner
+### `app/services/guest_service.py` — Guest Account
 
-Provisions isolated guest accounts on demand when users click "Login as Guest":
-- Creates unique `User` (`guest_{uid}@sqlnav.demo`).
-- Preloads `DBConnection` targeting the PostgreSQL `shop` database (customizable via `GUEST_DB_*` settings).
-- Preloads `KnowledgeBase` named `"Shop Catalog & Orders"` with all 9 e-commerce tables.
-- Seeds 3 rich mock conversations with SQL queries, product result cards (including real FakeStoreAPI images), aggregation metrics, and markdown analysis.
-- Populates `QueryHistory` with initial historical queries.
+A single, shared guest account (`guest@sqlnav.demo`, username `guest`) used by everyone who clicks "Login as Guest". It is an ordinary account (conversations, history and knowledge bases are stored like any other user's) except:
+- It has no usable password (random hash), so it is only reachable via `/api/auth/guest-login`.
+- Its only connection is the PostgreSQL `shop` database (`GUEST_DB_*` settings). On every guest login the connection is re-created if missing and synced to the current settings. `POST /api/connections`, `POST /api/connections/test` and `DELETE /api/connections/{id}` return 403 for the guest.
+- The `@sqlnav.demo` domain and the username `guest` are reserved at registration.
+
+On first creation it also gets the `"Shop Catalog & Orders"` knowledge base (all 9 tables) and 3 demo conversations with query history; later logins never re-seed. `is_guest(user)` (domain check) also matches the older per-login `guest_{uid}@sqlnav.demo` accounts.
 
 ### `app/services/sql_agent.py` — The Core AI System
 
@@ -397,6 +406,26 @@ Return { success, generated_sql, columns, rows, response_text }
 **To add a new tool:** Define with `@tool` decorator, add to `build_workflow()` ToolNode and `llm.bind_tools()`.
 
 ---
+
+### `app/services/schema_index/` — Schema Profiling (AI context)
+
+What the agent reads about a database. Replaces the bare column list from
+`get_schema_context` once a connection has been profiled.
+
+| Module | Role |
+|---|---|
+| `profiler.py` | `profile_database(engine)`: tables, columns, keys and comments from `pg_catalog`; null fraction, distinct count, most-common values and ranges from `pg_stats` (no table scans); a `LIMIT 500` sample for tables without statistics; format detection for text columns (`'YYYYMM'`, dates, numbers or zero-padded codes stored as text); inferred foreign keys (name match confirmed by a containment probe). `schema_fingerprint(engine)` is the cheap change check (also used to match twin connections). |
+| `render.py` | `render_schema(profile, tables, descriptions)`: one compact line per column (`name type PK -> t.c -- description; values: ...; format; range`). Falls back to a compact level above ~60k chars. |
+| `describer.py` | One structured LLM call per table: what a row represents + ≤20-word column descriptions. |
+| `service.py` | Background jobs (2-thread pool, Redis lock per connection), `build_schema_context(db, conn, engine, tables)` used by `/api/query/chat` and suggestions, staleness checks, and description editing. |
+
+Lifecycle:
+1. Creating a connection (UI or guest sign-up) schedules a profile job; connections that predate profiling get one on their first chat. Until it finishes, the agent gets the basic schema; requests never wait.
+2. Another connection to the same host/port/database with the same login and an identical schema donates its profile and generated descriptions (guest accounts all share the demo DB, so it is described once, not per guest).
+3. Every `SCHEMA_CHECK_INTERVAL_S` (checked when the connection is used) the catalog fingerprint is compared; a change triggers a re-profile. A re-profile can also be requested any time (`POST /api/schema/{id}/profile/refresh`, the "Re-profile" button in the table explorer). Tables whose structure changed are re-described; unchanged tables keep their descriptions.
+4. Descriptions with source `user` (edited in the table explorer's Columns tab) are never overwritten. Precedence: user > database COMMENT > generated.
+
+Storage: `schema_profiles` (one row per connection: status, profile JSON, `version` for cache invalidation, which tables are described at which structure hash) and `schema_annotations` (one row per table/column description). Both cascade on connection delete. Rendered context is cached in-process per `(connection, version, tables)`.
 
 ### `app/services/validate_sql.py`
 
