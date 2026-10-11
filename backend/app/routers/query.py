@@ -12,7 +12,8 @@ from app.models.conversation import Conversation, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.sql_agent import SQLAgent
-from app.utils.db_manager import get_schema_context, get_all_table_names
+from app.utils.db_manager import get_all_table_names
+from app.services.schema_index.service import build_schema_context
 from app.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
@@ -105,7 +106,7 @@ def chat_query(
     else:
         context_tables = all_tables
     
-    schema_context = get_schema_context(engine, context_tables)
+    schema_context = build_schema_context(db, conn, engine, context_tables)
 
     sql_agent = SQLAgent(engine, schema_context)
     result = sql_agent.run_query(

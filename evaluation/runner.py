@@ -1,14 +1,18 @@
 """Runs the production SQLAgent (in evaluation mode) over BIRD examples and
 scores each generated query against the gold SQL."""
+import json
 import logging
 import re
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy.engine import Engine
 
+from app.services.schema_index.describer import describe_table
+from app.services.schema_index.profiler import SchemaProfile, profile_database
 from app.services.sql_agent import AGENT_MODE_EVALUATION, SQLAgent
 from evaluation import metrics
 from evaluation.dataset import Example
@@ -63,6 +67,9 @@ class RateLimiter:
 class RunOptions:
     use_evidence: bool = True
     full_schema: bool = False
+    schema_format: str = "enriched"       # "enriched" (profiled) | "basic" (pre-Phase-1 format)
+    describe: bool = False                # add LLM table/column descriptions (enriched only)
+    descriptions_cache: Path | None = None  # JSON cache so descriptions are generated once
     rpm: float | None = None
     max_rate_limit_retries: int = 6
     backoff_base_s: float = 15.0
@@ -83,6 +90,8 @@ class AgentEvaluator:
         self._gold_cache: dict[int, ExecResult] = {}
         self._linker: SchemaLinker | None = None
         self._linker_lock = threading.Lock()
+        self._profile: SchemaProfile | None = None
+        self._descriptions: dict[str, dict] | None = None
 
     # ── Agent ────────────────────────────────────────────────────────────────
 
@@ -92,11 +101,50 @@ class AgentEvaluator:
             return sorted({t for ts in self.db_tables.values() for t in ts})
         return self.db_tables[db_id]
 
+    def _schema_for(self, tables: list[str]) -> str:
+        if self.opts.schema_format == "basic":
+            return build_schema_context(self.engine, tables)
+        if self._profile is None:
+            self._profile = profile_database(self.engine)
+        descriptions = self._describe(tables) if self.opts.describe else None
+        return build_schema_context(self.engine, tables, profile=self._profile,
+                                    descriptions=descriptions)
+
+    def _describe(self, tables: list[str]) -> dict[str, dict]:
+        """LLM descriptions for `tables`, cached on disk per table structure,
+        so a model describes each BIRD table once across all runs."""
+        path = self.opts.descriptions_cache
+        if self._descriptions is None:
+            self._descriptions = (
+                json.loads(path.read_text(encoding="utf-8")) if path and path.exists() else {})
+        out = {}
+        for table in tables:
+            current = self._profile.tables.get(table)
+            if current is None:
+                continue
+            cached = self._descriptions.get(table)
+            if not cached or cached.get("structure_hash") != current.structure_hash:
+                self.limiter.wait()
+                try:
+                    docs = describe_table(self.llm, self._profile, table)
+                except Exception as exc:
+                    logger.warning("Could not describe %s (continuing without): %s", table, exc)
+                    continue
+                cached = {**docs, "structure_hash": current.structure_hash}
+                self._descriptions[table] = cached
+                if path:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(json.dumps(self._descriptions, indent=1, ensure_ascii=False),
+                                    encoding="utf-8")
+            out[table] = {"description": cached.get("description"),
+                          "columns": cached.get("columns", {})}
+        return out
+
     def _agent_for(self, db_id: str) -> SQLAgent:
         key = "__all__" if self.opts.full_schema else db_id
         with self._agents_lock:
             if key not in self._agents:
-                schema = build_schema_context(self.engine, self._context_tables(db_id))
+                schema = self._schema_for(self._context_tables(db_id))
                 self._agents[key] = SQLAgent(
                     self.engine, schema, mode=AGENT_MODE_EVALUATION, llm=self.llm
                 )

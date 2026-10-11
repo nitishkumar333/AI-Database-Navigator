@@ -7,8 +7,12 @@ from typing import Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from app.services.schema_index.profiler import SchemaProfile
+from app.services.schema_index.render import Descriptions, render_schema
 from app.utils import db_manager
 from app.utils.db_manager import get_schema_context
+
+SCHEMA_FORMATS = ("enriched", "basic")
 
 
 def create_bird_engine(db_url: str, pool_size: int = 4) -> Engine:
@@ -39,9 +43,18 @@ def disable_schema_cache() -> None:
     db_manager.redis_client = _NullCache()
 
 
-def build_schema_context(engine: Engine, tables: list[str]) -> str:
-    # Reuse the production builder so the agent sees exactly the same format.
-    return get_schema_context(engine, tables)
+def build_schema_context(
+    engine: Engine,
+    tables: list[str],
+    *,
+    profile: SchemaProfile | None = None,
+    descriptions: Descriptions | None = None,
+) -> str:
+    """The schema text the agent gets, built with the production code:
+    the enriched renderer when a profile is given, else the basic one."""
+    if profile is None:
+        return get_schema_context(engine, tables)
+    return render_schema(profile, tables, descriptions)
 
 
 @dataclass

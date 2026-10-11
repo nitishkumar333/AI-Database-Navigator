@@ -11,11 +11,13 @@ import {
   GoArrowLeft,
   GoDatabase,
   GoEye,
+  GoSync,
 } from "react-icons/go";
 import { FaSpinner } from "react-icons/fa";
 import { useSearchParams } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import EditableDescription from "../components/explorer/EditableDescription";
 
 type TableInfo = {
   name: string;
@@ -33,6 +35,35 @@ type ColumnInfo = {
     referred_columns: string[];
   } | null;
 };
+
+type ColumnDetails = {
+  name: string;
+  description: string | null;
+  description_source: string | null;
+  sample_values: string[];
+  text_format: string | null;
+  distinct_count: number | null;
+};
+
+type TableDetails = {
+  name: string;
+  row_count: number | null;
+  description: string | null;
+  description_source: string | null;
+  columns: ColumnDetails[];
+};
+
+type ProfileStatus = {
+  status: string; // none | pending | running | ready | failed
+  description_status: string; // idle | running | done | partial | failed | disabled
+  error?: string | null;
+  profiled_at?: string | null;
+};
+
+const isBusy = (p: ProfileStatus | null) =>
+  !!p &&
+  (["pending", "running"].includes(p.status) ||
+    p.description_status === "running");
 
 type PreviewData = {
   columns: string[];
@@ -52,6 +83,8 @@ export default function CollectionPage() {
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<"columns" | "preview">("preview");
+  const [details, setDetails] = useState<TableDetails | null>(null);
+  const [profile, setProfile] = useState<ProfileStatus | null>(null);
 
   // Extract connection name — get auth token
   const connName = collectionName.split(" (")[0];
@@ -59,6 +92,84 @@ export default function CollectionPage() {
 
   // Find connection ID
   const [connId, setConnId] = useState<number | null>(null);
+
+  const authHeaders = () => ({
+    Authorization: `Bearer ${getToken()}`,
+    "Content-Type": "application/json",
+  });
+
+  // Descriptions + profile facts; 404 just means "not profiled yet".
+  const loadDetails = async (cId: number, tableName: string) => {
+    try {
+      const res = await fetch(
+        `${host}/api/schema/${cId}/tables/${encodeURIComponent(tableName)}/details`,
+        { headers: authHeaders() }
+      );
+      setDetails(res.ok ? await res.json() : null);
+    } catch (e) {
+      console.error("Failed to load table details:", e);
+      setDetails(null);
+    }
+  };
+
+  const loadProfile = async (cId: number) => {
+    try {
+      const res = await fetch(`${host}/api/schema/${cId}/profile`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) setProfile(await res.json());
+    } catch (e) {
+      console.error("Failed to load profile status:", e);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (!connId) return;
+    await fetch(`${host}/api/schema/${connId}/profile/refresh`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({}),
+    });
+    setProfile((p) => ({ ...(p || { description_status: "idle" }), status: "running" }));
+  };
+
+  const saveDescription = async (
+    tableName: string,
+    columnName: string | null,
+    text: string
+  ) => {
+    if (!connId) return;
+    const base = `${host}/api/schema/${connId}/tables/${encodeURIComponent(tableName)}`;
+    const url = columnName
+      ? `${base}/columns/${encodeURIComponent(columnName)}/description`
+      : `${base}/description`;
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ description: text }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || "Could not save description");
+    }
+    await loadDetails(connId, tableName);
+  };
+
+  // While profiling/describing runs in the background, poll its status and
+  // refresh the open table once it finishes.
+  useEffect(() => {
+    if (!connId || !isBusy(profile)) return;
+    const timer = setTimeout(async () => {
+      const res = await fetch(`${host}/api/schema/${connId}/profile`, {
+        headers: authHeaders(),
+      }).catch(() => null);
+      if (!res || !res.ok) return;
+      const next: ProfileStatus = await res.json();
+      setProfile(next);
+      if (!isBusy(next) && selectedTable) loadDetails(connId, selectedTable);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [profile, connId, selectedTable]);
 
   useEffect(() => {
     findConnection();
@@ -90,6 +201,7 @@ export default function CollectionPage() {
           ]);
           if (colRes.ok) setColumns(await colRes.json());
           if (prevRes.ok) setPreview(await prevRes.json());
+          await loadDetails(connId, firstName);
         } catch (e) {
           console.error("Failed to auto-load first table:", e);
         }
@@ -115,6 +227,7 @@ export default function CollectionPage() {
         if (match) {
           setConnId(match.id);
           loadTables(match.id);
+          loadProfile(match.id);
         }
       }
     } catch (e) {
@@ -148,6 +261,7 @@ export default function CollectionPage() {
     setSelectedTable(tableName);
     setActiveTab("preview");
     setPreview(null);
+    setDetails(null);
     try {
       const [colRes, prevRes] = await Promise.all([
         fetch(`${host}/api/schema/${connId}/tables/${tableName}/columns`, {
@@ -165,6 +279,7 @@ export default function CollectionPage() {
       ]);
       if (colRes.ok) setColumns(await colRes.json());
       if (prevRes.ok) setPreview(await prevRes.json());
+      await loadDetails(connId, tableName);
     } catch (e) {
       console.error("Failed to load table data:", e);
     }
@@ -217,8 +332,33 @@ export default function CollectionPage() {
             <h1 className="text-xl font-bold text-primary">{connName}</h1>
             <p className="text-xs text-muted-foreground">
               {tables.length} tables found
+              {profile && profile.status !== "none" && (
+                <>
+                  {" · "}
+                  {profile.status === "ready"
+                    ? `AI context profiled${
+                        profile.description_status === "running"
+                          ? ", writing descriptions…"
+                          : ""
+                      }`
+                    : profile.status === "failed"
+                    ? "Profiling failed"
+                    : "Profiling…"}
+                </>
+              )}
             </p>
           </div>
+          {connId && (
+            <button
+              onClick={refreshProfile}
+              disabled={isBusy(profile)}
+              title="Re-read the schema, statistics and sample values the AI uses, and describe new or changed tables"
+              className="ml-auto flex items-center gap-2 text-xs text-muted-foreground hover:text-accent disabled:opacity-50 border border-foreground rounded-md px-2 py-1"
+            >
+              <GoSync size={12} className={isBusy(profile) ? "animate-spin" : ""} />
+              Re-profile
+            </button>
+          )}
         </div>
 
         <Separator />
@@ -310,6 +450,22 @@ export default function CollectionPage() {
                             />
                           </div>
                         ) : (
+                          <>
+                          {details && (
+                            <div className="px-4 py-3 border-b border-foreground flex flex-col gap-1">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase">
+                                Table description
+                                {details.row_count != null &&
+                                  ` · ~${details.row_count.toLocaleString()} rows`}
+                              </span>
+                              <EditableDescription
+                                value={details.description}
+                                source={details.description_source}
+                                placeholder="No description yet. Describe what one row represents."
+                                onSave={(text) => saveDescription(details.name, null, text)}
+                              />
+                            </div>
+                          )}
                           <table className="w-full text-sm">
                             <thead className="sticky top-0 bg-background">
                               <tr className="border-b border-foreground text-left">
@@ -322,6 +478,11 @@ export default function CollectionPage() {
                                 <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
                                   Constraints
                                 </th>
+                                {details && (
+                                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase min-w-[280px]">
+                                    Description (used by the AI)
+                                  </th>
+                                )}
                               </tr>
                             </thead>
                             <tbody>
@@ -367,10 +528,17 @@ export default function CollectionPage() {
                                       )}
                                     </div>
                                   </td>
+                                  {details && (
+                                    <ColumnDescriptionCell
+                                      info={details.columns.find((c) => c.name === col.name)}
+                                      onSave={(text) => saveDescription(details.name, col.name, text)}
+                                    />
+                                  )}
                                 </tr>
                               ))}
                             </tbody>
                           </table>
+                          </>
                         )}
                       </>
                     )}
@@ -447,5 +615,35 @@ export default function CollectionPage() {
         )}
       </motion.div>
     </div>
+  );
+}
+
+function ColumnDescriptionCell({
+  info,
+  onSave,
+}: {
+  info: ColumnDetails | undefined;
+  onSave: (text: string) => Promise<void>;
+}) {
+  if (!info) return <td className="px-4 py-3" />;
+  const facts = [
+    info.text_format,
+    info.sample_values.length
+      ? `e.g. ${info.sample_values.slice(0, 3).join(", ")}`
+      : null,
+  ].filter(Boolean);
+  return (
+    <td className="px-4 py-3 align-top">
+      <EditableDescription
+        value={info.description}
+        source={info.description_source}
+        onSave={onSave}
+      />
+      {facts.length > 0 && (
+        <p className="text-[11px] text-muted-foreground mt-1 truncate max-w-[420px]">
+          {facts.join(" · ")}
+        </p>
+      )}
+    </td>
   );
 }

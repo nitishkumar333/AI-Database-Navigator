@@ -38,11 +38,14 @@ from evaluation.dataset import (
     DEFAULT_DATASET, DIFFICULTIES, SPLITS_DIR, filter_examples, load_db_tables, load_examples,
     load_split, make_split,
 )
-from evaluation.db import create_bird_engine, disable_schema_cache, execute_sql
+from evaluation.db import SCHEMA_FORMATS, create_bird_engine, disable_schema_cache, execute_sql
 from evaluation.report import write_report
 from evaluation.runner import AgentEvaluator, RateLimitExhausted, RunOptions
 
 RESULTS_DIR = EVAL_DIR / "results"
+CACHE_DIR = EVAL_DIR / ".cache"
+# Values runs made before a config key existed implicitly used.
+_LEGACY_CONFIG = {"schema_format": "basic", "describe": False}
 PREDICTIONS = "predictions.jsonl"
 
 logger = logging.getLogger("evaluation")
@@ -103,6 +106,9 @@ def cmd_run(args) -> int:
     run_name = args.run_name or (
         f"{provider}-{re.sub(r'[^A-Za-z0-9.-]+', '-', model)}-{datetime.now():%Y%m%d-%H%M%S}"
     )
+    if args.describe and args.schema_format != "enriched":
+        print("--describe needs --schema-format enriched", file=sys.stderr)
+        return 2
     run_dir = RESULTS_DIR / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     pred_path = run_dir / PREDICTIONS
@@ -116,15 +122,19 @@ def cmd_run(args) -> int:
         "split": load_split(args.split)["name"] if args.split else None,
         "use_evidence": not args.no_evidence,
         "full_schema": args.full_schema,
+        "schema_format": args.schema_format,
+        "describe": args.describe,
         "float_precision": args.float_precision,
         "started_at": datetime.now().isoformat(timespec="seconds"),
     }
     if config_path.exists() and not args.fresh:
         previous = json.loads(config_path.read_text(encoding="utf-8"))
-        for key in ("provider", "model", "split", "use_evidence", "full_schema"):
-            if previous.get(key) != run_config[key]:
+        for key in ("provider", "model", "split", "use_evidence", "full_schema",
+                    "schema_format", "describe"):
+            before = previous.get(key, _LEGACY_CONFIG.get(key))
+            if before != run_config[key]:
                 print(
-                    f"Run '{run_name}' was started with {key}={previous.get(key)!r}, "
+                    f"Run '{run_name}' was started with {key}={before!r}, "
                     f"now {run_config[key]!r}. Use a new --run-name or --fresh.",
                     file=sys.stderr,
                 )
@@ -151,6 +161,10 @@ def cmd_run(args) -> int:
         RunOptions(
             use_evidence=not args.no_evidence,
             full_schema=args.full_schema,
+            schema_format=args.schema_format,
+            describe=args.describe,
+            descriptions_cache=CACHE_DIR / "descriptions" / (
+                re.sub(r"[^A-Za-z0-9.-]+", "-", f"{provider}-{model}") + ".json"),
             rpm=args.rpm,
             exec_timeout_ms=args.timeout * 1000,
             float_precision=args.float_precision,
@@ -384,6 +398,12 @@ def main() -> int:
     run.add_argument("--no-evidence", action="store_true", help="omit BIRD evidence hints")
     run.add_argument("--full-schema", action="store_true",
                      help="give the agent all 75 BIRD tables instead of the question's database")
+    run.add_argument("--schema-format", choices=SCHEMA_FORMATS, default="enriched",
+                     help="enriched = profiled schema (sample values, formats, inferred joins); "
+                          "basic = the pre-profiling format, for comparison")
+    run.add_argument("--describe", action="store_true",
+                     help="add LLM-written table/column descriptions (1 LLM call per table, "
+                          "cached in evaluation/.cache/)")
     run.add_argument("--float-precision", type=int, default=4)
     run.add_argument("--output-rows", type=int, default=100,
                      help="rows of gold/pred output stored per question (0 = all)")

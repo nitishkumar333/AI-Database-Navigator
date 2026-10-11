@@ -11,7 +11,7 @@ import math
 from collections import Counter
 
 from evaluation.linking import failure_category
-from evaluation.report import summarize
+from evaluation.report import schema_label, summarize
 
 _MAX_LISTED_IDS = 25
 
@@ -55,9 +55,9 @@ def compare_runs(runs: list[tuple[str, list[dict], dict]]) -> str:
         f"Compared on the **{len(common)} questions** scored in every run "
         f"(baseline: `{runs[0][0]}`).",
         "",
-        "| Run | Model | Evidence | Split | EX | EX 95% CI | EX (col-tol.) | Soft-F1 "
+        "| Run | Model | Evidence | Schema | Split | EX | EX 95% CI | EX (col-tol.) | Soft-F1 "
         "| Tables exact | Col. recall | Avg tokens | Avg LLM calls | Avg tool calls | p50 s |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for (name, _, config), s in zip(subsets, summaries):
         total = s["accuracy_by_difficulty"]["total"]
@@ -66,7 +66,7 @@ def compare_runs(runs: list[tuple[str, list[dict], dict]]) -> str:
         ci = total.get("ex_ci95")
         lines.append(
             f"| `{name}` | `{config.get('model')}` | {'on' if config.get('use_evidence') else 'off'} "
-            f"| {config.get('split') or '-'} | {_fmt(total['ex'])} "
+            f"| {schema_label(config)} | {config.get('split') or '-'} | {_fmt(total['ex'])} "
             f"| {f'{ci[0]:.1f}-{ci[1]:.1f}' if ci else '-'} | {_fmt(total['ex_column_tolerant'])} "
             f"| {_fmt(total['soft_f1'])} | {_fmt(link['tables_exact'])} | {_fmt(link['column_recall'])} "
             f"| {_fmt(beh.get('avg_tokens'))} | {_fmt(beh.get('avg_llm_calls'))} "

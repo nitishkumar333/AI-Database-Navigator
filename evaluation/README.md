@@ -54,6 +54,8 @@ Other useful options:
 | `--db-id X`, `--difficulty simple`, `--question-id 5` | pick specific questions |
 | `--model X` | use a different model |
 | `--no-evidence` | don't give the agent BIRD's hint text (closer to real users) |
+| `--schema-format basic` | the schema format from before profiling, to measure what profiling adds (default `enriched`) |
+| `--describe` | add LLM-written table/column descriptions, as production does. One LLM call per table, cached per model in `evaluation/.cache/descriptions/`, so each table is described once across runs |
 | `--output-rows N` | result rows saved per question (default 100, 0 = all) |
 
 ## Results
@@ -194,4 +196,5 @@ recover.
 |---|---|---|---:|---:|---:|---:|---:|---|
 | Baseline (single-shot agent) | _to run_ | off | | | | | | — |
 | Baseline (single-shot agent) | _to run_ | on | | | | | | — |
+| Phase 1: profiled schema + descriptions (`--describe`) | _to run_ | off | | | | | | |
 

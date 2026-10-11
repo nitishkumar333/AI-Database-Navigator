@@ -153,6 +153,12 @@ def _fmt(v) -> str:
     return "-" if v is None else f"{v:.2f}"
 
 
+def schema_label(run: dict) -> str:
+    """Runs from before the key existed used the basic format."""
+    label = run.get("schema_format", "basic")
+    return label + (" + descriptions" if run.get("describe") else "")
+
+
 def _fmt_ci(ci) -> str:
     return "-" if not ci else f"{ci[0]:.1f}-{ci[1]:.1f}"
 
@@ -168,7 +174,8 @@ def render_markdown(summary: dict) -> str:
         f"- **Dataset:** {run.get('dataset')} ({summary['questions']} questions scored)"
         + (f" | **Split:** `{run['split']}`" if run.get("split") else ""),
         f"- **Evidence hints:** {'on' if run.get('use_evidence') else 'off'}  "
-        f"| **Schema scope:** {'all BIRD tables' if run.get('full_schema') else 'per-database'}",
+        f"| **Schema scope:** {'all BIRD tables' if run.get('full_schema') else 'per-database'}  "
+        f"| **Schema format:** {schema_label(run)}",
         f"- **Started:** {run.get('started_at')}",
         "",
         "## Accuracy (%)",
