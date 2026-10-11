@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
-    LLM_PROVIDER: str = "gemini"  # "gemini" | "groq"
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-flash"  # or "deepseek-v4-pro"
+    DEEPSEEK_THINKING: bool = False  # thinking mode: slower, ignores temperature
+    LLM_PROVIDER: str = "gemini"  # "gemini" | "groq" | "deepseek"
     # "production": full agent loop (SQL tool -> natural-language answer).
     # "evaluation": stop as soon as the SQL tool succeeds, skipping the
     #               final answer-generation LLM call (saves tokens in evals).
