@@ -1,54 +1,11 @@
 # SQL Agent Evaluation
 
 Tests how well the SQL agent writes SQL. It asks the agent questions from the
-Arcwise-Plat dataset (498 questions on the 11 BIRD databases), runs the agent's
-SQL and the correct ("gold") SQL, and checks whether both return the same rows.
+BIRD mini-dev dataset (500 questions), runs the agent's SQL and the correct
+("gold") SQL, and checks whether both return the same rows.
 
 Only the SQL is tested, not the final text answer. The agent stops as soon as
 its query works, so no tokens are spent on writing an answer.
-
-## Dataset
-
-[`data/arcwise_plat_postgresql.csv`](data/arcwise_plat_postgresql.csv) has the
-same columns as BIRD (`question_id, db_id, question, evidence, SQL, difficulty`).
-
-- **Source.** Arcwise-Plat ("full" variant) from Jin et al., *Pervasive Annotation
-  Errors Break Text-to-SQL Benchmarks and Leaderboards* (arXiv 2601.08778;
-  <https://github.com/uiuc-kang-lab/text_to_sql_benchmarks>).
-  - It is BIRD Mini-Dev with corrected gold SQL, questions and evidence. The
-    authors found annotation errors in 52.8% of the original Mini-Dev examples.
-  - BIRD is licensed CC BY-SA 4.0.
-  - q119 and q120 are dropped, as in Arcwise-Plat.
-  - Arcwise-Plat has no difficulty labels, so `difficulty` is copied from BIRD
-    Mini-Dev (the July 2025 release) by `question_id`.
-- **Ported from SQLite to PostgreSQL, and every query verified.** Each gold
-  query was run as published on the BIRD SQLite databases (`minidev_0703`
-  package), then run ported on the Postgres `bird` database, and the outputs
-  were compared: same rows, duplicates counted, order ignored.
-  - 477 of 498 outputs are identical.
-  - The other 21 differ only beyond the 6th significant digit, because Postgres
-    stores those columns as `real` (float4) while SQLite uses 8-byte doubles.
-  - 484 queries converted automatically and 14 were ported by hand. The
-    conversion keeps SQLite semantics:
-    - `CAST(... AS REAL)` becomes `DOUBLE PRECISION`;
-    - `real` columns are summed and averaged as `double precision`;
-    - `SUM(condition)` becomes `SUM(CASE WHEN ...)`;
-    - `LIKE` on date columns casts them to text;
-    - text columns compared with numbers compare as text;
-    - `SUBSTR(x, -n)` becomes `RIGHT(x, n)`;
-    - loose `GROUP BY` lists are completed;
-    - `date(x, '+N years')` becomes `x + INTERVAL 'N years'`.
-- **Sessions run in UTC+8.** The Postgres `bird` dump stores the
-  `codebase_community` timestamps as `timestamptz` shifted by −8 hours from the
-  original values. `create_bird_engine` therefore sets `timezone=Asia/Shanghai`,
-  so the times in questions (for example "20:29:39 on 2014/4/23") mean the same
-  thing as in the data. Any other client of the `bird` database needs the same
-  setting, or `ALTER DATABASE bird SET timezone = 'Asia/Shanghai'`.
-- **12 answers depend on today's date.** Questions about ages or "now"
-  (q194, q898, q1031, q1156, q1227, q1229, q1232, q1235, q1239, q1242, q1243,
-  q1257) use `CURRENT_DATE` or `CURRENT_TIMESTAMP`. Gold and predicted SQL run
-  at the same moment, so scoring stays consistent, but these gold outputs change
-  over time.
 
 ## Setup (once)
 
@@ -73,7 +30,7 @@ backend/venv/Scripts/python -m evaluation run --provider groq --split smoke30 --
 # the frozen 150-question benchmark (use before merging a change)
 backend/venv/Scripts/python -m evaluation run --provider groq --split dev150 --rpm 20 --run-name my-change-dev150
 
-# all 498 questions with Groq, max 10 requests per minute
+# all 500 questions with Groq, max 10 requests per minute
 backend/venv/Scripts/python -m evaluation run --provider groq --rpm 10 --run-name groq-full
 
 # re-score a finished run without calling the LLM
@@ -96,7 +53,7 @@ Other useful options:
 | `--sample N` | a random stratified sample (changes with `--seed`; prefer `--split` for comparisons) |
 | `--db-id X`, `--difficulty simple`, `--question-id 5` | pick specific questions |
 | `--model X` | use a different model |
-| `--no-evidence` | don't give the agent the dataset's hint text (closer to real users) |
+| `--no-evidence` | don't give the agent BIRD's hint text (closer to real users) |
 | `--schema-format basic` | the schema format from before profiling, to measure what profiling adds (default `enriched`) |
 | `--describe` | add LLM-written table/column descriptions, as production does. One LLM call per table, cached per model in `evaluation/.cache/descriptions/`, so each table is described once across runs |
 | `--output-rows N` | result rows saved per question (default 100, 0 = all) |
@@ -231,7 +188,7 @@ several times more per question, so check your provider's daily limits first.
 ## Ablation log
 
 One row per agent change that was merged, all on `dev150` with the same model.
-"Evidence on" is the dataset's hint text, which plays the role of a business glossary.
+"Evidence on" is BIRD's hint text, which plays the role of a business glossary.
 The gap between the two baseline rows estimates how much a semantic layer could
 recover.
 

@@ -2,7 +2,7 @@
   "name": "dev150",
   "size": 150,
   "seed": 42,
-  "dataset": "arcwise_plat_postgresql.csv",
+  "dataset": "bird_minidev_postgresql.csv",
   "parent_split": null,
   "stratified_by": [
     "db_id",

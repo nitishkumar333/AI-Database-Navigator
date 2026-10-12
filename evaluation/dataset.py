@@ -1,5 +1,4 @@
-"""Loading and filtering the Arcwise-Plat dataset (BIRD Mini-Dev with corrected
-questions, evidence and gold SQL), ported to PostgreSQL."""
+"""Loading and filtering the BIRD mini-dev (PostgreSQL) dataset."""
 import csv
 import json
 import random
@@ -8,7 +7,7 @@ from pathlib import Path
 
 from evaluation.bootstrap import EVAL_DIR
 
-DEFAULT_DATASET = EVAL_DIR / "data" / "arcwise_plat_postgresql.csv"
+DEFAULT_DATASET = EVAL_DIR / "data" / "bird_minidev_postgresql.csv"
 DB_TABLES_FILE = EVAL_DIR / "data" / "bird_db_tables.json"
 SPLITS_DIR = EVAL_DIR / "data" / "splits"
 DIFFICULTIES = ("simple", "moderate", "challenging")

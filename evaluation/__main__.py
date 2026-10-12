@@ -1,5 +1,5 @@
 """
-Offline evaluation of the SQL agent on Arcwise-Plat (corrected BIRD Mini-Dev, PostgreSQL).
+Offline evaluation of the SQL agent on BIRD mini-dev (PostgreSQL).
 
     python -m evaluation check-gold --split dev150  # sanity-check dataset + DB, no LLM calls
     python -m evaluation run --provider groq --split smoke30
