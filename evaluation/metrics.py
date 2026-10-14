@@ -1,14 +1,16 @@
 """
 Result-comparison metrics.
 
+- column_tolerant_match: the main correctness criterion ("accuracy"). Passes
+  when some projection of the predicted columns (any order) gives exactly the
+  gold row set, i.e. the correct answer is present in the output. Extra
+  columns (image URLs, names next to ids, helper values) and a different
+  column order don't make an answer wrong; missing, extra or wrong rows do.
 - execution_accuracy: BIRD's official EX, i.e. set(pred_rows) == set(gold_rows).
-  Row order and duplicates are ignored; column order and count matter.
+  Row order and duplicates are ignored; column order and count matter. Kept
+  as a secondary number for comparison with published BIRD results.
 - soft_f1: BIRD mini-dev's Soft-F1, a partial-credit score that compares
   values per row and tolerates extra or missing columns.
-- column_tolerant_match: our addition. Passes when some projection of the
-  predicted columns (any order) gives exactly the gold row set. It tolerates
-  the extra columns the production prompt asks for (image URLs, helper
-  aliases), which strict EX would count as wrong.
 
 All metrics run on normalized values, so Postgres type differences don't
 count as mismatches. For example, NUMERIC 0.5 and REAL 0.5 compare equal.

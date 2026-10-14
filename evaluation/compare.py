@@ -55,7 +55,7 @@ def compare_runs(runs: list[tuple[str, list[dict], dict]]) -> str:
         f"Compared on the **{len(common)} questions** scored in every run "
         f"(baseline: `{runs[0][0]}`).",
         "",
-        "| Run | Model | Evidence | Schema | Split | EX | EX 95% CI | EX (col-tol.) | Soft-F1 "
+        "| Run | Model | Evidence | Schema | Split | Accuracy | 95% CI | EX strict | Soft-F1 "
         "| Tables exact | Col. recall | Avg tokens | Avg LLM calls | Avg tool calls | p50 s |",
         "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
@@ -63,21 +63,21 @@ def compare_runs(runs: list[tuple[str, list[dict], dict]]) -> str:
         total = s["accuracy_by_difficulty"]["total"]
         link = s["schema_linking"]
         beh = s["behaviour_by_difficulty"]["total"]
-        ci = total.get("ex_ci95")
+        ci = total.get("accuracy_ci95")
         lines.append(
             f"| `{name}` | `{config.get('model')}` | {'on' if config.get('use_evidence') else 'off'} "
-            f"| {schema_label(config)} | {config.get('split') or '-'} | {_fmt(total['ex'])} "
-            f"| {f'{ci[0]:.1f}-{ci[1]:.1f}' if ci else '-'} | {_fmt(total['ex_column_tolerant'])} "
+            f"| {schema_label(config)} | {config.get('split') or '-'} | {_fmt(total['accuracy'])} "
+            f"| {f'{ci[0]:.1f}-{ci[1]:.1f}' if ci else '-'} | {_fmt(total['ex'])} "
             f"| {_fmt(total['soft_f1'])} | {_fmt(link['tables_exact'])} | {_fmt(link['column_recall'])} "
             f"| {_fmt(beh.get('avg_tokens'))} | {_fmt(beh.get('avg_llm_calls'))} "
             f"| {_fmt(beh.get('avg_tool_calls'))} | {_fmt(beh.get('latency_p50'))} |"
         )
 
-    lines += ["", "## EX by difficulty", "", "| Run | simple | moderate | challenging |", "|---|---:|---:|---:|"]
+    lines += ["", "## Accuracy by difficulty", "", "| Run | simple | moderate | challenging |", "|---|---:|---:|---:|"]
     for (name, _, _), s in zip(subsets, summaries):
         d = s["accuracy_by_difficulty"]
         lines.append(f"| `{name}` | " + " | ".join(
-            f"{_fmt(d[k]['ex'])} (n={d[k]['count']})" for k in ("simple", "moderate", "challenging")
+            f"{_fmt(d[k]['accuracy'])} (n={d[k]['count']})" for k in ("simple", "moderate", "challenging")
         ) + " |")
 
     base_name, base_records, _ = subsets[0]
