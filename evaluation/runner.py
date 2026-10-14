@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from sqlalchemy.engine import Engine
 
-from app.services.schema_index.describer import describe_table
+from app.services.schema_index.describer import _is_rate_limit, describe_table
 from app.services.schema_index.profiler import SchemaProfile, profile_database
 from app.services.sql_agent import AGENT_MODE_EVALUATION, SQLAgent
 from evaluation import metrics
@@ -37,6 +37,19 @@ def _provider_retry_after(message: str) -> float | None:
         units = {"h": 3600, "m": 60, "s": 1}
         return sum(float(n) * units[u] for n, u in re.findall(r"(\d+(?:\.\d+)?)([hms])", m.group(1)))
     return None
+
+
+def _backoff_delay(opts: "RunOptions", attempt: int, provider_error: str) -> float:
+    """Seconds to sleep before retry `attempt + 1` of a rate-limited call.
+    Raises RateLimitExhausted when retrying is pointless."""
+    retry_after = _provider_retry_after(provider_error)
+    if retry_after and retry_after > _MAX_BACKOFF_S:
+        # e.g. a daily quota: no point sleeping through it.
+        raise RateLimitExhausted(
+            f"provider asks to wait {retry_after / 3600:.1f}h (quota exhausted?)")
+    if attempt == opts.max_rate_limit_retries:
+        raise RateLimitExhausted(provider_error[:300])
+    return max(min(opts.backoff_base_s * 2 ** attempt, _MAX_BACKOFF_S), retry_after or 0)
 
 
 class RateLimitExhausted(RuntimeError):
@@ -68,8 +81,8 @@ class RunOptions:
     use_evidence: bool = True
     full_schema: bool = False
     schema_format: str = "enriched"       # "enriched" (profiled) | "basic" (pre-Phase-1 format)
-    describe: bool = False                # add LLM table/column descriptions (enriched only)
-    descriptions_cache: Path | None = None  # JSON cache so descriptions are generated once
+    describe: bool = True                 # add LLM table/column descriptions (enriched only)
+    descriptions_cache: Path | None = None  # JSON file; each table is described once, ever
     rpm: float | None = None
     max_rate_limit_retries: int = 6
     backoff_base_s: float = 15.0
@@ -102,43 +115,88 @@ class AgentEvaluator:
         return self.db_tables[db_id]
 
     def _schema_for(self, tables: list[str]) -> str:
+        """Same schema text the backend builds (schema_index.service.build_schema_context):
+        the profile rendered with its descriptions, plus the basic format for
+        any table the profile doesn't know."""
         if self.opts.schema_format == "basic":
             return build_schema_context(self.engine, tables)
+        profile = self.profile
+        descriptions = self._descriptions_for(tables) if self.opts.describe else None
+        context = build_schema_context(self.engine, tables, profile=profile,
+                                       descriptions=descriptions)
+        missing = [t for t in tables if t not in profile.tables]
+        if missing:
+            context = "\n\n".join(p for p in (context, build_schema_context(self.engine, missing)) if p)
+        return context
+
+    @property
+    def profile(self) -> SchemaProfile:
         if self._profile is None:
             self._profile = profile_database(self.engine)
-        descriptions = self._describe(tables) if self.opts.describe else None
-        return build_schema_context(self.engine, tables, profile=self._profile,
-                                    descriptions=descriptions)
+        return self._profile
 
-    def _describe(self, tables: list[str]) -> dict[str, dict]:
-        """LLM descriptions for `tables`, cached on disk per table structure,
-        so a model describes each BIRD table once across all runs."""
-        path = self.opts.descriptions_cache
+    def _load_descriptions(self) -> dict[str, dict]:
         if self._descriptions is None:
+            path = self.opts.descriptions_cache
             self._descriptions = (
                 json.loads(path.read_text(encoding="utf-8")) if path and path.exists() else {})
-        out = {}
-        for table in tables:
-            current = self._profile.tables.get(table)
-            if current is None:
-                continue
-            cached = self._descriptions.get(table)
-            if not cached or cached.get("structure_hash") != current.structure_hash:
-                self.limiter.wait()
-                try:
-                    docs = describe_table(self.llm, self._profile, table)
-                except Exception as exc:
-                    logger.warning("Could not describe %s (continuing without): %s", table, exc)
-                    continue
-                cached = {**docs, "structure_hash": current.structure_hash}
-                self._descriptions[table] = cached
-                if path:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(json.dumps(self._descriptions, indent=1, ensure_ascii=False),
-                                    encoding="utf-8")
-            out[table] = {"description": cached.get("description"),
-                          "columns": cached.get("columns", {})}
-        return out
+        return self._descriptions
+
+    def _is_described(self, table: str) -> bool:
+        cached = self._load_descriptions().get(table)
+        return bool(cached) and cached.get("structure_hash") == self.profile.tables[table].structure_hash
+
+    def undescribed_tables(self) -> list[str]:
+        if self.opts.schema_format != "enriched" or not self.opts.describe:
+            return []
+        return sorted(t for t in self.profile.tables if not self._is_described(t))
+
+    def prepare_descriptions(self, progress=None) -> None:
+        """Describe every profiled table that isn't in the cache yet, the way
+        the backend does after profiling a connection: one describe_table()
+        call per table. The cache file is saved after each table, so the BIRD
+        tables are described once and then reused by every later run, whatever
+        the model. Stops at the first table that can't be described (out of
+        credit, no connection, ...) so no run ever uses a partial set."""
+        for table in self.undescribed_tables():
+            docs = self._describe_with_retry(table)
+            self._descriptions[table] = {
+                **docs, "structure_hash": self.profile.tables[table].structure_hash}
+            self._save_descriptions()
+            if progress:
+                progress(table)
+
+    def _describe_with_retry(self, table: str) -> dict:
+        for attempt in range(self.opts.max_rate_limit_retries + 1):
+            self.limiter.wait()
+            try:
+                return describe_table(self.llm, self.profile, table)
+            except Exception as exc:
+                if not _is_rate_limit(exc):
+                    raise
+                delay = _backoff_delay(self.opts, attempt, str(exc))
+                logger.warning("Rate limited describing %s; retrying in %.0fs", table, delay)
+                time.sleep(delay)
+        raise AssertionError("unreachable")
+
+    def _save_descriptions(self) -> None:
+        path = self.opts.descriptions_cache
+        if path:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            ordered = dict(sorted(self._descriptions.items()))
+            path.write_text(json.dumps(ordered, indent=1, ensure_ascii=False) + "\n",
+                            encoding="utf-8")
+
+    def _descriptions_for(self, tables: list[str]) -> dict[str, dict]:
+        """Cached descriptions for `tables`, in the shape the backend loads
+        them from its annotations table (schema_index.service.load_descriptions).
+        Tables without an up-to-date description are left out, as in production
+        while a table is still undescribed."""
+        cache = self._load_descriptions()
+        return {
+            t: {"description": cache[t].get("description"), "columns": cache[t].get("columns", {})}
+            for t in tables if t in self.profile.tables and self._is_described(t)
+        }
 
     def _agent_for(self, db_id: str) -> SQLAgent:
         key = "__all__" if self.opts.full_schema else db_id
@@ -164,19 +222,7 @@ class AgentEvaluator:
                 # run_query turns provider rate-limit errors into a 429.
                 if exc.status_code != 429:
                     raise
-                provider_error = str(exc.__context__ or exc)
-                retry_after = _provider_retry_after(provider_error)
-                if retry_after and retry_after > _MAX_BACKOFF_S:
-                    # e.g. a daily quota: no point sleeping through it.
-                    raise RateLimitExhausted(
-                        f"provider asks to wait {retry_after / 3600:.1f}h (quota exhausted?)"
-                    ) from exc
-                if attempt == self.opts.max_rate_limit_retries:
-                    raise RateLimitExhausted(provider_error[:300]) from exc
-                delay = max(
-                    min(self.opts.backoff_base_s * 2 ** attempt, _MAX_BACKOFF_S),
-                    retry_after or 0,
-                )
+                delay = _backoff_delay(self.opts, attempt, str(exc.__context__ or exc))
                 logger.warning("Rate limited on q%s; retrying in %.0fs", ex.question_id, delay)
                 time.sleep(delay)
         latency = time.perf_counter() - start

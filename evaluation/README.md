@@ -55,7 +55,7 @@ Other useful options:
 | `--model X` | use a different model |
 | `--no-evidence` | don't give the agent BIRD's hint text (closer to real users) |
 | `--schema-format basic` | the schema format from before profiling, to measure what profiling adds (default `enriched`) |
-| `--describe` | add LLM-written table/column descriptions, as production does. One LLM call per table, cached per model in `evaluation/.cache/descriptions/`, so each table is described once across runs |
+| `--no-describe` | leave out the LLM-written table/column descriptions. By default the agent gets the same schema as in production, descriptions included. They are generated the way the backend does (one LLM call per table, with the run's model) the first time a table is missing, then saved in `data/bird_descriptions.json` and reused by every later run, whatever the model. Commit that file once it's complete |
 | `--output-rows N` | result rows saved per question (default 100, 0 = all) |
 
 ## Results
@@ -196,5 +196,5 @@ recover.
 |---|---|---|---:|---:|---:|---:|---:|---|
 | Baseline (single-shot agent) | _to run_ | off | | | | | | — |
 | Baseline (single-shot agent) | _to run_ | on | | | | | | — |
-| Phase 1: profiled schema + descriptions (`--describe`) | _to run_ | off | | | | | | |
+| Phase 1: profiled schema + descriptions (default) | _to run_ | off | | | | | | |
 

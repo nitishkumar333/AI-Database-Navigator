@@ -43,7 +43,9 @@ from evaluation.report import write_report
 from evaluation.runner import AgentEvaluator, RateLimitExhausted, RunOptions
 
 RESULTS_DIR = EVAL_DIR / "results"
-CACHE_DIR = EVAL_DIR / ".cache"
+# LLM table/column descriptions of the BIRD tables. The dataset never changes,
+# so they are generated once (by whichever model runs first) and committed.
+DESCRIPTIONS_PATH = EVAL_DIR / "data" / "bird_descriptions.json"
 # Values runs made before a config key existed implicitly used.
 _LEGACY_CONFIG = {"schema_format": "basic", "describe": False}
 PREDICTIONS = "predictions.jsonl"
@@ -106,9 +108,7 @@ def cmd_run(args) -> int:
     run_name = args.run_name or (
         f"{provider}-{re.sub(r'[^A-Za-z0-9.-]+', '-', model)}-{datetime.now():%Y%m%d-%H%M%S}"
     )
-    if args.describe and args.schema_format != "enriched":
-        print("--describe needs --schema-format enriched", file=sys.stderr)
-        return 2
+    describe = args.schema_format == "enriched" and not args.no_describe
     run_dir = RESULTS_DIR / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     pred_path = run_dir / PREDICTIONS
@@ -124,7 +124,7 @@ def cmd_run(args) -> int:
         "use_evidence": not args.no_evidence,
         "full_schema": args.full_schema,
         "schema_format": args.schema_format,
-        "describe": args.describe,
+        "describe": describe,
         "float_precision": args.float_precision,
         "started_at": datetime.now().isoformat(timespec="seconds"),
     }
@@ -163,15 +163,17 @@ def cmd_run(args) -> int:
             use_evidence=not args.no_evidence,
             full_schema=args.full_schema,
             schema_format=args.schema_format,
-            describe=args.describe,
-            descriptions_cache=CACHE_DIR / "descriptions" / (
-                re.sub(r"[^A-Za-z0-9.-]+", "-", f"{provider}-{model}") + ".json"),
+            describe=describe,
+            descriptions_cache=DESCRIPTIONS_PATH,
             rpm=args.rpm,
             exec_timeout_ms=args.timeout * 1000,
             float_precision=args.float_precision,
             max_output_rows=args.output_rows,
         ),
     )
+
+    if not _prepare_descriptions(evaluator):
+        return 1
 
     write_lock = threading.Lock()
     stop = threading.Event()
@@ -234,6 +236,25 @@ def cmd_run(args) -> int:
         )
         return 1
     return 0
+
+
+def _prepare_descriptions(evaluator: AgentEvaluator) -> bool:
+    """Describe any BIRD table missing from the descriptions file before the
+    first question, so every question sees the same schema text."""
+    pending = evaluator.undescribed_tables()
+    if not pending:
+        return True
+    try:
+        with tqdm(total=len(pending), unit="table", desc="Describing tables (one-time)") as bar:
+            evaluator.prepare_descriptions(progress=lambda _table: bar.update(1))
+    except Exception as exc:
+        reason = (f"rate limit not recovering ({exc})" if isinstance(exc, RateLimitExhausted)
+                  else str(exc)[:300])
+        print(f"\nStopped while describing tables: {reason}\n"
+              f"Tables described so far are saved; run the same command again to continue.",
+              file=sys.stderr)
+        return False
+    return True
 
 
 # ── score ────────────────────────────────────────────────────────────────────
@@ -402,9 +423,10 @@ def main() -> int:
     run.add_argument("--schema-format", choices=SCHEMA_FORMATS, default="enriched",
                      help="enriched = profiled schema (sample values, formats, inferred joins); "
                           "basic = the pre-profiling format, for comparison")
-    run.add_argument("--describe", action="store_true",
-                     help="add LLM-written table/column descriptions (1 LLM call per table, "
-                          "cached in evaluation/.cache/)")
+    run.add_argument("--no-describe", action="store_true",
+                     help="leave out the LLM-written table/column descriptions production adds "
+                          "(by default they are generated once per table, 1 LLM call each, and "
+                          "kept in evaluation/data/bird_descriptions.json)")
     run.add_argument("--float-precision", type=int, default=4)
     run.add_argument("--output-rows", type=int, default=100,
                      help="rows of gold/pred output stored per question (0 = all)")
