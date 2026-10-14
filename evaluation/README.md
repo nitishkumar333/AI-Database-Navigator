@@ -61,6 +61,32 @@ Other useful options:
 | `--schema-format basic` | the schema format from before profiling, to measure what profiling adds (default `enriched`) |
 | `--no-describe` | leave out the LLM-written table/column descriptions. By default the agent gets the same schema as in production, descriptions included. They are generated the way the backend does (one LLM call per table, with the run's model) the first time a table is missing, then saved in `data/bird_descriptions.json` and reused by every later run, whatever the model. Commit that file once it's complete |
 | `--output-rows N` | result rows saved per question (default 100, 0 = all) |
+| `--full-schema` | give the agent all 75 BIRD tables instead of the question's database. That schema (~90k chars) is over `AGENT_FULL_SCHEMA_MAX_CHARS`, so the prompt holds the table list and **schema linking** adds the tables retrieved for each question: the way to test retrieval on BIRD, whose single databases are small enough to go in the prompt whole |
+| `--no-retrieval` | search the schema by keywords over the profile instead of the retrieval index (the pre-Phase-3 behaviour), for comparison |
+
+## Schema retrieval
+
+Before the first question, a run builds or updates the retrieval index of the
+BIRD tables in the app database (`eval:bird:described`; needs pgvector there,
+see the backend docs). With `JINA_API_KEY` set, every table and column
+document is embedded once (~870 short texts), later runs reuse the vectors;
+without it the index uses trigram + value matching. `config.json` records the
+method as `retrieval` (`hybrid (model, dims)`, `trigram` or `keyword`).
+
+Schema linking can be measured without the agent, so it costs no LLM tokens
+(with Jina: one query embedding per question):
+
+```bash
+# are the gold SQL's tables among the tables linked into the prompt?
+backend/venv/Scripts/python -m evaluation link-recall --split dev150 --full-schema --no-evidence
+backend/venv/Scripts/python -m evaluation link-recall --split dev150 --full-schema --no-retrieval --show-misses 20
+```
+
+It prints, per difficulty, the share of questions with **every** gold table
+linked, the share of gold tables linked, the average number of tables linked,
+how many come from other BIRD databases, and the prompt text added. In a run
+with `--full-schema`, the report's schema-linking table shows the same
+`linked_recall` per question, next to `context_recall` (linked + described).
 
 ## Results
 

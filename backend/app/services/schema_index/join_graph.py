@@ -52,6 +52,28 @@ class JoinGraph:
                 queue.append((neighbour, hops + 1))
         return None
 
+    def bridge_tables(self, tables: list[str], max_hops: int = 3) -> list[str]:
+        """Tables that connect `tables` to each other on the foreign-key graph
+        (an approximate Steiner tree): each table, in order, joins the tree
+        built so far by its shortest path to any table already in it."""
+        tree: list[str] = tables[:1]
+        bridges: list[str] = []
+        for table in tables[1:]:
+            if table in tree:
+                continue
+            best = None
+            for node in tree:
+                path = self.shortest_path(table, node, max_hops)
+                if path is not None and (best is None or len(path) < len(best)):
+                    best = path
+            tree.append(table)
+            for rel in best or []:
+                for t in (rel.from_table, rel.to_table):
+                    if t not in tree:
+                        tree.append(t)
+                        bridges.append(t)
+        return bridges
+
     def describe_paths(self, tables: list[str], max_pairs: int = 15) -> list[str]:
         """One line per pair of `tables`: the join conditions that connect
         them, including any bridge tables on the way."""

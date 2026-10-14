@@ -170,7 +170,8 @@ def search_schema(ctx: AgentContext, query: str) -> tuple[str, dict]:
         return (f"No tables or columns match '{query}'. Tables available: {names}",
                 {"kind": SEARCH_SCHEMA, "success": True, "tables": []})
     lines = []
-    for table, _, hits in results:
+    for match in results:
+        table = match.table
         head = f"TABLE {sql_ident(table.name)}"
         facts = []
         if table.row_count is not None:
@@ -178,15 +179,21 @@ def search_schema(ctx: AgentContext, query: str) -> tuple[str, dict]:
         if view.table_description(table):
             facts.append(_clip(view.table_description(table), 120))
         lines.append(head + (" -- " + ". ".join(facts) if facts else ""))
-        for col, _ in hits:
+        for col, _ in match.columns:
             line = f"  {sql_ident(col.name)} {col.data_type}"
+            notes = []
             description = view.column_description(table, col)
             if description:
-                line += " -- " + _clip(description, 100)
+                notes.append(_clip(description, 100))
+            if match.values.get(col.name):
+                notes.append("matching stored values: " + ", ".join(
+                    "'" + v.replace("'", "''") + "'" for v in match.values[col.name][:3]))
+            if notes:
+                line += " -- " + "; ".join(notes)
             lines.append(line)
     lines.append("Use describe_tables for full column details and join paths.")
-    return "\n".join(lines), {"kind": SEARCH_SCHEMA, "success": True,
-                              "tables": [t.name for t, _, _ in results]}
+    return "\n".join(lines), {"kind": SEARCH_SCHEMA, "success": True, "method": view.search_method,
+                              "tables": [m.table.name for m in results]}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -264,7 +271,21 @@ def find_values(ctx: AgentContext, text: str, column: str | None = None) -> tupl
             if low in v or difflib.SequenceMatcher(None, low, v).ratio() >= 0.85:
                 found.setdefault((table.name, col.name), []).append(value)
 
-    # 2. Live search on columns whose values the statistics don't fully cover.
+    # 2. The retrieval index: every value of low-cardinality text columns (fuzzy match).
+    if view.index is not None:
+        wanted = {(t.name, c.name) for t, c in targets}
+        try:
+            indexed = view.index.find_values(needle, sorted({t for t, _ in wanted}))
+        except Exception as exc:
+            logger.info("Value index lookup failed: %s", exc)
+            indexed = []
+        for table_name, col_name, value in indexed:
+            if (table_name, col_name) in wanted:
+                existing = found.setdefault((table_name, col_name), [])
+                if value not in existing:
+                    existing.append(value)
+
+    # 3. Live search on columns whose values the statistics don't fully cover.
     def complete(col) -> bool:
         return (col.sample_coverage or 0) >= 0.999
 

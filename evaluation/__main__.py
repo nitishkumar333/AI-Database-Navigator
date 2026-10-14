@@ -6,6 +6,7 @@ Offline evaluation of the SQL agent on BIRD mini-dev (PostgreSQL).
     python -m evaluation run --run-name my-run      # resumes an interrupted run
     python -m evaluation score --run-name my-run    # re-score without LLM calls
     python -m evaluation compare baseline-run new-run   # paired comparison, no LLM calls
+    python -m evaluation link-recall --split dev150 --full-schema   # schema linking, no LLM calls
     python -m evaluation make-split --name dev150 --size 150   # freeze a question set
 
 Run from the repository root with the backend virtualenv.
@@ -48,7 +49,8 @@ RESULTS_DIR = EVAL_DIR / "results"
 DESCRIPTIONS_PATH = EVAL_DIR / "data" / "bird_descriptions.json"
 # Values runs made before a config key existed implicitly used.
 # Values for runs from before a key existed.
-_LEGACY_CONFIG = {"schema_format": "basic", "describe": False, "schema_prompt": "full"}
+_LEGACY_CONFIG = {"schema_format": "basic", "describe": False, "schema_prompt": "full",
+                  "retrieval": "keyword"}
 PREDICTIONS = "predictions.jsonl"
 
 logger = logging.getLogger("evaluation")
@@ -170,6 +172,7 @@ def cmd_run(args) -> int:
             schema_format=args.schema_format,
             describe=describe,
             descriptions_cache=DESCRIPTIONS_PATH,
+            retrieval=not args.no_retrieval,
             rpm=args.rpm,
             exec_timeout_ms=args.timeout * 1000,
             float_precision=args.float_precision,
@@ -179,6 +182,15 @@ def cmd_run(args) -> int:
 
     if not _prepare_descriptions(evaluator):
         return 1
+    retrieval = _prepare_index(evaluator)
+    if config_path.exists() and not args.fresh:
+        before = json.loads(config_path.read_text(encoding="utf-8")).get("retrieval")
+        if before is not None and before != retrieval and pred_path.exists() and done:
+            print(f"Run '{run_name}' was started with retrieval={before!r}, now {retrieval!r}. "
+                  "Use a new --run-name or --fresh.", file=sys.stderr)
+            return 2
+    run_config["retrieval"] = retrieval
+    config_path.write_text(json.dumps(run_config, indent=2), encoding="utf-8")
 
     write_lock = threading.Lock()
     stop = threading.Event()
@@ -260,6 +272,95 @@ def _prepare_descriptions(evaluator: AgentEvaluator) -> bool:
               file=sys.stderr)
         return False
     return True
+
+
+def _prepare_index(evaluator: AgentEvaluator) -> str:
+    """Build or update the BIRD retrieval index (first time: embeds every
+    table and column document; later runs reuse it). Returns the method label
+    stored in the run config, e.g. "hybrid (jina-embeddings-v5-text-small)"."""
+    print("Updating the schema retrieval index...", file=sys.stderr)
+    method = evaluator.prepare_index()
+    if method == "hybrid":
+        settings = get_settings()
+        method = f"hybrid ({settings.JINA_EMBEDDING_MODEL}, {settings.EMBEDDING_DIM}d)"
+    print(f"Schema retrieval: {method}", file=sys.stderr)
+    return method
+
+
+# ── link-recall ──────────────────────────────────────────────────────────────
+
+def cmd_link_recall(args) -> int:
+    """Schema linking quality without the agent: for each question, are the
+    gold SQL's tables among the tables linked into the prompt? Uses only the
+    retrieval index (and one query embedding per question), never an LLM."""
+    settings = get_settings()
+    engine = create_bird_engine(_bird_db_url())
+    disable_schema_cache()
+    evaluator = AgentEvaluator(
+        engine, llm=None, db_tables=load_db_tables(),
+        opts=RunOptions(use_evidence=not args.no_evidence, full_schema=args.full_schema,
+                        describe=not args.no_describe, descriptions_cache=DESCRIPTIONS_PATH,
+                        retrieval=not args.no_retrieval),
+    )
+    if evaluator.undescribed_tables():
+        print("Some BIRD tables have no descriptions yet; run an evaluation first "
+              "(or pass --no-describe).", file=sys.stderr)
+        return 2
+    method = _prepare_index(evaluator)
+    max_tables = args.max_tables or settings.SCHEMA_LINK_MAX_TABLES
+    max_chars = args.max_chars or settings.SCHEMA_LINK_MAX_CHARS
+
+    examples = _select_examples(args)
+    rows = []
+    for ex in tqdm(examples, unit="q"):
+        refs = evaluator.linker.references(ex.gold_sql)
+        if refs is None:
+            continue
+        result = evaluator.link(ex, max_tables, max_chars)
+        linked = {t.lower() for t in (result.all_tables if result else [])}
+        own = {t.lower() for t in evaluator.db_tables[ex.db_id]}
+        rows.append({
+            "question_id": ex.question_id, "db_id": ex.db_id, "difficulty": ex.difficulty,
+            "gold": sorted(refs.tables), "linked": sorted(linked),
+            "recall": len(refs.tables & linked) / len(refs.tables) if refs.tables else 1.0,
+            "all": refs.tables <= linked,
+            "other_db": len(linked - own),
+            "chars": len(result.text) if result else 0,
+        })
+    if not rows:
+        print("No questions selected.", file=sys.stderr)
+        return 2
+
+    def pct(values) -> str:
+        values = list(values)
+        return f"{100 * sum(values) / len(values):.1f}" if values else "-"
+
+    def avg(values) -> str:
+        values = list(values)
+        return f"{sum(values) / len(values):.1f}" if values else "-"
+
+    scope = "all BIRD tables" if args.full_schema else "per-database"
+    print(f"\nSchema linking: {method} | scope: {scope} | evidence "
+          f"{'off' if args.no_evidence else 'on'} | max {max_tables} tables, {max_chars:,} chars")
+    print(f"{'':14} {'n':>4} {'all gold':>9} {'recall':>7} {'tables':>7} {'other db':>9} {'chars':>7}")
+    groups = [("total", rows)] + [(d, [r for r in rows if r["difficulty"] == d]) for d in DIFFICULTIES]
+    for name, group in groups:
+        if group:
+            print(f"{name:14} {len(group):>4} {pct(r['all'] for r in group):>9} "
+                  f"{pct(r['recall'] for r in group):>7} {avg(len(r['linked']) for r in group):>7} "
+                  f"{avg(r['other_db'] for r in group):>9} {avg(r['chars'] for r in group):>7}")
+    print("\nall gold = % of questions with every gold table linked; recall = % of gold tables "
+          "linked;\ntables = avg tables linked; other db = avg linked tables from other BIRD databases.")
+    misses = [r for r in rows if not r["all"]]
+    if misses and args.show_misses:
+        print("\nMissed:")
+        for r in misses[: args.show_misses]:
+            print(f"  q{r['question_id']} [{r['db_id']}] gold={r['gold']} linked={r['linked']}")
+    if args.out:
+        out = Path(args.out)
+        out.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        print(f"Per-question results: {out}")
+    return 0
 
 
 # ── score ────────────────────────────────────────────────────────────────────
@@ -432,10 +533,28 @@ def main() -> int:
                      help="leave out the LLM-written table/column descriptions production adds "
                           "(by default they are generated once per table, 1 LLM call each, and "
                           "kept in evaluation/data/bird_descriptions.json)")
+    run.add_argument("--no-retrieval", action="store_true",
+                     help="search the schema by keywords over the profile instead of the "
+                          "retrieval index (pgvector + pg_trgm), as before Phase 3")
     run.add_argument("--float-precision", type=int, default=4)
     run.add_argument("--output-rows", type=int, default=100,
                      help="rows of gold/pred output stored per question (0 = all)")
     run.set_defaults(func=cmd_run)
+
+    link = sub.add_parser("link-recall",
+                          help="measure schema linking against the gold SQL's tables (no LLM calls)")
+    _add_selection_args(link)
+    link.add_argument("--full-schema", action="store_true",
+                      help="link against all 75 BIRD tables (what triggers linking in a run)")
+    link.add_argument("--no-evidence", action="store_true", help="link with the question only")
+    link.add_argument("--no-describe", action="store_true", help="index without descriptions")
+    link.add_argument("--no-retrieval", action="store_true", help="keyword search, no index")
+    link.add_argument("--max-tables", type=int, help="default: SCHEMA_LINK_MAX_TABLES")
+    link.add_argument("--max-chars", type=int, help="default: SCHEMA_LINK_MAX_CHARS")
+    link.add_argument("--show-misses", type=int, default=0, metavar="N",
+                      help="print up to N questions whose gold tables weren't all linked")
+    link.add_argument("--out", help="write per-question results (JSONL) here")
+    link.set_defaults(func=cmd_link_recall)
 
     score = sub.add_parser("score", help="re-score an existing run (no LLM calls)")
     score.add_argument("--run-name", required=True)

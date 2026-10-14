@@ -117,6 +117,8 @@ class SQLAgent:
             engine=engine,
             schema_context=schema_context if use_full else schema_view.catalog(),
             catalog_prompt=not use_full,
+            link_max_tables=settings.SCHEMA_LINK_MAX_TABLES,
+            link_max_chars=settings.SCHEMA_LINK_MAX_CHARS,
             schema=schema_view,
             llm=llm or _get_default_llm(),
             budget=budget or Budget(),
@@ -157,6 +159,9 @@ class SQLAgent:
             "sql_runs_used": 0,
             "forced_submits": 0,
             "answer": None,
+            "linked_schema": None,
+            "linked_tables": [],
+            "link_method": None,
         }
 
         # A copy per turn: one SQLAgent can serve concurrent turns (evaluation workers).
@@ -231,8 +236,12 @@ class SQLAgent:
             result["trace"] = self._collect_trace(turn, state, source)
             result["trace"]["schema_prompt"] = self.schema_prompt
             if self.schema_prompt == "catalog":
-                # What the agent read columns of: the schema-linking metric's context.
-                result["trace"]["context_tables"] = sorted({
+                linked = list(state.get("linked_tables") or [])
+                result["trace"]["linked_tables"] = linked
+                result["trace"]["link_method"] = state.get("link_method")
+                # Tables whose columns the agent saw (linked into the prompt or
+                # described): the schema-linking metric's context.
+                result["trace"]["context_tables"] = sorted(set(linked) | {
                     t for m in turn if _artifact(m).get("kind") == DESCRIBE_TABLES
                     for t in _artifact(m).get("tables") or []})
         return result

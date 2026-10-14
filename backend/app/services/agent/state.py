@@ -21,6 +21,10 @@ class AgentState(TypedDict, total=False):
     sql_runs_used: int
     forced_submits: int        # LLM calls made with only submit_answer allowed
     answer: dict | None        # artifact of the successful submit_answer
+    # Schema linking (catalog prompt only): the retrieved tables, rendered in full.
+    linked_schema: str | None
+    linked_tables: list[str]
+    link_method: str | None    # "hybrid" | "trigram" | "keyword"
 
 
 @dataclass(frozen=True)
@@ -42,4 +46,6 @@ class AgentContext:
     answer_rows_shown: int = 50  # ... of which the model sees this many
     sql_timeout_ms: int = 10_000
     catalog_prompt: bool = False  # schema_context is the table catalog; columns via describe_tables
+    link_max_tables: int = 8   # catalog prompt: retrieved tables added in full ...
+    link_max_chars: int = 24_000  # ... up to this much text
     turn_id: str = "-"         # tags this turn's log lines (set per turn by SQLAgent)

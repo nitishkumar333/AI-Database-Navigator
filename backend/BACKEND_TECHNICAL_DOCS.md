@@ -377,10 +377,13 @@ never written to a checkpoint.
 User Question
      |
      v
+link (schema linking; only when the prompt holds the table list, see below)
+     |
+     v
 agent (LLM with schema in system prompt + 5 tools) <--------------------+
      |                                                                   |
      +-- tool calls --> tools node (budget check, parallel execution) ---+
-     |                    search_schema    lexical search over tables/columns
+     |                    search_schema    hybrid search over tables/columns (retrieval index)
      |                    describe_tables  full detail + FK join paths
      |                    find_values      how a mentioned value is stored
      |                    run_sql          exploratory, <=20 rows + row count
@@ -400,6 +403,17 @@ only a table list (name, approximate rows, one-line description;
 `render.render_catalog`, capped at ~6k tokens with shorter fallbacks) and the
 agent reads columns with `describe_tables`, so the prompt stays bounded however
 large the database is. The choice is made per request in `SQLAgent.__init__`.
+
+**Schema linking** (table-list prompt only): before the first LLM call the
+`link` node searches the schema with the question (plus the previous question
+for short follow-ups), keeps the strongest foreign-key-connected group of
+tables, adds the bridge tables that join them (approximate Steiner tree on the
+FK graph) and any table holding a value the question mentions, and appends
+them in full to this turn's system prompt (`SCHEMA_LINK_MAX_TABLES` tables,
+`SCHEMA_LINK_MAX_CHARS` chars; compact detail before dropping a table). Most
+questions are then answered with a single `submit_answer`; `describe_tables`
+is only needed for tables linking missed. If linking fails or finds nothing,
+the turn proceeds with the plain table list.
 
 **Budgets** (`agent/state.py` `Budget`): 8 tool calls and 6 SQL executions per
 turn, kept in graph state. Calls beyond them are refused; once a budget is used
@@ -443,8 +457,12 @@ What the agent reads about a database. Replaces the bare column list from
 | `render.py` | `render_schema(profile, tables, descriptions)`: one compact line per column (`name type PK -> t.c -- description; values: ...; format; range`). Falls back to a compact level above ~60k chars. |
 | `describer.py` | One structured LLM call per table: what a row represents + ≤20-word column descriptions. |
 | `service.py` | Background jobs (2-thread pool, Redis lock per connection), `build_schema_context(db, conn, engine, tables)` used by `/api/query/chat` and suggestions, `build_schema_view(...)` for the agent's schema tools, staleness checks, and description editing. |
-| `retriever.py` | `SchemaView`: the agent's scoped view of the schema (profile + descriptions, limited to the allowed tables; a minimal inspector-based profile before profiling finishes) and the lexical `search` behind `search_schema`. |
-| `join_graph.py` | `JoinGraph`: shortest join paths between tables over declared + inferred foreign keys (BFS), shown by `describe_tables`. |
+| `retriever.py` | `SchemaView`: the agent's scoped view of the schema (profile + descriptions, limited to the allowed tables; a minimal inspector-based profile before profiling finishes). `search` (behind `search_schema`) uses the retrieval index when the connection has one, else keyword scoring; `link` is schema linking (see above). |
+| `join_graph.py` | `JoinGraph`: shortest join paths between tables over declared + inferred foreign keys (BFS), shown by `describe_tables`; `bridge_tables` connects a set of tables (greedy Steiner tree). |
+| `documents.py` | What gets indexed: one document per table (name split into words, summary, comment, key and main columns) and per column (table + column names, type/format, description, comment, top values), each with an embedding text and a trigram text; plus every value of low-cardinality text columns (≤ `SCHEMA_VALUE_INDEX_MAX_DISTINCT` distinct, read with a bounded `SELECT DISTINCT` when the statistics don't cover them). |
+| `index_store.py` | Storage in the app database: `schema_index_docs` (trigram GIN index + `vector` column), `schema_index_values` (trigram GIN index), `schema_index_state`. `search` ranks documents with three lists fused by reciprocal rank fusion in one SQL query: cosine distance to the question's embedding, trigram `word_similarity` of the question's terms, and stored values the question mentions (`strict_word_similarity`). Vector search is exact (one connection's few thousand rows), not HNSW, so scoping by connection and allowed tables never loses rows. |
+| `indexer.py` | `update_index(key, profile, descriptions, source_engine)`: incremental, only re-embeds documents whose text changed and reuses embeddings any index already has for the same text and model. `HybridIndex`: the search handle `SchemaView` uses; it adds the keyword ranking as a fourth RRF list. |
+| `../embeddings.py` | `JinaEmbedder` (Jina AI embeddings API, `retrieval.passage` / `retrieval.query`, batched, retried on 429/5xx); `get_embedder()` is None without `JINA_API_KEY`. |
 
 Lifecycle:
 1. Creating a connection (UI or guest sign-up) schedules a profile job; connections that predate profiling get one on their first chat. Until it finishes, the agent gets the basic schema; requests never wait.
@@ -452,7 +470,11 @@ Lifecycle:
 3. Every `SCHEMA_CHECK_INTERVAL_S` (checked when the connection is used) the catalog fingerprint is compared; a change triggers a re-profile. A re-profile can also be requested any time (`POST /api/schema/{id}/profile/refresh`, the "Re-profile" button in the table explorer). Tables whose structure changed are re-described; unchanged tables keep their descriptions.
 4. Descriptions with source `user` (edited in the table explorer's Columns tab) are never overwritten. Precedence: user > database COMMENT > generated.
 
-Storage: `schema_profiles` (one row per connection: status, profile JSON, `version` for cache invalidation, which tables are described at which structure hash) and `schema_annotations` (one row per table/column description). Both cascade on connection delete. Rendered context is cached in-process per `(connection, version, tables)`.
+5. The retrieval index (key `conn:<id>`) is updated after profiling, again after describing, and in the background after a description edit; a connection profiled before indexing existed is indexed on its next chat. Deleting the connection deletes its index.
+
+Retrieval degrades step by step: no `JINA_API_KEY` (or an embedding outage) → trigram + value search; no pgvector in the app database or `SCHEMA_RETRIEVAL_ENABLED=false` → keyword search over the profile. The app database needs the `vector` extension (the compose file builds `docker/postgres`, i.e. `postgres:16-alpine` + pgvector); `pg_trgm` ships with Postgres. Index status is part of `GET /api/schema/{id}/profile` (`index`).
+
+Storage: `schema_profiles` (one row per connection: status, profile JSON, `version` for cache invalidation, which tables are described at which structure hash) and `schema_annotations` (one row per table/column description). Both cascade on connection delete. Rendered context is cached in-process per `(connection, version, tables)`. The index tables (`schema_index_*`) are created on first use.
 
 ### `app/services/validate_sql.py`
 
@@ -634,18 +656,20 @@ Frontend POST /api/query/chat
          v
 7. SQLAgent(engine, schema_context, schema_view=...).run_query()  [sql_agent.py -> agent/graph.py]
          |
-   7a. agent node: LLM with schema in the system prompt and 5 tools bound
+   7a. link node: table-list prompt only -> retrieved tables added in full
          |
-   7b. Optional exploration: search_schema / describe_tables / find_values / run_sql,
+   7b. agent node: LLM with schema in the system prompt and 5 tools bound
+         |
+   7c. Optional exploration: search_schema / describe_tables / find_values / run_sql,
          |    several per turn, run in parallel within the per-turn budget
          |
-   7c. submit_answer(sql, assumptions) -> SafeSqlExecutor.run(sql)  [validate_sql.py]
+   7d. submit_answer(sql, assumptions) -> SafeSqlExecutor.run(sql)  [validate_sql.py]
          |    - Layer 1: sqlglot AST validation (_check_structure)
          |    - Layer 2: Schema validation via EXPLAIN in read-only tx (_check_against_schema)
          |    - Layer 3: Execute in read-only tx with 10s timeout (_execute)
          |    (an error goes back to the LLM, which fixes the query and submits again)
          |
-   7d. LLM writes the final response_text from the submitted result
+   7e. LLM writes the final response_text from the submitted result
          |
          v
 8. Save QueryHistory to App DB

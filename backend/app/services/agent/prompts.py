@@ -95,6 +95,20 @@ _CATALOG_FIRST_STEP = (
 )
 _CATALOG_HEADER = "TABLES (name, approximate rows, description; call describe_tables for columns):"
 
+# Catalog mode with schema linking: the retrieved tables follow the list in full.
+_LINKED_FIRST_STEP = (
+    "1. The list below shows every table by name. After it, the tables most likely "
+    "relevant to this question are shown with all their columns (found by searching the "
+    "schema for the question; they may include extra tables, or miss one). If they cover "
+    "the question, call `submit_answer` right away. Call `describe_tables` only for other "
+    "tables you need (it also returns the join conditions), and `search_schema` if you "
+    "can't tell which tables hold the data. Column details from earlier in the "
+    "conversation are still valid."
+)
+_LINKED_HEADER = (
+    "TABLES MOST LIKELY RELEVANT TO THIS QUESTION (all columns; `-> t.c` marks join keys):"
+)
+
 FORCE_SUBMIT_NOTE = (
     "\n\nSTOP EXPLORING: {reason} Call `submit_answer` now with the best query you "
     "have. Do not call any other tool."
@@ -103,13 +117,24 @@ BUDGET_REASON = "the tool budget for this question is used up."
 UNSUBMITTED_REASON = "you ran queries but did not submit a final one."
 
 
-def system_prompt(schema_text: str, budget: Budget, *, catalog: bool = False) -> str:
-    """`schema_text` is the full schema, or with catalog=True the table list."""
-    return _WORKFLOW.format(
+def system_prompt(schema_text: str, budget: Budget, *, catalog: bool = False,
+                  linked: str | None = None) -> str:
+    """`schema_text` is the full schema, or with catalog=True the table list.
+    `linked` (catalog only) is the retrieved tables' full schema for this turn."""
+    linked = linked if catalog else None
+    if not catalog:
+        first_step, typical = _FULL_FIRST_STEP, "a single `submit_answer`"
+    elif linked:
+        first_step, typical = _LINKED_FIRST_STEP, "a single `submit_answer`"
+    else:
+        first_step, typical = _CATALOG_FIRST_STEP, "`describe_tables` then `submit_answer`"
+    prompt = _WORKFLOW.format(
         max_tool_calls=budget.max_tool_calls,
         max_sql_runs=budget.max_sql_runs,
-        first_step=_CATALOG_FIRST_STEP if catalog else _FULL_FIRST_STEP,
-        typical_calls=("`describe_tables` then `submit_answer`" if catalog
-                       else "a single `submit_answer`"),
+        first_step=first_step,
+        typical_calls=typical,
         schema_header=_CATALOG_HEADER if catalog else _FULL_HEADER,
     ) + "\n" + schema_text
+    if linked:
+        prompt += "\n\n" + _LINKED_HEADER + "\n" + linked
+    return prompt

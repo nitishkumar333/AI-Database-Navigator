@@ -18,6 +18,7 @@ PRIMARY = _METRICS[0][0]
 
 _LINKING = (
     ("context_recall", "Gold tables present in agent context"),
+    ("linked_recall", "Gold tables retrieved into the prompt (schema linking)"),
     ("table_recall", "Table recall (pred SQL vs gold)"),
     ("table_precision", "Table precision"),
     ("tables_exact", "Exact table set"),
@@ -184,7 +185,9 @@ def schema_label(run: dict) -> str:
     """Runs from before a key existed used the basic format / full-schema prompt."""
     label = run.get("schema_format", "basic")
     label += " + descriptions" if run.get("describe") else ""
-    return label + f", {run.get('schema_prompt', 'full')} prompt"
+    label += f", {run.get('schema_prompt', 'full')} prompt"
+    # Runs from before the retrieval index searched the schema by keywords.
+    return label + f", {run.get('retrieval', 'keyword')} retrieval"
 
 
 def _fmt_ci(ci) -> str:

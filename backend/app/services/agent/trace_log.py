@@ -135,6 +135,18 @@ def llm_note(turn_id: str, message: str) -> None:
     _log().info("[%s] NOTE: %s", turn_id, message)
 
 
+# ── Schema linking ───────────────────────────────────────────────────────────
+
+def schema_linked(turn_id: str, method: str, tables: list[str], bridges: list[str],
+                  chars: int, seconds: float) -> None:
+    _log().info("[%s] LINK %s | %.2fs | tables=%s bridges=%s | %s chars added to the prompt",
+                turn_id, method, seconds, tables, bridges, f"{chars:,}")
+
+
+def schema_link_failed(turn_id: str, error: str) -> None:
+    _log().warning("[%s] LINK FAILED: %s", turn_id, _one_line(error, 500))
+
+
 # ── Tool calls ───────────────────────────────────────────────────────────────
 
 def tool_skipped(turn_id: str, call: dict, reason: str) -> None:

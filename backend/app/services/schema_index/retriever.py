@@ -2,9 +2,12 @@
 The agent's view of a connection's schema: the profile, the table/column
 descriptions, and the tables it may use (e.g. a knowledge base's tables).
 
-Tools look tables and columns up here, and search_schema ranks them with a
-lexical score over names, descriptions and sample values. Phase 3 replaces
-`search` with hybrid (trigram + embedding) retrieval; the interface stays.
+Tools look tables and columns up here. `search` ranks tables and columns for
+a question: with the connection's retrieval index (indexer.HybridIndex:
+embeddings + trigrams + stored values, fused with RRF) when it has been built,
+otherwise with a keyword score over names, descriptions and sample values.
+`link` picks the tables a question most likely needs, adds the bridge tables
+that join them, and renders them for the agent's prompt.
 
 Before a connection has been profiled, a minimal profile (names, types and
 declared keys only) is read from the database the first time a tool needs it.
@@ -14,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+from dataclasses import dataclass, field
 
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
@@ -21,7 +25,11 @@ from sqlalchemy.engine import Engine
 from app.services.schema_index.profiler import (
     ColumnProfile, RelationProfile, SchemaProfile, TableProfile, type_family,
 )
-from app.services.schema_index.render import DEFAULT_CATALOG_CHARS, Descriptions, render_catalog
+from app.services.schema_index.index_store import RRF_K, DocHit
+from app.services.schema_index.join_graph import JoinGraph
+from app.services.schema_index.render import (
+    DEFAULT_CATALOG_CHARS, Descriptions, render_catalog, render_table, sql_ident,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +70,84 @@ def _match(query: set[str], words: set[str]) -> float:
     return score
 
 
+@dataclass
+class TableMatch:
+    table: TableProfile
+    score: float
+    columns: list[tuple[ColumnProfile, float]] = field(default_factory=list)
+    values: dict[str, list[str]] = field(default_factory=dict)   # column -> stored values mentioned
+
+
+@dataclass
+class LinkResult:
+    text: str                   # schema text for the prompt
+    tables: list[str]           # retrieved tables, best first
+    bridges: list[str]          # tables added to join them
+    method: str                 # "hybrid" | "trigram" | "keyword"
+
+    @property
+    def all_tables(self) -> list[str]:
+        return self.tables + self.bridges
+
+
+_LINK_MIN_SHARE = 0.3           # tables scoring below this share of the best one are left out ...
+_LINK_STRONG_SHARE = 0.6        # ... and those below this one must join the tables already picked
+_LINK_JOIN_HOPS = 2
+_LINK_MAX_BRIDGES = 3
+
+
+def _coherent(matches: list[TableMatch], graph: JoinGraph, max_tables: int) -> list[TableMatch]:
+    """The tables to link, best first. A question is usually about one
+    connected group of tables, so candidates are grouped by foreign-key
+    distance and the group with the most evidence wins; it beats taking the
+    single best table and its neighbours when that table is a false hit.
+    Tables of other groups are kept only when they score nearly as high as
+    the best table. A table holding a value the question mentions is kept
+    when it joins the chosen tables at all (value boost)."""
+    best = matches[0].score
+    candidates = [m for m in matches if m.score >= _LINK_MIN_SHARE * best]
+
+    # Union-find over candidates joined within _LINK_JOIN_HOPS foreign keys.
+    parent = list(range(len(candidates)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a in enumerate(candidates):
+        for j in range(i):
+            if root(i) != root(j) and graph.shortest_path(
+                    a.table.name, candidates[j].table.name, _LINK_JOIN_HOPS) is not None:
+                parent[root(i)] = root(j)
+    groups: dict[int, list[TableMatch]] = {}
+    for i, m in enumerate(candidates):
+        groups.setdefault(root(i), []).append(m)
+
+    def evidence(group: list[TableMatch]) -> float:
+        return sum(m.score for m in group[:4])
+
+    winner = max(groups.values(), key=evidence)
+    chosen = winner[:max_tables]
+    for m in candidates:
+        if len(chosen) >= max_tables:
+            break
+        if m not in chosen and m.score >= _LINK_STRONG_SHARE * best:
+            chosen.append(m)
+
+    def joins(match: TableMatch) -> bool:
+        return any(graph.shortest_path(match.table.name, c.table.name, 4) is not None
+                   for c in chosen)
+
+    for m in matches:                  # value boost
+        if len(chosen) >= max_tables:
+            break
+        if m.values and m not in chosen and joins(m):
+            chosen.append(m)
+    return sorted(chosen, key=lambda m: -m.score)
+
+
 class SchemaView:
     def __init__(
         self,
@@ -70,11 +156,14 @@ class SchemaView:
         profile: SchemaProfile | None = None,
         descriptions: Descriptions | None = None,
         engine: Engine | None = None,
+        index=None,
     ):
+        """`index` is the connection's indexer.HybridIndex, if it has one."""
         self.scope = list(dict.fromkeys(tables))
         self._profile = profile
         self.descriptions = descriptions or {}
         self._engine = engine
+        self.index = index
         self._fallback: dict[str, TableProfile] | None = None
         self._fallback_relations: list[RelationProfile] = []
         self._lock = threading.Lock()
@@ -136,12 +225,62 @@ class SchemaView:
 
     # ── Search ───────────────────────────────────────────────────────────────
 
-    def search(self, query: str, k: int = 6, columns_per_table: int = 5):
-        """[(table, score, [(column, score), ...])] for the best-matching tables."""
+    @property
+    def search_method(self) -> str:
+        return self.index.mode if self.index is not None else "keyword"
+
+    def search(self, query: str, k: int = 6, columns_per_table: int = 5) -> list[TableMatch]:
+        """The best-matching tables, each with its best-matching columns."""
+        if self.index is not None:
+            try:
+                return self._hybrid_search(query, k, columns_per_table)
+            except Exception as exc:
+                logger.warning("Schema index search failed (%s); using keyword search", exc)
+        return self._keyword_search(query, k, columns_per_table)
+
+    def _hybrid_search(self, query: str, k: int, columns_per_table: int) -> list[TableMatch]:
+        hits = {(h.table_name, h.column_name): h for h in self.index.search(query, self.scope)}
+        # The keyword ranking (identifier-aware, weights names over descriptions)
+        # is a fourth RRF list next to the index's vector, trigram and value lists.
+        for rank, (table_name, column_name) in enumerate(self._keyword_doc_ranking(query), 1):
+            hit = hits.get((table_name, column_name))
+            if hit is None:
+                hit = hits[(table_name, column_name)] = DocHit(table_name, column_name, 0.0)
+            hit.score += 1.0 / (RRF_K + rank)
+            hit.sources.append("keyword")
+
+        matches: dict[str, TableMatch] = {}
+        table_scores: dict[str, float] = {}
+        for hit in hits.values():
+            table = self.table(hit.table_name)
+            if table is None:
+                continue
+            match = matches.setdefault(table.name, TableMatch(table, 0.0))
+            if not hit.column_name:
+                table_scores[table.name] = hit.score
+                continue
+            col = table.column(hit.column_name)
+            if col is None:
+                continue
+            match.columns.append((col, hit.score))
+            if hit.values:
+                match.values[col.name] = hit.values
+        for name, match in matches.items():
+            match.columns.sort(key=lambda c: -c[1])
+            # A table ranks by its own document plus its two best columns (best
+            # of 1-5 on BIRD: more lets wide tables win on many weak matches).
+            match.score = table_scores.get(name, 0.0) + sum(s for _, s in match.columns[:2])
+            match.columns = match.columns[:columns_per_table]
+        ranked = sorted(matches.values(), key=lambda m: (-m.score, m.table.name))
+        return ranked[:k]
+
+    def _keyword_scores(self, query: str):
+        """[(table, table_score, [(column, score), ...] best first)] for every
+        table with any keyword hit."""
         q = tokens(query)
         if not q:
             return []
-        ranked = []
+        out = []
         for table in self.tables():
             table_score = (3 * _match(q, tokens(table.name))
                            + _match(q, tokens(self.table_description(table))))
@@ -154,11 +293,80 @@ class SchemaView:
                 if score:
                     hits.append((col, score))
             hits.sort(key=lambda h: -h[1])
-            total = table_score + sum(s for _, s in hits[:3])
-            if total:
-                ranked.append((table, total, hits[:columns_per_table]))
-        ranked.sort(key=lambda r: (-r[1], r[0].name))
+            if table_score or hits:
+                out.append((table, table_score, hits))
+        return out
+
+    def _keyword_search(self, query: str, k: int, columns_per_table: int) -> list[TableMatch]:
+        ranked = [TableMatch(table, table_score + sum(s for _, s in hits[:3]),
+                             hits[:columns_per_table])
+                  for table, table_score, hits in self._keyword_scores(query)]
+        ranked.sort(key=lambda m: (-m.score, m.table.name))
         return ranked[:k]
+
+    def _keyword_doc_ranking(self, query: str, depth: int = 40) -> list[tuple[str, str]]:
+        """Table and column documents ranked by keyword score, as
+        (table, column) with column "" for a table."""
+        scored = []
+        for table, table_score, hits in self._keyword_scores(query):
+            if table_score:
+                scored.append((table_score, table.name, ""))
+            scored += [(score, table.name, col.name) for col, score in hits]
+        scored.sort(key=lambda s: (-s[0], s[1], s[2]))
+        return [(t, c) for _, t, c in scored[:depth]]
+
+    # ── Schema linking ───────────────────────────────────────────────────────
+
+    def link(self, question: str, max_tables: int = 8, max_chars: int = 24_000) -> LinkResult | None:
+        """The tables `question` most likely needs plus the bridge tables
+        joining them, rendered in full (compact when needed to fit `max_chars`)."""
+        if max_tables <= 0:
+            return None                # linking switched off
+        matches = self.search(question, k=max_tables * 3, columns_per_table=8)
+        if not matches:
+            return None
+        relations = self.relations()
+        graph = JoinGraph(relations)
+        chosen = _coherent(matches, graph, max_tables)
+        names = [m.table.name for m in chosen]
+        bridges = [b for b in graph.bridge_tables(names)
+                   if b not in names and self.table(b) is not None][:_LINK_MAX_BRIDGES]
+
+        blocks = self._render_linked(names + bridges, relations, max_chars)
+        if not blocks:
+            return None
+        kept = {name for name, _ in blocks}
+        mentioned = [
+            f"  {sql_ident(m.table.name)}.{sql_ident(col)}: "
+            + ", ".join("'" + v.replace("'", "''") + "'" for v in values)
+            for m in chosen if m.table.name in kept for col, values in m.values.items()
+        ]
+        text = "\n\n".join(block for _, block in blocks)
+        if mentioned:
+            text += ("\n\nSTORED VALUES THAT MATCH WORDS OF THE QUESTION (use them only if "
+                     "they are what the question means):\n" + "\n".join(mentioned))
+        return LinkResult(text=text, tables=[t for t in names if t in kept],
+                          bridges=[t for t in bridges if t in kept], method=self.search_method)
+
+    def _render_linked(self, tables: list[str], relations, max_chars: int) -> list[tuple[str, str]]:
+        """(table, text) for `tables` (best first) within `max_chars`: as many
+        tables as fit at the compact level (one too big for the space left is
+        skipped, not the ones after it), then upgraded to full detail in
+        rank order while that still fits."""
+        compact = {n: render_table(self.table(n), relations, self.descriptions, level="compact")
+                   for n in tables}
+        kept, used = [], 0
+        for name in tables:
+            if used + len(compact[name]) + 2 <= max_chars:
+                kept.append(name)
+                used += len(compact[name]) + 2
+        blocks = {n: compact[n] for n in kept}
+        for name in kept:
+            full = render_table(self.table(name), relations, self.descriptions, level="full")
+            if used - len(compact[name]) + len(full) <= max_chars:
+                blocks[name] = full
+                used += len(full) - len(compact[name])
+        return [(n, blocks[n]) for n in kept]
 
     # ── Minimal profile for connections that aren't profiled yet ─────────────
 
