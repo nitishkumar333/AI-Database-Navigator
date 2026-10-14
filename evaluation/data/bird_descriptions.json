@@ -1,0 +1,1250 @@
+{
+ "account": {
+  "description": "One row per bank account, with its owning district, statement frequency and opening date.",
+  "columns": {
+   "account_id": "Unique identifier of the account.",
+   "district_id": "Identifier of the district where the account was opened; joins to district.district_id.",
+   "frequency": "Statement issuance frequency: monthly, weekly, or per transaction (POPLATEK PO OBRATU).",
+   "date": "Date the account was opened."
+  },
+  "structure_hash": "c877297c92102037437ba41868312460"
+ },
+ "alignment": {
+  "description": "One row per alignment category (e.g. Good, Bad, Neutral) used to classify superheroes.",
+  "columns": {
+   "id": "Surrogate primary key identifying the alignment.",
+   "alignment": "Alignment label: 'Good', 'Bad' or 'Neutral'."
+  },
+  "structure_hash": "5d74fc02047842a7577c8fcec008c52b"
+ },
+ "atom": {
+  "description": "One row per atom within a molecule, identified by a molecule-derived atom ID.",
+  "columns": {
+   "atom_id": "Unique atom identifier, formed as molecule ID plus an underscore and atom number.",
+   "molecule_id": "Identifier of the molecule this atom belongs to; joins to molecule.molecule_id.",
+   "element": "Chemical element symbol of the atom, lowercase (e.g. 'c' carbon, 'h' hydrogen)."
+  },
+  "structure_hash": "b0baea245404d1e5edb939fe92879299"
+ },
+ "attendance": {
+  "description": "One row per member per event, recording that the member attended that event.",
+  "columns": {
+   "link_to_event": "Foreign key to event.event_id identifying the event attended.",
+   "link_to_member": "Foreign key to member.member_id identifying the member who attended."
+  },
+  "structure_hash": "3b6435757290891068b8766fd1d9008c"
+ },
+ "attribute": {
+  "description": "One row per hero attribute type (e.g. Intelligence, Strength, Speed).",
+  "columns": {
+   "id": "Surrogate primary key identifying the attribute.",
+   "attribute_name": "Name of the attribute, such as Intelligence, Strength or Speed."
+  },
+  "structure_hash": "265b7a209f22e1bd9b8eacdfa7ad411f"
+ },
+ "badges": {
+  "description": "One row per badge awarded to a user.",
+  "columns": {
+   "id": "Unique identifier for this badge award.",
+   "userid": "User who received the badge; joins to users.id.",
+   "name": "Badge name, e.g. 'Student', 'Supporter', 'Editor'.",
+   "date": "Timestamp when the badge was awarded."
+  },
+  "structure_hash": "3e48b67469b4ed9072272b5d4a2380a5"
+ },
+ "bond": {
+  "description": "One row per chemical bond within a molecule, linking two atoms of that molecule.",
+  "columns": {
+   "bond_id": "Unique bond identifier, formatted as molecule id plus the two atom numbers joined by underscores.",
+   "molecule_id": "Identifier of the molecule this bond belongs to; joins to molecule.molecule_id.",
+   "bond_type": "Bond order as a symbol: '-' single, '=' double, '#' triple."
+  },
+  "structure_hash": "b053c31e5a65d114d26fd339e021cdf1"
+ },
+ "budget": {
+  "description": "One row per budget line item, tracking the amount allocated, amount spent, and remaining balance for a spending category tied to an event.",
+  "columns": {
+   "budget_id": "Primary key uniquely identifying this budget line item.",
+   "category": "Spending category for the budget line, e.g. Food, Advertisement, Parking, Speaker Gifts.",
+   "spent": "Amount spent so far in this category, in currency units.",
+   "remaining": "Amount left in the budget after spending, in currency units; can be negative if overspent.",
+   "amount": "Total amount allocated to this budget category, in currency units.",
+   "event_status": "Status of the associated event: Open, Closed, or Planning.",
+   "link_to_event": "Foreign key to event.event_id identifying the event this budget belongs to."
+  },
+  "structure_hash": "f943495bbe00247cd5fc75ebd481483a"
+ },
+ "card": {
+  "description": "One row per card issued to a bank account, linked to the account's disposition record.",
+  "columns": {
+   "card_id": "Unique identifier for the card.",
+   "disp_id": "Identifier of the disposition (account-holder relationship) the card was issued for.",
+   "type": "Card product type: 'classic', 'junior' or 'gold'.",
+   "issued": "Date the card was issued."
+  },
+  "structure_hash": "861a88f2e1859e3dd9ae41da80075fe7"
+ },
+ "cards": {
+  "description": "One row per Magic: The Gathering card printing (a specific card in a specific set), identified by uuid.",
+  "columns": {
+   "id": "Surrogate primary key for the card printing.",
+   "artist": "Name of the illustrator of this printing's artwork.",
+   "asciiname": "ASCII-normalized card name; always NULL in this data.",
+   "availability": "Comma-separated platforms where the card is available, e.g. paper, mtgo, arena.",
+   "bordercolor": "Border color of the printed card, e.g. black, white, gold, silver, borderless.",
+   "cardkingdomfoilid": "Card Kingdom product ID for the foil version, stored as text.",
+   "cardkingdomid": "Card Kingdom product ID for the non-foil version, stored as text.",
+   "coloridentity": "Commander color identity as WUBRG letters, including colors from mana symbols in rules text.",
+   "colorindicator": "Color indicator letters for cards with no mana cost; always NULL here.",
+   "colors": "Card's colors as WUBRG letters; NULL for colorless cards.",
+   "convertedmanacost": "Total mana value of the card, in mana units.",
+   "dueldeck": "Which half of a Duel Deck the card belongs to: 'a' or 'b'.",
+   "edhrecrank": "EDHREC popularity rank of the card among Commander decks; lower is more popular.",
+   "faceconvertedmanacost": "Mana value of this face only, for multi-face cards.",
+   "facename": "Name of this face of a multi-face card.",
+   "flavorname": "Alternate flavor name of the card; always NULL in this data.",
+   "flavortext": "Italicized flavor text printed on the card.",
+   "frameeffects": "Special frame treatments, e.g. legendary, extendedart, nyxtouched.",
+   "frameversion": "Card frame style year: 1993, 1997, 2003, 2015 or future.",
+   "hand": "Starting hand modifier for Vanguard cards; always NULL here.",
+   "hasalternativedecklimit": "1 if the card has an alternate deck-size limit, else 0.",
+   "hascontentwarning": "1 if the card carries a content warning, else 0.",
+   "hasfoil": "1 if a foil printing exists, else 0.",
+   "hasnonfoil": "1 if a non-foil printing exists, else 0.",
+   "isalternative": "1 if this is an alternate-art or alternate-treatment version, else 0.",
+   "isfullart": "1 if the card has full-art artwork, else 0.",
+   "isonlineonly": "1 if the card exists only in digital formats, else 0.",
+   "isoversized": "1 if the card is an oversized printing, else 0.",
+   "ispromo": "1 if the card is a promotional printing, else 0.",
+   "isreprint": "1 if the card was printed in an earlier set, else 0.",
+   "isreserved": "1 if the card is on the Reserved List, else 0.",
+   "isstarter": "1 if the card is from a starter set, else 0.",
+   "isstoryspotlight": "1 if the card is part of the Story Spotlight series, else 0.",
+   "istextless": "1 if the card has no printed rules text, else 0.",
+   "istimeshifted": "1 if the card is a timeshifted (planar chaos) printing, else 0.",
+   "keywords": "Comma-separated keyword abilities on the card, e.g. Flying, Trample.",
+   "layout": "Card layout, e.g. normal, transform, modal_dfc, adventure, split, saga.",
+   "leadershipskills": "Dict of booleans for brawl, commander and oathbreaker legality as commander.",
+   "life": "Starting life modifier for Vanguard cards; always NULL here.",
+   "loyalty": "Starting loyalty counters for planeswalker cards, stored as text.",
+   "manacost": "Mana cost as symbol string, e.g. {1}{W}; NULL for lands and similar.",
+   "mcmid": "Cardmarket (MCM) product ID.",
+   "mcmmetaid": "Cardmarket (MCM) meta product ID, stored as text.",
+   "mtgarenaid": "MTG Arena card ID, stored as text.",
+   "mtgjsonv4id": "MTGJSON v4 UUID for this card printing.",
+   "mtgofoilid": "Magic Online foil card ID, stored as text.",
+   "mtgoid": "Magic Online card ID, stored as text.",
+   "multiverseid": "Gatherer (multiverse) card ID, stored as text.",
+   "name": "Printed card name.",
+   "number": "Collector's number of the card within its set, stored as text.",
+   "originalreleasedate": "Original release date of the card, formatted YYYY/M/D.",
+   "originaltext": "Original printed rules text of the card.",
+   "originaltype": "Original printed type line of the card.",
+   "otherfaceids": "Comma-separated UUIDs of the other faces of this card.",
+   "power": "Creature power, stored as text; may be '*' or similar.",
+   "printings": "Comma-separated set codes in which this card has been printed.",
+   "promotypes": "Comma-separated promo types, e.g. setpromo, prerelease, boosterfun.",
+   "purchaseurls": "Dict of vendor purchase links, e.g. cardKingdom.",
+   "rarity": "Card rarity: common, uncommon, rare or mythic.",
+   "scryfallid": "Scryfall UUID for this card printing.",
+   "scryfallillustrationid": "Scryfall UUID identifying the artwork illustration.",
+   "scryfalloracleid": "Scryfall UUID for the card's oracle (rules) identity.",
+   "setcode": "Code of the set this printing belongs to, e.g. MB1, PRM, CMR.",
+   "side": "Which side of a split or double-faced card: 'a' or 'b'.",
+   "subtypes": "Comma-separated creature/other subtypes, e.g. Human,Wizard.",
+   "supertypes": "Comma-separated supertypes, e.g. Legendary, Basic, Snow.",
+   "tcgplayerproductid": "TCGplayer product ID, stored as text.",
+   "text": "Rules text of the card, with mana symbols in braces.",
+   "toughness": "Creature toughness, stored as text; may be '*' or similar.",
+   "type": "Full type line of the card, e.g. Instant, Sorcery, Artifact.",
+   "types": "Comma-separated card types, e.g. Creature, Instant, Land.",
+   "uuid": "Unique UUID identifying this card printing.",
+   "variations": "Comma-separated UUIDs of alternate-art variations of this card.",
+   "watermark": "Faction or set watermark on the card, e.g. phyrexian, mirran, dimir."
+  },
+  "structure_hash": "432ece29040745b846d81049075fc44a"
+ },
+ "circuits": {
+  "description": "One row per motor racing circuit, with its name, location and coordinates.",
+  "columns": {
+   "circuitid": "Surrogate primary key identifying the circuit.",
+   "circuitref": "Short reference code or slug for the circuit, used in links and lookups.",
+   "name": "Full official name of the circuit.",
+   "location": "Town, region or area where the circuit is situated.",
+   "country": "Country where the circuit is located.",
+   "lat": "Latitude of the circuit in decimal degrees; cast to double precision when aggregating.",
+   "lng": "Longitude of the circuit in decimal degrees; cast to double precision when aggregating.",
+   "alt": "Altitude of the circuit; always NULL, so unusable.",
+   "url": "Wikipedia page URL for the circuit."
+  },
+  "structure_hash": "166cf092e01851ab69ba6e7ca0816a6f"
+ },
+ "client": {
+  "description": "One row per client (bank customer) with demographics and home district.",
+  "columns": {
+   "client_id": "Unique client identifier; primary key.",
+   "gender": "Client's gender: 'M' male, 'F' female.",
+   "birth_date": "Client's date of birth.",
+   "district_id": "Identifier of the district the client lives in; joins to district."
+  },
+  "structure_hash": "8951cb87b7c9c0cabc2aec7f2a827b63"
+ },
+ "colour": {
+  "description": "One row per colour, used as a lookup list of colour names referenced by other tables.",
+  "columns": {
+   "id": "Surrogate primary key identifying the colour.",
+   "colour": "Colour name, e.g. 'No Colour' for an unset or absent colour."
+  },
+  "structure_hash": "a1650bc739a217e30214afc385e98378"
+ },
+ "comments": {
+  "description": "One row per comment posted on a post, with its score, text, author and creation time.",
+  "columns": {
+   "id": "Unique identifier for the comment.",
+   "postid": "Identifier of the post this comment belongs to; joins to posts.id.",
+   "score": "Comment score; 22 distinct values, mostly small non-negative integers.",
+   "text": "Body text of the comment.",
+   "creationdate": "Timestamp when the comment was created, with timezone.",
+   "userid": "Identifier of the user who wrote the comment; joins to users.id.",
+   "userdisplayname": "Display name of the commenting user; NULL for about 98% of rows."
+  },
+  "structure_hash": "7828e8044356c3aaab930faf25293c18"
+ },
+ "connected": {
+  "description": "One row per pair of connected atoms (a bond edge) in a molecule, linking two atom records.",
+  "columns": {
+   "atom_id": "First atom in the connected pair; foreign key to atom.atom_id.",
+   "atom_id2": "Second atom in the connected pair; foreign key to atom.atom_id.",
+   "bond_id": "Bond joining the two atoms; foreign key to bond.bond_id."
+  },
+  "structure_hash": "efab351f0a785b62884daefcdee7c06b"
+ },
+ "constructorresults": {
+  "description": "One row per constructor (team) per race, recording the points scored and status in that race.",
+  "columns": {
+   "constructorresultsid": "Surrogate primary key identifying this constructor-race result row.",
+   "raceid": "Identifier of the race this result belongs to; joins to the race table.",
+   "constructorid": "Identifier of the constructor (team) that scored these points; joins to constructors.",
+   "points": "Championship points awarded to the constructor in this race.",
+   "status": "Status code for the result; only value seen is 'D', and all values are NULL."
+  },
+  "structure_hash": "22db734cb4a8c70809f2b7df4b723986"
+ },
+ "constructors": {
+  "description": "One row per Formula One constructor (team or entrant) that has competed in races.",
+  "columns": {
+   "constructorid": "Surrogate primary key identifying the constructor.",
+   "constructorref": "Lowercase short reference code for the constructor, used in URLs and joins.",
+   "name": "Display name of the constructor, sometimes including an engine partner.",
+   "nationality": "Country the constructor is registered or based in, e.g. British, Italian.",
+   "url": "Wikipedia page URL for the constructor."
+  },
+  "structure_hash": "d64d3a62bdedda9c6d74aa65a383ccfb"
+ },
+ "constructorstandings": {
+  "description": "One row per constructor per race, giving that constructor's cumulative championship standing after the race.",
+  "columns": {
+   "constructorstandingsid": "Surrogate primary key identifying this standings record.",
+   "raceid": "Race this standing was recorded after; joins to the race table.",
+   "constructorid": "Constructor the standing belongs to; joins to constructors.constructorid.",
+   "points": "Championship points accumulated by the constructor at this point in the season.",
+   "position": "Championship position of the constructor, 1 being first; null or non-numeric when unranked.",
+   "positiontext": "Position as text; same as position, or a code such as 'D' for disqualified or 'E' for excluded.",
+   "wins": "Number of race wins by the constructor so far in the season."
+  },
+  "structure_hash": "f33b763c546daa68d932539535b32bfc"
+ },
+ "country": {
+  "description": "One row per country in which football leagues and matches are played.",
+  "columns": {
+   "id": "Surrogate primary key identifying the country.",
+   "name": "Country name, e.g. Belgium, England, France."
+  },
+  "structure_hash": "68ebc2965512399ab0efed05e60c37a1"
+ },
+ "customers": {
+  "description": "One row per customer, holding the customer's segment classification and currency.",
+  "columns": {
+   "customerid": "Unique identifier for the customer; joins to transactions_1k and yearmonth.",
+   "segment": "Customer segment code: SME, LAM (large account) or KAM (key account).",
+   "currency": "Currency assigned to the customer: CZK or EUR."
+  },
+  "structure_hash": "5f92bd76a758e3d56a257ee7c1a323d5"
+ },
+ "disp": {
+  "description": "One row per disposition (a client's authorization on an account), linking a client to an account.",
+  "columns": {
+   "disp_id": "Unique identifier for this client-account disposition record.",
+   "client_id": "Client holding this disposition; joins to client.client_id.",
+   "account_id": "Account the client is authorized on; joins to account.account_id.",
+   "type": "Disposition role: 'OWNER' holds the account, 'DISPONENT' is an authorized user."
+  },
+  "structure_hash": "e6350d5cf0f0318cee75b45e1936a695"
+ },
+ "district": {
+  "description": "One row per district (Czech administrative district) with demographic and economic statistics.",
+  "columns": {
+   "district_id": "Primary key identifying the district.",
+   "a2": "District name, e.g. Benesov, Karlovy Vary, Prachatice.",
+   "a3": "Region the district belongs to, e.g. south Moravia, central Bohemia.",
+   "a4": "Possibly district population count, stored as text.",
+   "a5": "Possibly count of towns or municipalities with a given status; stored as text.",
+   "a6": "Possibly count of municipalities in the district; stored as text.",
+   "a7": "Possibly count of municipalities of a certain category; stored as text.",
+   "a8": "Possibly count of a small administrative unit type; small integer code.",
+   "a9": "Possibly count of another administrative unit type; small integer code.",
+   "a10": "Possibly average age or similar ratio; unit unclear.",
+   "a11": "Possibly average or total wage in local currency; unit unclear.",
+   "a12": "Possibly unemployment or crime rate as a percentage.",
+   "a13": "Possibly another rate or ratio, e.g. per-capita measure.",
+   "a14": "Possibly count of a facility type, e.g. schools or physicians.",
+   "a15": "Possibly count of a larger facility or service type.",
+   "a16": "Possibly count of another facility or service type."
+  },
+  "structure_hash": "3bd59d11b080538b64fefd8ce382ca90"
+ },
+ "drivers": {
+  "description": "One row per racing driver, with identity, birth date and nationality.",
+  "columns": {
+   "driverid": "Surrogate primary key identifying the driver.",
+   "driverref": "Short lowercase reference handle for the driver, used in URLs and lookups.",
+   "number": "Driver's permanent car number; often null for drivers without one.",
+   "code": "Three-letter driver abbreviation, e.g. VER; null when unassigned.",
+   "forename": "Driver's given name.",
+   "surname": "Driver's family name.",
+   "dob": "Driver's date of birth.",
+   "nationality": "Driver's nationality as a demonym, e.g. British, Italian.",
+   "url": "Wikipedia page URL for the driver; may be empty."
+  },
+  "structure_hash": "27ebc8647c8c633e6a1e6dcd01653d87"
+ },
+ "driverstandings": {
+  "description": "One row per driver per race, giving that driver's championship standing after the race.",
+  "columns": {
+   "driverstandingsid": "Surrogate primary key identifying this driver-race standing record.",
+   "raceid": "Identifier of the race this standing was recorded after; joins to races.",
+   "driverid": "Identifier of the driver this standing belongs to; joins to drivers.",
+   "points": "Championship points accumulated by the driver at this point in the season.",
+   "position": "Championship position of the driver; possibly includes non-numeric codes for special cases.",
+   "positiontext": "Position as text, e.g. '9'; may hold non-numeric codes where position is not a plain number.",
+   "wins": "Number of race wins the driver has accumulated at this point in the season."
+  },
+  "structure_hash": "cea9e3c5d953e04238abbbcc15c277f9"
+ },
+ "event": {
+  "description": "One row per scheduled club event, with its date, type, location and status.",
+  "columns": {
+   "event_id": "Unique identifier for the event; primary key referenced by attendance and budget.",
+   "event_name": "Short descriptive title of the event.",
+   "event_date": "Date and time the event is scheduled to start.",
+   "type": "Category of event, e.g. Meeting, Game, Social, Election, Registration.",
+   "notes": "Free-text details or instructions about the event; often null.",
+   "location": "Place where the event is held, given as room, building or street address.",
+   "status": "Planning stage of the event: Planning, Open, or Closed."
+  },
+  "structure_hash": "f04fa79de1ca9fa1d5ac24326065d0e6"
+ },
+ "examination": {
+  "description": "One row per examination (lab panel) of a patient, recording antiphospholipid antibody results, ANA findings, diagnosis and symptoms.",
+  "columns": {
+   "id": "Patient identifier linking to patient.id; NULL for about a third of rows.",
+   "Examination Date": "Date the examination was performed.",
+   "aCL IgG": "Anticardiolipin IgG antibody level; units not specified.",
+   "aCL IgM": "Anticardiolipin IgM antibody level; units not specified.",
+   "ana": "Antinuclear antibody titer, as reciprocal dilution (e.g. 16 = 1:16).",
+   "ANA Pattern": "ANA immunofluorescence pattern codes, e.g. S, P; comma-separated when multiple.",
+   "aCL IgA": "Anticardiolipin IgA antibody level; units not specified.",
+   "diagnosis": "Rheumatic disease diagnosis, e.g. SLE, SjS, Behcet.",
+   "kct": "Kaolin clotting time test result: '+' positive, '-' negative.",
+   "rvvt": "Russell's viper venom time test result: '+' positive, '-' negative.",
+   "lac": "Lupus anticoagulant test result: '+' positive, '-' negative.",
+   "symptoms": "Reported clinical symptom or manifestation, e.g. Apo, CNS lupus.",
+   "thrombosis": "Count or code of thrombosis events; 0 likely means none."
+  },
+  "structure_hash": "826437b16402f3ec3d8efdba4cce3c28"
+ },
+ "expense": {
+  "description": "One row per expense record, capturing a single purchase or reimbursement with its cost, date, approving member and budget.",
+  "columns": {
+   "expense_id": "Primary key uniquely identifying the expense record.",
+   "expense_description": "Free-text description of what was purchased, e.g. food, posters or club merchandise.",
+   "expense_date": "Date the expense occurred, stored as text in YYYY-MM-DD format.",
+   "cost": "Expense amount in dollars; cast to double precision when aggregating.",
+   "approved": "Approval flag as text; only value present is 'true', so all listed expenses are approved.",
+   "link_to_member": "Foreign key to member.member_id identifying the member associated with the expense.",
+   "link_to_budget": "Foreign key to budget.budget_id identifying the budget the expense is charged to."
+  },
+  "structure_hash": "65891c172673c09a074ab55fe19e5db7"
+ },
+ "foreign_data": {
+  "description": "One row per Magic: The Gathering card printing per language, with localized name, text and type.",
+  "columns": {
+   "id": "Surrogate primary key identifying this localized card record.",
+   "flavortext": "Localized flavor text printed on the card; empty when the card has none.",
+   "language": "Language of this card's printed text, e.g. Japanese, French, Spanish.",
+   "multiverseid": "Wizards of the Coast multiverse card ID; NULL for 17% of rows, likely unassigned printings.",
+   "name": "Localized card name in the row's language.",
+   "text": "Localized rules text of the card; empty for cards with no rules text.",
+   "type": "Localized card type line, e.g. Hexerei (sorcery), Spontanzauber (instant).",
+   "uuid": "UUID identifying the card printing, shared across languages of the same card."
+  },
+  "structure_hash": "03e408890d3ec0371d58310b34888ba9"
+ },
+ "frpm": {
+  "description": "One row per California public school (or district/agency location) for academic year 2014-2015 with free and reduced-price meal (FRPM) eligibility counts and percentages.",
+  "columns": {
+   "cdscode": "14-digit CDS school identifier stored as text; join key to schools.cdscode, compare as text.",
+   "Academic Year": "School year the data covers; only '2014-2015' present.",
+   "County Code": "Two-digit county code within the CDS code, stored as text with leading zeros.",
+   "District Code": "Five-digit district code within the CDS code.",
+   "School Code": "Seven-digit school code within the CDS code, zero-padded.",
+   "County Name": "Name of the California county where the school is located.",
+   "District Name": "Name of the school district or agency operating the school.",
+   "School Name": "Name of the school or reporting location.",
+   "District Type": "Category of the district or agency, e.g. Unified School District, County Office of Education.",
+   "School Type": "Category of school, e.g. Elementary Schools (Public), High Schools (Public), Continuation High Schools.",
+   "Educational Option Type": "Instructional setting, e.g. Traditional, Continuation School, Community Day School, Juvenile Court School.",
+   "NSLP Provision Status": "National School Lunch Program provision used, e.g. Provision 2, CEP; mostly null.",
+   "Charter School (Y/N)": "Flag: 1 if the school is a charter school, 0 if not.",
+   "Charter School Number": "Charter school identification number; null for non-charter schools.",
+   "Charter Funding Type": "Whether the charter is directly or locally funded; null for non-charter schools.",
+   "irc": "Flag with values 0 or 1; meaning not evident from the data.",
+   "Low Grade": "Lowest grade served, e.g. K, P (preschool), or a numeric grade.",
+   "High Grade": "Highest grade served, e.g. 12, Adult, or a numeric grade.",
+   "Enrollment (K-12)": "Count of K-12 students enrolled.",
+   "Free Meal Count (K-12)": "Number of K-12 students eligible for free meals.",
+   "Percent (%) Eligible Free (K-12)": "Share of K-12 enrollment eligible for free meals, as a fraction 0-1.",
+   "FRPM Count (K-12)": "Number of K-12 students eligible for free or reduced-price meals.",
+   "Percent (%) Eligible FRPM (K-12)": "Share of K-12 enrollment eligible for free or reduced-price meals, as a fraction 0-1.",
+   "Enrollment (Ages 5-17)": "Count of students aged 5 to 17 enrolled.",
+   "Free Meal Count (Ages 5-17)": "Number of students aged 5-17 eligible for free meals.",
+   "Percent (%) Eligible Free (Ages 5-17)": "Share of ages 5-17 enrollment eligible for free meals, as a fraction 0-1.",
+   "FRPM Count (Ages 5-17)": "Number of students aged 5-17 eligible for free or reduced-price meals.",
+   "Percent (%) Eligible FRPM (Ages 5-17)": "Share of ages 5-17 enrollment eligible for free or reduced-price meals, as a fraction 0-1.",
+   "2013-14 CALPADS Fall 1 Certification Status": "CALPADS Fall 1 certification flag for 2013-14; only value 1 present."
+  },
+  "structure_hash": "7a53a6650df14a31778722acbdee21df"
+ },
+ "gasstations": {
+  "description": "One row per gas station, listing its chain, country and market segment.",
+  "columns": {
+   "gasstationid": "Unique identifier of the gas station; joins to transactions_1k.",
+   "chainid": "Identifier of the chain the station belongs to; chains span multiple stations.",
+   "country": "Country where the station is located: CZE = Czech Republic, SVK = Slovakia.",
+   "segment": "Market segment of the station: Premium, Noname, Value for money, Discount or Other."
+  },
+  "structure_hash": "854d5f5b6816ad4cf6995ea0967d3057"
+ },
+ "gender": {
+  "description": "One row per gender category used to classify superheroes.",
+  "columns": {
+   "id": "Surrogate key identifying the gender category.",
+   "gender": "Gender label, e.g. Male, Female, or N/A when unspecified."
+  },
+  "structure_hash": "24166273ff83f3402d9b0b74a3dd6d8e"
+ },
+ "hero_attribute": {
+  "description": "One row per hero per attribute, giving that hero's value for that attribute.",
+  "columns": {
+   "hero_id": "Identifier of the superhero this attribute value belongs to; joins to superhero.id.",
+   "attribute_id": "Identifier of the attribute being measured; joins to attribute.id, six possible attributes.",
+   "attribute_value": "Numeric score for this hero on this attribute; scale and units unknown."
+  },
+  "structure_hash": "238242e9fbca62f41fb29cb2eac43d82"
+ },
+ "hero_power": {
+  "description": "One row per hero-power pairing, linking a superhero to one superpower they possess.",
+  "columns": {
+   "hero_id": "Identifier of the superhero; joins to superhero.id.",
+   "power_id": "Identifier of the superpower; joins to superpower.id."
+  },
+  "structure_hash": "f4b306926a105f15a397087d23c9617b"
+ },
+ "income": {
+  "description": "One row per income record received by the organization, with amount, source and date.",
+  "columns": {
+   "income_id": "Primary key uniquely identifying this income record.",
+   "date_received": "Date the income was received, stored as text in YYYY-MM-DD format.",
+   "amount": "Income amount received, in dollars.",
+   "source": "Category of income: Dues, Fundraising, School Appropration, or Sponsorship.",
+   "notes": "Free-text note about the income; usually null.",
+   "link_to_member": "Foreign key to member.member_id for the member associated with this income; often null."
+  },
+  "structure_hash": "ad394f63dc17e6a9673b06a9faca4865"
+ },
+ "laboratory": {
+  "description": "One row per laboratory test panel (blood/urine chemistry and immunology results) recorded for a patient on a given date.",
+  "columns": {
+   "id": "Patient identifier; joins to patient.id.",
+   "date": "Date the laboratory panel was drawn or reported.",
+   "got": "GOT (AST) liver enzyme activity, likely IU/L.",
+   "gpt": "GPT (ALT) liver enzyme activity, likely IU/L.",
+   "ldh": "Lactate dehydrogenase activity, likely IU/L.",
+   "alp": "Alkaline phosphatase activity, likely IU/L.",
+   "tp": "Total protein, likely g/dL.",
+   "alb": "Albumin, likely g/dL.",
+   "ua": "Uric acid, likely mg/dL.",
+   "un": "Blood urea nitrogen, likely mg/dL.",
+   "cre": "Creatinine, likely mg/dL.",
+   "T-BIL": "Total bilirubin, likely mg/dL.",
+   "T-CHO": "Total cholesterol, likely mg/dL.",
+   "tg": "Triglycerides, likely mg/dL.",
+   "cpk": "Creatine phosphokinase activity, likely IU/L.",
+   "glu": "Glucose, likely mg/dL.",
+   "wbc": "White blood cell count, likely 10^3/uL.",
+   "rbc": "Red blood cell count, likely 10^6/uL.",
+   "hgb": "Hemoglobin, likely g/dL.",
+   "hct": "Hematocrit, likely percent.",
+   "plt": "Platelet count, likely 10^3/uL.",
+   "pt": "Prothrombin time, likely seconds.",
+   "aptt": "Activated partial thromboplastin time; always NULL in this data.",
+   "fg": "Fibrinogen, likely mg/dL.",
+   "pic": "Possibly plasmin-alpha2-plasmin inhibitor complex; units unclear.",
+   "tat": "Possibly thrombin-antithrombin complex; units unclear.",
+   "tat2": "Possibly a repeat or second thrombin-antithrombin complex measurement; units unclear.",
+   "U-PRO": "Urine protein by dipstick: '-' negative, 'TR' trace, numeric values mg/dL.",
+   "igg": "Immunoglobulin G, likely mg/dL.",
+   "iga": "Immunoglobulin A, likely mg/dL.",
+   "igm": "Immunoglobulin M, likely mg/dL.",
+   "crp": "C-reactive protein as text, e.g. '-' negative or '<0.3' below detection.",
+   "ra": "Rheumatoid arthritis test result: '-', '+-', '+', '2+'.",
+   "rf": "Rheumatoid factor as text, e.g. '<40' below threshold.",
+   "c3": "Complement C3, likely mg/dL.",
+   "c4": "Complement C4, likely mg/dL.",
+   "rnp": "Anti-RNP antibody titer as text; '0' or 'negative' means absent.",
+   "sm": "Anti-Sm antibody titer as text; '0' or 'negative' means absent.",
+   "sc170": "Anti-Scl-70 antibody titer as text; '0' or 'negative' means absent.",
+   "ssa": "Anti-SSA antibody titer as text; '0' or 'negative' means absent.",
+   "ssb": "Anti-SSB antibody titer as text; '0' or 'negative' means absent.",
+   "centromea": "Anti-centromere antibody result as text; only '0' or 'negative' observed.",
+   "dna": "Anti-DNA antibody value stored as text, numeric string.",
+   "DNA-II": "Possibly anti-double-stranded DNA antibody; always NULL in this data."
+  },
+  "structure_hash": "ef3bd0ff6a5c2a05d67f45725ba30660"
+ },
+ "laptimes": {
+  "description": "One row per driver per lap of a race, giving that lap's position and time.",
+  "columns": {
+   "raceid": "Identifier of the race this lap belongs to; joins to races.raceid.",
+   "driverid": "Identifier of the driver who drove this lap; joins to drivers.driverid.",
+   "lap": "Sequential lap number within the race, starting at 1.",
+   "position": "Driver's track position on this lap, 1 = leader.",
+   "time": "Lap duration formatted as minutes:seconds.milliseconds, e.g. 1:21.340.",
+   "milliseconds": "Lap duration in milliseconds; numeric equivalent of time."
+  },
+  "structure_hash": "b951082d08d14acb7dd0e8344bd3bbd7"
+ },
+ "league": {
+  "description": "One row per soccer league, listing its name and the country it belongs to.",
+  "columns": {
+   "id": "Surrogate primary key identifying the league.",
+   "country_id": "Foreign key to country.id; the country this league is played in.",
+   "name": "Full league name, typically country plus competition name."
+  },
+  "structure_hash": "45e286c7f12a3f9d22b1caed70c79a64"
+ },
+ "legalities": {
+  "description": "One row per card (uuid) per format, giving that card's legality status in that format.",
+  "columns": {
+   "id": "Surrogate primary key identifying this card-format legality record.",
+   "format": "Magic tournament format the legality applies to, e.g. duel, commander, vintage, legacy, modern.",
+   "status": "Legality of the card in the format: Legal, Banned, or Restricted.",
+   "uuid": "Card identifier (UUID) the legality applies to; joins to the card table."
+  },
+  "structure_hash": "cfac45a7f1fe0214e2d611b586e82f8b"
+ },
+ "loan": {
+  "description": "One row per loan issued on an account, with amount, term, payment and status.",
+  "columns": {
+   "loan_id": "Unique identifier for the loan.",
+   "account_id": "Account the loan belongs to; joins to account.account_id.",
+   "date": "Date the loan was granted or recorded.",
+   "amount": "Loan principal amount, in currency units.",
+   "duration": "Loan term length; observed values 12, 24, 36, 48, 60, likely months.",
+   "payments": "Payment amount, in currency units; cast to double precision when aggregating.",
+   "status": "Loan status code: 'A', 'B', 'C' or 'D'; meaning not evident from data."
+  },
+  "structure_hash": "7efee31d2943ddc97fee10d96fec36ee"
+ },
+ "major": {
+  "description": "One row per academic major offered, with its department and college.",
+  "columns": {
+   "major_id": "Unique identifier for the major; primary key referenced by member.",
+   "major_name": "Name of the academic major or program.",
+   "department": "Department or school offering the major.",
+   "college": "College the major belongs to."
+  },
+  "structure_hash": "f5238121e97c6b571db9907d406ed48f"
+ },
+ "match": {
+  "description": "One row per soccer match, with teams, score, lineup positions and pre-match betting odds.",
+  "columns": {
+   "id": "Surrogate primary key identifying the match.",
+   "country_id": "Country the match's league belongs to; joins to country.id.",
+   "league_id": "League the match was played in; joins to league.id.",
+   "season": "Season label as 'YYYY/YYYY', e.g. '2008/2009'.",
+   "stage": "Possibly the round or stage number within the season.",
+   "date": "Match kickoff date and time, stored as text 'YYYY-MM-DD HH:MM:SS'.",
+   "match_api_id": "External API identifier for the match.",
+   "home_team_api_id": "Home team's API id; joins to team.team_api_id.",
+   "away_team_api_id": "Away team's API id; joins to team.team_api_id.",
+   "home_team_goal": "Goals scored by the home team.",
+   "away_team_goal": "Goals scored by the away team.",
+   "home_player_x1": "Home player 1's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x2": "Home player 2's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x3": "Home player 3's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x4": "Home player 4's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x5": "Home player 5's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x6": "Home player 6's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x7": "Home player 7's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x8": "Home player 8's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x9": "Home player 9's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x10": "Home player 10's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_x11": "Home player 11's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x1": "Away player 1's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x2": "Away player 2's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x3": "Away player 3's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x4": "Away player 4's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x5": "Away player 5's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x6": "Away player 6's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x7": "Away player 7's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x8": "Away player 8's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x9": "Away player 9's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x10": "Away player 10's horizontal pitch coordinate, 1-10 scale.",
+   "away_player_x11": "Away player 11's horizontal pitch coordinate, 1-10 scale.",
+   "home_player_y1": "Home player 1's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y2": "Home player 2's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y3": "Home player 3's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y4": "Home player 4's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y5": "Home player 5's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y6": "Home player 6's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y7": "Home player 7's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y8": "Home player 8's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y9": "Home player 9's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y10": "Home player 10's vertical pitch coordinate, 0-11 scale.",
+   "home_player_y11": "Home player 11's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y1": "Away player 1's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y2": "Away player 2's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y3": "Away player 3's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y4": "Away player 4's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y5": "Away player 5's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y6": "Away player 6's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y7": "Away player 7's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y8": "Away player 8's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y9": "Away player 9's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y10": "Away player 10's vertical pitch coordinate, 0-11 scale.",
+   "away_player_y11": "Away player 11's vertical pitch coordinate, 0-11 scale.",
+   "home_player_1": "Home team's 1st player; joins to player.player_api_id.",
+   "home_player_2": "Home team's 2nd player; joins to player.player_api_id.",
+   "home_player_3": "Home team's 3rd player; joins to player.player_api_id.",
+   "home_player_4": "Home team's 4th player; joins to player.player_api_id.",
+   "home_player_5": "Home team's 5th player; joins to player.player_api_id.",
+   "home_player_6": "Home team's 6th player; joins to player.player_api_id.",
+   "home_player_7": "Home team's 7th player; joins to player.player_api_id.",
+   "home_player_8": "Home team's 8th player; joins to player.player_api_id.",
+   "home_player_9": "Home team's 9th player; joins to player.player_api_id.",
+   "home_player_10": "Home team's 10th player; joins to player.player_api_id.",
+   "home_player_11": "Home team's 11th player; joins to player.player_api_id.",
+   "away_player_1": "Away team's 1st player; joins to player.player_api_id.",
+   "away_player_2": "Away team's 2nd player; joins to player.player_api_id.",
+   "away_player_3": "Away team's 3rd player; joins to player.player_api_id.",
+   "away_player_4": "Away team's 4th player; joins to player.player_api_id.",
+   "away_player_5": "Away team's 5th player; joins to player.player_api_id.",
+   "away_player_6": "Away team's 6th player; joins to player.player_api_id.",
+   "away_player_7": "Away team's 7th player; joins to player.player_api_id.",
+   "away_player_8": "Away team's 8th player; joins to player.player_api_id.",
+   "away_player_9": "Away team's 9th player; joins to player.player_api_id.",
+   "away_player_10": "Away team's 10th player; joins to player.player_api_id.",
+   "away_player_11": "Away team's 11th player; joins to player.player_api_id.",
+   "goal": "XML fragments of goal events for the match; NULL when no event data.",
+   "shoton": "XML fragments of shots on target events; NULL when no event data.",
+   "shotoff": "XML fragments of shots off target events; NULL when no event data.",
+   "foulcommit": "XML fragments of foul events; NULL when no event data.",
+   "card": "XML fragments of yellow/red card events; NULL when no event data.",
+   "cross": "XML fragments of cross events; NULL when no event data.",
+   "corner": "XML fragments of corner-kick events; NULL when no event data.",
+   "possession": "XML fragments of possession events; NULL when no event data.",
+   "b365h": "Bet365 decimal odds for a home win.",
+   "b365d": "Bet365 decimal odds for a draw.",
+   "b365a": "Bet365 decimal odds for an away win.",
+   "bwh": "Betwin decimal odds for a home win.",
+   "bwd": "Betwin decimal odds for a draw.",
+   "bwa": "Betwin decimal odds for an away win.",
+   "iwh": "Interwetten decimal odds for a home win.",
+   "iwd": "Interwetten decimal odds for a draw.",
+   "iwa": "Interwetten decimal odds for an away win.",
+   "lbh": "Ladbrokes decimal odds for a home win.",
+   "lbd": "Ladbrokes decimal odds for a draw.",
+   "lba": "Ladbrokes decimal odds for an away win.",
+   "psh": "Pinnacle Sports decimal odds for a home win.",
+   "psd": "Pinnacle Sports decimal odds for a draw.",
+   "psa": "Pinnacle Sports decimal odds for an away win.",
+   "whh": "William Hill decimal odds for a home win.",
+   "whd": "William Hill decimal odds for a draw.",
+   "wha": "William Hill decimal odds for an away win.",
+   "sjh": "Stan James decimal odds for a home win.",
+   "sjd": "Stan James decimal odds for a draw.",
+   "sja": "Stan James decimal odds for an away win.",
+   "vch": "VC Bet decimal odds for a home win.",
+   "vcd": "VC Bet decimal odds for a draw.",
+   "vca": "VC Bet decimal odds for an away win.",
+   "gbh": "Gamebookers decimal odds for a home win.",
+   "gbd": "Gamebookers decimal odds for a draw.",
+   "gba": "Gamebookers decimal odds for an away win.",
+   "bsh": "Blue Square decimal odds for a home win.",
+   "bsd": "Blue Square decimal odds for a draw.",
+   "bsa": "Blue Square decimal odds for an away win."
+  },
+  "structure_hash": "944a1abf7823e0d8ab0c0fa4c3ee2e93"
+ },
+ "member": {
+  "description": "One row per member of the organization, with contact details, role, and major.",
+  "columns": {
+   "member_id": "Primary key identifying the member; text record ID.",
+   "first_name": "Member's given name.",
+   "last_name": "Member's family name.",
+   "email": "Member's email address, mostly first.last@lpu.edu.",
+   "position": "Member's role: Member, Inactive, President, Vice President, Treasurer, or Secretary.",
+   "t_shirt_size": "Member's t-shirt size: Small, Medium, Large, or X-Large.",
+   "phone": "Member's phone number as free text; formats vary by region.",
+   "zip": "Foreign key to zip_code.zip_code; member's ZIP/postal code.",
+   "link_to_major": "Foreign key to major.major_id; the member's declared major."
+  },
+  "structure_hash": "005eed1fb2a3208826f6da073aa76625"
+ },
+ "molecule": {
+  "description": "One row per molecule, identified by a molecule_id.",
+  "columns": {
+   "molecule_id": "Molecule identifier, formatted as 'TR' followed by digits; referenced by atom and bond tables.",
+   "label": "Molecule class flag: '+' or '-'."
+  },
+  "structure_hash": "7556910d9e9a932cc86b7b9f910b9c82"
+ },
+ "order": {
+  "description": "One row per bank transfer order, recording the sending account, destination bank and account, amount, and payment purpose.",
+  "columns": {
+   "order_id": "Unique identifier for the order.",
+   "account_id": "Sending account, referencing account.account_id.",
+   "bank_to": "Two-letter code of the destination bank.",
+   "account_to": "Destination account number the transfer is sent to.",
+   "amount": "Transfer amount in the account's currency unit.",
+   "k_symbol": "Payment purpose code: SIPO, UVER, POJISTNE, LEASING, or blank if unspecified."
+  },
+  "structure_hash": "f71d6a9dabe7fdf393e7707fedebcd05"
+ },
+ "patient": {
+  "description": "One row per patient, with demographics and admission/diagnosis information.",
+  "columns": {
+   "id": "Unique patient identifier; primary key.",
+   "sex": "Patient sex: 'F' female, 'M' male; blank when unknown.",
+   "birthday": "Patient's date of birth.",
+   "description": "Possibly a recorded date for the patient, such as first visit or description date; often missing.",
+   "First Date": "Possibly the patient's first contact or first examination date; often missing.",
+   "admission": "Admission status flag: '+' present, '-' absent, '+(' possibly partial or conditional admission; blank unknown.",
+   "diagnosis": "Diagnosis code, e.g. SLE (lupus), SJS (Stevens-Johnson syndrome), RA (rheumatoid arthritis)."
+  },
+  "structure_hash": "f2fbf4e0119594554e785031065b76aa"
+ },
+ "pitstops": {
+  "description": "One row per driver per pit stop within a race.",
+  "columns": {
+   "raceid": "Identifier of the race; joins to races.raceid.",
+   "driverid": "Identifier of the driver making the stop; joins to drivers.driverid.",
+   "stop": "Sequential pit stop number for that driver in the race, starting at 1.",
+   "lap": "Lap number on which the pit stop occurred.",
+   "time": "Clock time of the stop as text, 'MM:SS' or 'HH:MM:SS'.",
+   "duration": "Pit stop duration in seconds, stored as text.",
+   "milliseconds": "Pit stop duration in milliseconds."
+  },
+  "structure_hash": "29533886baca81a413b188552a99fb3a"
+ },
+ "player": {
+  "description": "One row per soccer player, with identifying IDs, name, birth date, height and weight.",
+  "columns": {
+   "id": "Surrogate primary key uniquely identifying the player in this table.",
+   "player_api_id": "External API identifier for the player; may be null for some players.",
+   "player_name": "Player's display name, typically first name or single name.",
+   "player_fifa_api_id": "FIFA video-game API identifier for the player; may be null.",
+   "birthday": "Player's date of birth, stored as text timestamp with time set to midnight.",
+   "height": "Player height in centimeters.",
+   "weight": "Player weight in pounds."
+  },
+  "structure_hash": "839d3991e1a609f7525786fe25db015c"
+ },
+ "player_attributes": {
+  "description": "One row per player per dated FIFA attribute snapshot, giving that player's ratings and skills on that date.",
+  "columns": {
+   "id": "Surrogate primary key for the attribute snapshot row.",
+   "player_fifa_api_id": "Player identifier in the FIFA API; joins to FIFA-sourced player data.",
+   "player_api_id": "Foreign key to player.player_api_id identifying the rated player.",
+   "date": "Snapshot date and time, stored as text in 'YYYY-MM-DD HH:MM:SS' format.",
+   "overall_rating": "Current overall ability rating, roughly 0-100 scale.",
+   "potential": "Maximum projected overall rating the player could reach, 0-100 scale.",
+   "preferred_foot": "Dominant foot: 'right' or 'left'.",
+   "attacking_work_rate": "Attacking work-rate category; intended low/medium/high but contains dirty values.",
+   "defensive_work_rate": "Defensive work-rate category; intended low/medium/high but heavily corrupted with junk values.",
+   "crossing": "Crossing ability rating, 0-100 scale.",
+   "finishing": "Finishing ability rating, 0-100 scale.",
+   "heading_accuracy": "Heading accuracy rating, 0-100 scale.",
+   "short_passing": "Short passing ability rating, 0-100 scale.",
+   "volleys": "Volley shooting ability rating, 0-100 scale.",
+   "dribbling": "Dribbling ability rating, 0-100 scale.",
+   "curve": "Curve/bend on shots and passes rating, 0-100 scale.",
+   "free_kick_accuracy": "Free kick accuracy rating, 0-100 scale.",
+   "long_passing": "Long passing ability rating, 0-100 scale.",
+   "ball_control": "Ball control rating, 0-100 scale.",
+   "acceleration": "Acceleration rating, 0-100 scale.",
+   "sprint_speed": "Sprint speed rating, 0-100 scale.",
+   "agility": "Agility rating, 0-100 scale.",
+   "reactions": "Reactions rating, 0-100 scale.",
+   "balance": "Balance rating, 0-100 scale.",
+   "shot_power": "Shot power rating, 0-100 scale.",
+   "jumping": "Jumping ability rating, 0-100 scale.",
+   "stamina": "Stamina rating, 0-100 scale.",
+   "strength": "Physical strength rating, 0-100 scale.",
+   "long_shots": "Long shot ability rating, 0-100 scale.",
+   "aggression": "Aggression rating, 0-100 scale.",
+   "interceptions": "Interception ability rating, 0-100 scale.",
+   "positioning": "Positioning rating, 0-100 scale.",
+   "vision": "Vision/passing awareness rating, 0-100 scale.",
+   "penalties": "Penalty taking ability rating, 0-100 scale.",
+   "marking": "Marking ability rating, 0-100 scale.",
+   "standing_tackle": "Standing tackle ability rating, 0-100 scale.",
+   "sliding_tackle": "Sliding tackle ability rating, 0-100 scale.",
+   "gk_diving": "Goalkeeper diving rating, 0-100 scale.",
+   "gk_handling": "Goalkeeper handling rating, 0-100 scale.",
+   "gk_kicking": "Goalkeeper kicking rating, 0-100 scale.",
+   "gk_positioning": "Goalkeeper positioning rating, 0-100 scale.",
+   "gk_reflexes": "Goalkeeper reflexes rating, 0-100 scale."
+  },
+  "structure_hash": "ed53333c0b6abf5dcec5df7ca4f585ce"
+ },
+ "posthistory": {
+  "description": "One row per revision event on a post, recording the type of change, who made it, and when.",
+  "columns": {
+   "id": "Surrogate primary key identifying the revision event.",
+   "posthistorytypeid": "Revision type code; 1=initial title, 2=body edit, 3=tags, 4=rollback, 5=title, 6=tags, 10=closed, 16=locked, 24/25=unknown.",
+   "postid": "Foreign key to the post this revision belongs to.",
+   "revisionguid": "GUID identifying the revision; all-zero value appears for some rows.",
+   "creationdate": "Timestamp when the revision was created, with timezone.",
+   "userid": "Foreign key to the user who made the revision; NULL when unknown or deleted.",
+   "text": "Body content of the revision, such as the new title or tag list; often empty.",
+   "comment": "Free-text edit summary, e.g. 'edited title' or 'edited tags'.",
+   "userdisplayname": "Display name of the revising user at the time; empty when anonymous."
+  },
+  "structure_hash": "ed2ecac3d7489d1b4d918150c8281aec"
+ },
+ "postlinks": {
+  "description": "One row per link between a post and a related post.",
+  "columns": {
+   "id": "Surrogate primary key identifying the link record.",
+   "creationdate": "Timestamp when the link was created.",
+   "postid": "ID of the source post that the link originates from.",
+   "relatedpostid": "ID of the post linked to from postid.",
+   "linktypeid": "Link type code: 1 = linked (related), 3 = duplicate."
+  },
+  "structure_hash": "650902dce6e755ff886c9a9f0e73aaf4"
+ },
+ "posts": {
+  "description": "One row per Stack Exchange post (question, answer, or other post type).",
+  "columns": {
+   "id": "Unique post identifier.",
+   "posttypeid": "Post type code: 1 question, 2 answer, 3 tag wiki, 4 tag excerpt, 5 user, 6 moderator nomination, 7 wiki.",
+   "acceptedanswerid": "ID of the accepted answer post; NULL when no answer accepted.",
+   "creaiondate": "Timestamp when the post was created.",
+   "score": "Net vote score (upvotes minus downvotes).",
+   "viewcount": "Number of times the post was viewed; NULL for non-question posts.",
+   "body": "Post body content, HTML or Markdown text.",
+   "owneruserid": "User ID of the post author; joins to users.id.",
+   "lasactivitydate": "Timestamp of the most recent activity on the post.",
+   "title": "Question title; NULL for answers and other non-question posts.",
+   "tags": "Angle-bracket delimited question tags, e.g. '<r>'; NULL for non-questions.",
+   "answercount": "Number of answers to the question; NULL for non-question posts.",
+   "commentcount": "Number of comments on the post.",
+   "favoritecount": "Number of users who favorited the question; NULL for non-questions.",
+   "lasteditoruserid": "User ID of the last editor; joins to users.id; NULL if never edited.",
+   "lasteditdate": "Timestamp of the most recent edit; NULL if never edited.",
+   "communityowneddate": "Timestamp when the post was converted to community wiki; NULL otherwise.",
+   "parentid": "ID of the parent post; for answers, the question they answer.",
+   "closeddate": "Timestamp when the question was closed; NULL if not closed.",
+   "ownerdisplayname": "Display name of the post author when no user ID is recorded.",
+   "lasteditordisplayname": "Display name of the last editor when no user ID is recorded."
+  },
+  "structure_hash": "2b30ebe4043a3f950093d285d4e02118"
+ },
+ "products": {
+  "description": "One row per product (goods item or service) that can appear on a transaction.",
+  "columns": {
+   "productid": "Unique identifier for the product; referenced by transactions_1k.",
+   "description": "Product name or label, mostly Czech text, e.g. goods, service fees, catalytic converters."
+  },
+  "structure_hash": "2ba66dadcb638542693ca2ca49965573"
+ },
+ "publisher": {
+  "description": "One row per comic book publisher.",
+  "columns": {
+   "id": "Surrogate primary key identifying the publisher.",
+   "publisher_name": "Name of the publishing company; empty string where the name is unknown."
+  },
+  "structure_hash": "f10e7739c9896fec853ea4e7fb7162e6"
+ },
+ "qualifying": {
+  "description": "One row per driver's qualifying result in a Formula 1 race weekend.",
+  "columns": {
+   "qualifyid": "Surrogate primary key identifying this qualifying record.",
+   "raceid": "Foreign key to the race this qualifying session belongs to.",
+   "driverid": "Foreign key to the driver who set the qualifying times.",
+   "constructorid": "Foreign key to the constructor (team) the driver raced for.",
+   "number": "Car number the driver used in this race.",
+   "position": "Final qualifying position, 1 being pole.",
+   "q1": "Lap time in the first qualifying session, as m:ss.mmm text.",
+   "q2": "Lap time in the second qualifying session; empty or NULL if not reached.",
+   "q3": "Lap time in the third qualifying session; empty or NULL if not reached."
+  },
+  "structure_hash": "e502e9acfe14aeb8892d469a1ea9bbba"
+ },
+ "race": {
+  "description": "One row per distinct superhero race or species category.",
+  "columns": {
+   "id": "Surrogate primary key identifying the race.",
+   "race": "Name of the race or species; '-' means unknown or unspecified."
+  },
+  "structure_hash": "01e5522da6c94b322dd8e0f79533ba3d"
+ },
+ "races": {
+  "description": "One row per Formula 1 race (Grand Prix event) held in a given season.",
+  "columns": {
+   "raceid": "Surrogate primary key identifying the race.",
+   "year": "Season year the race belongs to; joins to seasons.year.",
+   "round": "Race number within the season's calendar, starting at 1.",
+   "circuitid": "Circuit where the race was held; joins to circuits.circuitid.",
+   "name": "Official race name, typically the host country's Grand Prix.",
+   "date": "Calendar date the race was held.",
+   "time": "Scheduled local start time of day; NULL for most older races.",
+   "url": "Wikipedia page URL for the race."
+  },
+  "structure_hash": "0e5f8e465d10677dc9465f8c610284bb"
+ },
+ "results": {
+  "description": "One row per driver's result in a single race (a driver-race entry, including non-finishers).",
+  "columns": {
+   "resultid": "Surrogate primary key identifying this race result row.",
+   "raceid": "Foreign key to the race this result belongs to.",
+   "driverid": "Foreign key to the driver who achieved this result.",
+   "constructorid": "Foreign key to the constructor (team) the driver raced for.",
+   "number": "Driver's car number in this race.",
+   "grid": "Starting grid position; 0 likely indicates pit lane or no qualifying time.",
+   "position": "Final classified finishing position; NULL for unclassified or non-finishers.",
+   "positiontext": "Finishing position as text; letters like R (retired) or F mark non-numeric outcomes.",
+   "positionorder": "Sort order of the result, used to rank rows including non-finishers.",
+   "points": "Championship points awarded for this result.",
+   "laps": "Number of laps completed by the driver in this race.",
+   "time": "Finishing time or gap to winner, formatted as m:ss.mmm or +seconds; NULL if not classified.",
+   "milliseconds": "Finishing time or gap expressed in milliseconds; NULL when time is unavailable.",
+   "fastestlap": "Lap number on which the driver set their fastest lap; NULL if not recorded.",
+   "rank": "Rank of the driver's fastest lap time among all drivers in the race; NULL if no fastest lap.",
+   "fastestlaptime": "Driver's fastest lap time in this race, formatted m:ss.mmm; NULL if not recorded.",
+   "fastestlapspeed": "Average speed of the fastest lap, stored as text, likely km/h; NULL if not recorded.",
+   "statusid": "Foreign key to the finishing status (e.g. finished, retired, disqualified)."
+  },
+  "structure_hash": "6e5328740d5dcbeb43b429204f9be47a"
+ },
+ "rulings": {
+  "description": "One row per official ruling text issued for a Magic card on a given date.",
+  "columns": {
+   "id": "Surrogate primary key identifying the ruling.",
+   "date": "Date the ruling was published, ranging from March 2005 to February 2021.",
+   "text": "Full ruling text explaining how a card's ability or interaction works.",
+   "uuid": "Foreign key to cards.uuid identifying the card this ruling applies to."
+  },
+  "structure_hash": "ad129516b8c31f63b9dd1a5acabb88e7"
+ },
+ "satscores": {
+  "description": "One row per California school (identified by CDS code) with SAT test-taking counts and average scores.",
+  "columns": {
+   "cds": "School CDS code as text with leading zeros; joins to schools.cdscode, compare as text.",
+   "rtype": "School type code: 'S' or 'D'.",
+   "sname": "School name; NULL for about 23% of rows.",
+   "dname": "School district name.",
+   "cname": "County name.",
+   "enroll12": "Enrollment count in 2012.",
+   "numtsttakr": "Number of students who took the SAT.",
+   "avgscrread": "Average SAT reading score; NULL for about 26% of rows.",
+   "avgscrmath": "Average SAT math score; NULL for about 26% of rows.",
+   "avgscrwrite": "Average SAT writing score; NULL for about 26% of rows.",
+   "numge1500": "Count of students scoring 1500 or above; NULL for about 26% of rows."
+  },
+  "structure_hash": "4c2b8812db7381cf634e325d117a88d6"
+ },
+ "schools": {
+  "description": "One row per California school or district (CDS code) with its identity, status, location, contact and administrative details.",
+  "columns": {
+   "cdscode": "14-digit California Department of Education school/district code, stored as text with leading zeros.",
+   "ncesdist": "NCES district identifier, stored as text with leading zeros.",
+   "ncesschool": "NCES school identifier, stored as text with leading zeros.",
+   "statustype": "Operating status: Active, Closed, Merged or Pending.",
+   "county": "County name where the school or district is located.",
+   "district": "Name of the school district.",
+   "school": "Name of the school; NULL for district-level records.",
+   "street": "Physical street address of the school or district.",
+   "streetabr": "Abbreviated form of the physical street address.",
+   "city": "City of the physical address.",
+   "zip": "ZIP code of the physical address, stored as text.",
+   "state": "State of the physical address; always CA.",
+   "mailstreet": "Mailing street address.",
+   "mailstrabr": "Abbreviated form of the mailing street address.",
+   "mailcity": "City of the mailing address.",
+   "mailzip": "ZIP code of the mailing address, stored as text; may include ZIP+4.",
+   "mailstate": "State of the mailing address; always CA.",
+   "phone": "Contact phone number of the school or district.",
+   "ext": "Phone extension, stored as text.",
+   "website": "Website domain of the school or district.",
+   "opendate": "Date the school or district opened.",
+   "closeddate": "Date the school or district closed, if applicable.",
+   "charter": "Charter flag: 1 if charter school, 0 if not.",
+   "charternum": "Charter school number, stored as text with leading zeros.",
+   "fundingtype": "Charter funding category: Directly funded, Locally funded, or Not in CS funding model.",
+   "doc": "Two-digit District/Office/County code identifying the district type.",
+   "doctype": "Description of the district type, e.g. Unified School District or County Office of Education.",
+   "soc": "Two-digit School Ownership Code classifying the school type.",
+   "soctype": "Description of the school ownership/type code, e.g. Elementary Schools (Public).",
+   "edopscode": "Educational options code, e.g. TRAD, CON, COMMDAY, ALTSOC.",
+   "edopsname": "Description of the educational options code, e.g. Traditional or Continuation School.",
+   "eilcode": "Educational instruction level code, e.g. ELEM, HS, INTMIDJR.",
+   "eilname": "Description of the instruction level, e.g. Elementary or High School.",
+   "gsoffered": "Grade span offered by the school, e.g. K-5 or 9-12.",
+   "gsserved": "Grade span served by the school, e.g. K-5 or 9-12.",
+   "virtual": "Virtual instruction flag: N none, P partial, F full.",
+   "magnet": "Magnet school flag: 1 if magnet, 0 if not.",
+   "latitude": "Latitude of the school location in decimal degrees.",
+   "longitude": "Longitude of the school location in decimal degrees.",
+   "admfname1": "First name of the primary administrator.",
+   "admlname1": "Last name of the primary administrator.",
+   "admemail1": "Email address of the primary administrator.",
+   "admfname2": "First name of the secondary administrator.",
+   "admlname2": "Last name of the secondary administrator.",
+   "admemail2": "Email address of the secondary administrator.",
+   "admfname3": "First name of the third administrator.",
+   "admlname3": "Last name of the third administrator.",
+   "admemail3": "Email address of the third administrator.",
+   "lastupdate": "Date this record was last updated."
+  },
+  "structure_hash": "950c89b5e763de92c02420f88cd130d7"
+ },
+ "seasons": {
+  "description": "One row per Formula One season, identified by its year.",
+  "columns": {
+   "year": "Season year; primary key.",
+   "url": "Wikipedia page URL for that season's Formula One article."
+  },
+  "structure_hash": "08a1f004b91dbd117f8c78d1de049a15"
+ },
+ "set_translations": {
+  "description": "One row per set per language giving the localized name of that set.",
+  "columns": {
+   "id": "Surrogate primary key for the translation row.",
+   "language": "Language of the translation, e.g. 'French', 'Japanese'.",
+   "setcode": "Code of the set being translated; joins to sets.code.",
+   "translation": "Localized set name in the given language; NULL when no translation is available."
+  },
+  "structure_hash": "4740ad91bf12a35456602959acb3d3fb"
+ },
+ "sets": {
+  "description": "One row per Magic: The Gathering card set (expansion, promo, commander, etc.).",
+  "columns": {
+   "id": "Surrogate primary key identifying the set.",
+   "basesetsize": "Number of cards in the base (non-variant) portion of the set.",
+   "block": "Name of the block the set belongs to, e.g. 'Core Set'; NULL if not in a block.",
+   "booster": "JSON describing booster pack configurations and contents for the set.",
+   "code": "Short set code, e.g. '10E' for Tenth Edition.",
+   "isfoilonly": "1 if the set is only available in foil, else 0.",
+   "isforeignonly": "1 if the set was released only in non-English languages, else 0.",
+   "isnonfoilonly": "1 if the set is only available in non-foil, else 0.",
+   "isonlineonly": "1 if the set was released only digitally (e.g. MTGO), else 0.",
+   "ispartialpreview": "1 if the set listing is an incomplete preview, else 0.",
+   "keyrunecode": "Keyrune icon code used to render the set symbol, e.g. 'DEFAULT'.",
+   "mcmid": "Cardmarket set identifier; NULL if not listed on Cardmarket.",
+   "mcmidextras": "Cardmarket identifier for the set's extras (tokens, etc.); NULL if none.",
+   "mcmname": "Set name as used by Cardmarket; NULL if not listed there.",
+   "mtgocode": "MTGO set code; NULL if the set is not on MTGO.",
+   "name": "Full display name of the set, e.g. 'Mirrodin Besieged'.",
+   "parentcode": "Code of the parent set this set is derived from, e.g. 'ZNR'; NULL if none.",
+   "releasedate": "Date the set was released.",
+   "tcgplayergroupid": "TCGplayer category/group identifier for the set; NULL if not listed.",
+   "totalsetsize": "Total number of cards in the set, including variants.",
+   "type": "Set category, e.g. 'promo', 'expansion', 'core', 'commander', 'masters'."
+  },
+  "structure_hash": "6b6a306c469cf5f590b33d4c926e730f"
+ },
+ "status": {
+  "description": "One row per race result status (finish classification or retirement reason).",
+  "columns": {
+   "statusid": "Surrogate key identifying the status; referenced by results.",
+   "status": "Outcome label for a driver's race result, e.g. 'Finished', 'Clutch', '+1 Lap'."
+  },
+  "structure_hash": "7c272cfa128f67ee0890ddfa141303d4"
+ },
+ "superhero": {
+  "description": "One row per superhero character, with physical attributes and publishing metadata.",
+  "columns": {
+   "id": "Unique identifier for the superhero.",
+   "superhero_name": "Alias or codename the character is known by.",
+   "full_name": "Character's real name; '-' or NULL when unknown.",
+   "gender_id": "FK to gender; 1, 2, 3 are the only gender codes present.",
+   "eye_colour_id": "FK to colour giving eye colour.",
+   "hair_colour_id": "FK to colour giving hair colour.",
+   "skin_colour_id": "FK to colour giving skin colour.",
+   "race_id": "FK to race, e.g. Human, Mutant, alien species.",
+   "publisher_id": "FK to publisher owning the character, e.g. Marvel or DC.",
+   "alignment_id": "FK to alignment; 1, 2, 3 likely good, neutral, bad.",
+   "height_cm": "Height in centimetres; NULL when unknown.",
+   "weight_kg": "Weight in kilograms; NULL when unknown."
+  },
+  "structure_hash": "432d515010f526df53cc648ac489b63d"
+ },
+ "superpower": {
+  "description": "One row per distinct superpower, referenced by heroes via hero_power.",
+  "columns": {
+   "id": "Surrogate primary key identifying the superpower.",
+   "power_name": "Name of the superpower, e.g. 'Accelerated Healing'."
+  },
+  "structure_hash": "7fddb21be1b8e55be67ac30daeb042fc"
+ },
+ "tags": {
+  "description": "One row per tag used on the site, with its usage count and the posts that define it.",
+  "columns": {
+   "id": "Surrogate primary key identifying the tag.",
+   "tagname": "Tag label, lowercase hyphenated keyword such as 'garch' or 'parallel-analysis'.",
+   "count": "Number of posts carrying this tag.",
+   "excerptpostid": "Post ID of the tag's excerpt/intro text; NULL when none exists.",
+   "wikipostid": "Post ID of the tag's full wiki description; NULL when none exists."
+  },
+  "structure_hash": "a280fd7d64f0600a2eab782f509ad940"
+ },
+ "team": {
+  "description": "One row per soccer team, with its internal and external identifiers and names.",
+  "columns": {
+   "id": "Surrogate primary key identifying the team within this database.",
+   "team_api_id": "Team identifier used by the external API source.",
+   "team_fifa_api_id": "Team identifier in the FIFA API; null or missing for some teams.",
+   "team_long_name": "Full official team name, e.g. 'Widzew Łódź'.",
+   "team_short_name": "Abbreviated team name, typically three letters, e.g. 'BEL'."
+  },
+  "structure_hash": "5c7ef6cdcdf2d5918809a53ff2688165"
+ },
+ "team_attributes": {
+  "description": "One row per team per date, giving that team's FIFA-style tactical attribute ratings and their class labels.",
+  "columns": {
+   "id": "Surrogate primary key for the attribute record.",
+   "team_fifa_api_id": "FIFA's own team identifier, distinct from the local team id.",
+   "team_api_id": "Foreign key to team.team_api_id identifying the team these attributes describe.",
+   "date": "Date the attributes were recorded, stored as text in 'YYYY-MM-DD HH:MM:SS' format.",
+   "buildupplayspeed": "Rating for speed of build-up play, roughly 23-80.",
+   "buildupplayspeedclass": "Build-up speed band: Slow, Balanced or Fast.",
+   "buildupplaydribbling": "Rating for dribbling in build-up play, roughly 26-77; often NULL.",
+   "buildupplaydribblingclass": "Dribbling amount in build-up: Little, Normal or Lots.",
+   "buildupplaypassing": "Rating for passing in build-up play, roughly 20-80.",
+   "buildupplaypassingclass": "Build-up passing style: Short, Mixed or Long.",
+   "buildupplaypositioningclass": "Build-up positioning style: Organised or Free Form.",
+   "chancecreationpassing": "Rating for passing in chance creation, roughly 21-80.",
+   "chancecreationpassingclass": "Chance-creation passing risk: Safe, Normal or Risky.",
+   "chancecreationcrossing": "Rating for crossing in chance creation, roughly 23-24.",
+   "chancecreationcrossingclass": "Crossing frequency in chance creation: Little, Normal or Lots.",
+   "chancecreationshooting": "Rating for shooting in chance creation, roughly 22-77.",
+   "chancecreationshootingclass": "Shooting frequency in chance creation: Little, Normal or Lots.",
+   "chancecreationpositioningclass": "Chance-creation positioning style: Organised or Free Form.",
+   "defencepressure": "Rating for defensive pressure applied, roughly 67-72.",
+   "defencepressureclass": "Defensive pressure level: Deep, Medium or High.",
+   "defenceaggression": "Rating for defensive aggression, roughly 27-72.",
+   "defenceaggressionclass": "Defensive aggression style: Contain, Press or Double.",
+   "defenceteamwidth": "Rating for defensive team width, roughly 29-73.",
+   "defenceteamwidthclass": "Defensive width band: Narrow, Normal or Wide.",
+   "defencedefenderlineclass": "Defensive line approach: Cover or Offside Trap."
+  },
+  "structure_hash": "413ec392250214dcbc8b788276d6740f"
+ },
+ "trans": {
+  "description": "One row per bank transaction on an account, recording date, type, amount and resulting balance.",
+  "columns": {
+   "trans_id": "Unique identifier of the transaction.",
+   "account_id": "Account the transaction belongs to; joins to account.account_id.",
+   "date": "Date the transaction was posted.",
+   "type": "Transaction direction: PRIJEM = credit, VYDAJ = debit, VYBER = cash withdrawal.",
+   "operation": "Operation kind, e.g. VKLAD deposit, VYBER KARTOU card withdrawal, PREVOD transfer.",
+   "amount": "Transaction amount in local currency units.",
+   "balance": "Account balance after the transaction, in local currency units.",
+   "k_symbol": "Operation category code, e.g. UROK interest, SLUZBY fees, SIPO standing order, DUCHOD pension.",
+   "bank": "Two-letter code of the counterparty bank for transfers.",
+   "account": "Counterparty account number for transfers; NULL when not a transfer."
+  },
+  "structure_hash": "61e2c5782c2f626f0c4405830bb2ec83"
+ },
+ "transactions_1k": {
+  "description": "One row per fuel transaction at a gas station, recording the customer, card, product, amount and price.",
+  "columns": {
+   "transactionid": "Unique identifier for the transaction; primary key.",
+   "date": "Calendar date the transaction occurred.",
+   "time": "Time of day of the transaction, stored as text in MM:SS or HH:MM:SS format.",
+   "customerid": "Identifier of the customer making the purchase; joins to customers.customerid.",
+   "cardid": "Identifier of the payment card used for the transaction.",
+   "gasstationid": "Identifier of the gas station where the transaction occurred; joins to gasstations.gasstationid.",
+   "productid": "Identifier of the product purchased; joins to products.productid.",
+   "amount": "Quantity of product purchased, in units of the product.",
+   "price": "Price of the transaction, in currency units; cast to double precision when aggregating."
+  },
+  "structure_hash": "f6c544479d02fb8d55695cdf735ee666"
+ },
+ "users": {
+  "description": "One row per registered user account.",
+  "columns": {
+   "id": "Unique user identifier; primary key referenced by other tables.",
+   "reputation": "User's accumulated reputation score in points.",
+   "creationdate": "Timestamp when the user account was created.",
+   "displayname": "User's public display name shown on posts and comments.",
+   "lastaccessdate": "Timestamp of the user's most recent site access.",
+   "websiteurl": "URL of the user's personal website; often NULL or placeholder 'none'.",
+   "location": "Free-text self-reported location of the user.",
+   "aboutme": "HTML-formatted self-description from the user's profile; often empty.",
+   "views": "Number of times the user's profile page has been viewed.",
+   "upvotes": "Total upvotes the user has cast or received; direction unclear.",
+   "downvotes": "Total downvotes the user has cast or received; direction unclear.",
+   "accountid": "Possibly an external or legacy account identifier for the user.",
+   "age": "Self-reported age of the user in years; often NULL.",
+   "profileimageurl": "URL of the user's profile avatar image; often NULL."
+  },
+  "structure_hash": "b95f324431c1e8141df7488ab2be1aa1"
+ },
+ "votes": {
+  "description": "One row per vote cast on a post, recording the vote type, when it was cast, and by whom.",
+  "columns": {
+   "id": "Unique identifier for the vote.",
+   "postid": "Post the vote was cast on; joins to posts.id.",
+   "votetypeid": "Code for the kind of vote; 10 distinct values, most common 2, 5, 1, 3.",
+   "creationdate": "Date the vote was cast.",
+   "userid": "User who cast the vote; joins to users.id, NULL for 91% of rows.",
+   "bountyamount": "Bounty points attached to the vote; NULL in all rows."
+  },
+  "structure_hash": "12d0a5aa36a62f946d07016e083efed7"
+ },
+ "yearmonth": {
+  "description": "One row per customer per month with a consumption value.",
+  "columns": {
+   "customerid": "Identifier of the customer; joins to customers.customerid.",
+   "date": "Year and month as text 'YYYYMM'; 20 distinct months.",
+   "consumption": "Consumption amount for that customer-month; can be negative."
+  },
+  "structure_hash": "256fbeb77819bb4a78363363b56eced0"
+ },
+ "zip_code": {
+  "description": "One row per US ZIP code, with its city, county and state.",
+  "columns": {
+   "zip_code": "ZIP code identifier; primary key, referenced by member.",
+   "type": "ZIP code category: Standard, PO Box, or Unique.",
+   "city": "City or place name associated with the ZIP code.",
+   "county": "County name, including the word 'County'.",
+   "state": "Full state name.",
+   "short_state": "Two-letter state abbreviation."
+  },
+  "structure_hash": "45957b05c97498eb3afd6e1cffa4576b"
+ }
+}
