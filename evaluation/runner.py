@@ -13,6 +13,7 @@ from sqlalchemy.engine import Engine
 
 from app.services.schema_index.describer import _is_rate_limit, describe_table
 from app.services.schema_index.profiler import SchemaProfile, profile_database
+from app.services.schema_index.retriever import SchemaView
 from app.services.sql_agent import AGENT_MODE_EVALUATION, SQLAgent
 from evaluation import metrics
 from evaluation.dataset import Example
@@ -198,13 +199,24 @@ class AgentEvaluator:
             for t in tables if t in self.profile.tables and self._is_described(t)
         }
 
+    def _schema_view(self, tables: list[str]) -> SchemaView:
+        """What the agent's schema tools see, as the backend builds it
+        (schema_index.service.build_schema_view). It is limited to the
+        question's database: BIRD keeps every database in one Postgres."""
+        if self.opts.schema_format == "basic":
+            return SchemaView(tables, engine=self.engine)
+        descriptions = self._descriptions_for(tables) if self.opts.describe else None
+        return SchemaView(tables, profile=self.profile, descriptions=descriptions,
+                          engine=self.engine)
+
     def _agent_for(self, db_id: str) -> SQLAgent:
         key = "__all__" if self.opts.full_schema else db_id
         with self._agents_lock:
             if key not in self._agents:
-                schema = self._schema_for(self._context_tables(db_id))
+                tables = self._context_tables(db_id)
                 self._agents[key] = SQLAgent(
-                    self.engine, schema, mode=AGENT_MODE_EVALUATION, llm=self.llm
+                    self.engine, self._schema_for(tables), mode=AGENT_MODE_EVALUATION,
+                    llm=self.llm, schema_view=self._schema_view(tables),
                 )
             return self._agents[key]
 
@@ -239,12 +251,17 @@ class AgentEvaluator:
             "pred_sql": result.get("generated_sql", ""),
             "agent_error": None if result.get("success") else result.get("error"),
             "attempted_sql": trace.get("attempted_sql", []),
+            "exploration_sql": trace.get("exploration_sql", []),
+            "answer_source": trace.get("answer_source"),
+            "budget": trace.get("budget", {}),
             "tool_errors": trace.get("tool_errors", []),
             "llm_calls": trace.get("llm_calls", 0),
             "tool_calls": trace.get("tool_calls", {}),
-            # An agent that retrieves schema itself reports what it looked at;
-            # otherwise it saw everything the evaluator gave it.
-            "context_tables": trace.get("context_tables") or self._context_tables(ex.db_id),
+            # When the schema was too big for the prompt, the agent reports the
+            # tables it read columns of; otherwise it saw everything it was given.
+            "context_tables": (trace["context_tables"] if "context_tables" in trace
+                               else self._context_tables(ex.db_id)),
+            "schema_prompt": trace.get("schema_prompt"),   # "full" | "catalog" for this question
             "usage": trace.get("usage", {}),
             "final_text": trace.get("final_text", "") if not result.get("generated_sql") else "",
             "latency_s": round(latency, 3),
@@ -279,7 +296,11 @@ class AgentEvaluator:
         """Adds execution results, metrics, schema-linking analysis, a status
         and a failure category to a prediction record."""
         self._score_execution(rec)
-        context = rec.get("context_tables") or self._context_tables(rec["db_id"])
+        # [] is meaningful (catalog prompt, nothing described): only a missing
+        # value falls back to the tables the agent was given.
+        context = rec.get("context_tables")
+        if context is None:
+            context = self._context_tables(rec["db_id"])
         rec["linking"] = self.linker.analyze(rec["gold_sql"], rec.get("pred_sql"), context)
         rec["failure_category"] = failure_category(rec)
         return rec
@@ -318,7 +339,8 @@ class AgentEvaluator:
         rec["pred_columns"] = pred.columns
         rec["pred_sql_output"], rec["pred_output_truncated"] = self._output(pred.rows)
         rec["metrics"] = metrics.score(pred.rows, gold.rows, self.opts.float_precision)
-        rec["status"] = "correct" if rec["metrics"]["ex"] else "wrong_result"
+        # Correct = the gold answer is present; extra columns / column order are fine.
+        rec["status"] = "correct" if rec["metrics"]["ex_column_tolerant"] else "wrong_result"
         return rec
 
     def evaluate(self, ex: Example) -> dict:

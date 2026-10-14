@@ -128,8 +128,8 @@ def _precision(gold: frozenset | set, pred: frozenset | set) -> float:
 def failure_category(rec: dict) -> str | None:
     """Coarse, heuristic reason a question was missed (None if correct/unscorable).
 
-    Checked in order, so each failure gets the earliest matching cause:
-      extra_columns     right rows, but extra columns (passes column-tolerant EX)
+    Checked in order, so each failure gets the earliest matching cause
+    (extra columns alone never fail a question: see metrics.column_tolerant_match):
       wrong_tables      used a different set of tables than gold (schema linking)
       wrong_columns     same tables, but missed a column gold uses
       wrong_projection  same tables/columns, different number of output columns
@@ -142,8 +142,6 @@ def failure_category(rec: dict) -> str | None:
         return None
     if status != "wrong_result":
         return status
-    if (rec.get("metrics") or {}).get("ex_column_tolerant"):
-        return "extra_columns"
     link = rec.get("linking") or {}
     if link.get("tables_exact") is False:
         return "wrong_tables"

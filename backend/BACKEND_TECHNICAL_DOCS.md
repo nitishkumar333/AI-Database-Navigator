@@ -91,7 +91,8 @@ backend/
     |
     ├── services/                # Business logic / AI integrations
     |   ├── __init__.py
-    |   ├── sql_agent.py         # LangGraph + Gemini SQL agent (core AI loop)
+    |   ├── sql_agent.py         # SQLAgent: thin entry point for one agent turn
+    |   ├── agent/               # Agent graph (compiled once), tools, prompt, budgets
     |   ├── validate_sql.py      # SafeSqlExecutor: AST validation (sqlglot) + EXPLAIN + read-only transaction sandbox
     |   ├── rate_limiter.py      # Sliding-window rate limiter (Redis sorted sets)
     |   └── redis_client.py      # Redis wrapper (get/set/delete with JSON auto-encode)
@@ -363,47 +364,71 @@ A single, shared guest account (`guest@sqlnav.demo`, username `guest`) used by e
 
 On first creation it also gets the `"Shop Catalog & Orders"` knowledge base (all 9 tables) and 3 demo conversations with query history; later logins never re-seed. `is_guest(user)` (domain check) also matches the older per-login `guest_{uid}@sqlnav.demo` accounts.
 
-### `app/services/sql_agent.py` — The Core AI System
+### `app/services/sql_agent.py` + `app/services/agent/` — The Core AI System
 
-**Class: `SQLAgent`**
-
-Implements a LangGraph ReAct-style agentic loop:
+`SQLAgent` (`sql_agent.py`) is a thin wrapper: it bundles one connection's
+context and runs a turn of the agent graph in `services/agent/`. The graph is
+compiled **once per process** (one for production with the Postgres
+checkpointer, one for evaluation without it); everything connection-specific
+travels in an `AgentContext` passed as `graph.invoke(..., context=ctx)` and is
+never written to a checkpoint.
 
 ```
 User Question
      |
      v
-generate_response (Gemini 2.5 Flash with schema in system prompt)
+agent (LLM with schema in system prompt + 5 tools) <--------------------+
+     |                                                                   |
+     +-- tool calls --> tools node (budget check, parallel execution) ---+
+     |                    search_schema    lexical search over tables/columns
+     |                    describe_tables  full detail + FK join paths
+     |                    find_values      how a mentioned value is stored
+     |                    run_sql          exploratory, <=20 rows + row count
+     |                    submit_answer    final query, up to 200 rows -> ends the search
      |
-     +-- tool_call? YES --> execute_sql_query tool
-     |                           |
-     |                     SafeSqlExecutor.run()
-     |                     - Layer 1: sqlglot AST validation (SELECT/CTE root only)
-     |                     - Layer 2: Schema validation via EXPLAIN in read-only tx
-     |                     - Layer 3: Read-only transaction execution (10s timeout, max 50 rows)
-     |                     Returns QueryResult (to_llm_string compact JSON)
-     |
-     |<---- Tool result fed back to LLM (JSON rows or error)
-     |
-     +-- tool_call? NO --> Final response text
-     |
+     +-- answer submitted --> production: agent writes the reply --> END
+     |                        evaluation: END (the SQL is what gets scored)
+     +-- no tool calls -----> END (greeting / clarifying question)
      v
-Return { success, generated_sql, columns, rows, response_text }
+Return { success, generated_sql, columns, rows, assumptions, answer_source, response_text }
 ```
 
-**Key internals:**
+**Schema in the prompt**: when the full schema of the allowed tables fits
+`AGENT_FULL_SCHEMA_MAX_CHARS` (32k chars, ~8k tokens) it goes in the system
+prompt and the agent can submit straight away. Above that, the prompt holds
+only a table list (name, approximate rows, one-line description;
+`render.render_catalog`, capped at ~6k tokens with shorter fallbacks) and the
+agent reads columns with `describe_tables`, so the prompt stays bounded however
+large the database is. The choice is made per request in `SQLAgent.__init__`.
 
-- `SQLAgent.__init__(engine, schema_context)` — builds system prompt with DB schema.
-- `generate_system_prompt(schema_context)` — embeds full schema into the LLM system message with instructions to preserve image URL columns.
-- `build_workflow()` — creates LangGraph `StateGraph` with generate_response → tools → conditional edges. Uses `SqliteSaver` checkpointer with `checkpoints.sqlite` for multi-turn memory.
-- `run_query(user_input, conversation_id)` — invokes the graph with `thread_id=conversation_id` to maintain per-conversation context.
-- `execute_sql_query` tool (created by `create_sql_tool`) — validates and executes SQL via `SafeSqlExecutor(agent_instance.engine, max_rows=50)`. Stores generated SQL and result rows on success, and returns `result.to_llm_string()` (or driver error string if validation/execution fails).
+**Budgets** (`agent/state.py` `Budget`): 8 tool calls and 6 SQL executions per
+turn, kept in graph state. Calls beyond them are refused; once a budget is used
+up the next model call may only call `submit_answer` (forced `tool_choice`,
+falling back to a submit-only binding where a provider rejects it). A model
+that explores but replies without submitting is asked to submit once. After 2
+forced submits without a valid answer the turn ends and the last successful
+`run_sql` query is returned (`answer_source="exploration"`) with an
+explanation instead of an error.
 
-**To change the LLM model:** Change `model="gemini-2.5-flash"` in `generate_response()`.
+**Parallel tool calls** run on a shared thread pool; SQL from them is limited
+per engine by a semaphore (`tools.sql_slot`) because user engines have a pool
+of only 2 + 3 connections.
 
-**To change the system prompt:** Edit `generate_system_prompt()`.
+| File | Role |
+|---|---|
+| `sql_agent.py` | `SQLAgent(engine, schema_context, *, mode, llm, schema_view, budget)` and `run_query(...)`; result + evaluation trace. |
+| `agent/graph.py` | Nodes, routing, budgets, history replay (whole current turn + 20 earlier messages, unanswered tool calls stripped), compiled graphs, checkpointer. |
+| `agent/tools.py` | Tool schemas the model sees (`TOOL_SCHEMAS`) and their implementations (`run_tool(ctx, name, args)`). |
+| `agent/prompts.py` | System prompt: workflow, query rules, schema legend, PostgreSQL pitfalls. |
+| `agent/state.py` | `AgentState`, `AgentContext`, `Budget`. |
 
-**To add a new tool:** Define with `@tool` decorator, add to `build_workflow()` ToolNode and `llm.bind_tools()`.
+**To change the LLM model:** set `LLM_PROVIDER` / `*_MODEL` (see `llm_factory.py`).
+
+**To change the system prompt:** edit `agent/prompts.py`.
+
+**To add a new tool:** add an args model + entry in `TOOL_SCHEMAS` and an
+implementation in `_IMPLEMENTATIONS` (`agent/tools.py`); add its name to
+`SQL_TOOLS` if it runs user SQL.
 
 ---
 
@@ -417,7 +442,9 @@ What the agent reads about a database. Replaces the bare column list from
 | `profiler.py` | `profile_database(engine)`: tables, columns, keys and comments from `pg_catalog`; null fraction, distinct count, most-common values and ranges from `pg_stats` (no table scans); a `LIMIT 500` sample for tables without statistics; format detection for text columns (`'YYYYMM'`, dates, numbers or zero-padded codes stored as text); inferred foreign keys (name match confirmed by a containment probe). `schema_fingerprint(engine)` is the cheap change check (also used to match twin connections). |
 | `render.py` | `render_schema(profile, tables, descriptions)`: one compact line per column (`name type PK -> t.c -- description; values: ...; format; range`). Falls back to a compact level above ~60k chars. |
 | `describer.py` | One structured LLM call per table: what a row represents + ≤20-word column descriptions. |
-| `service.py` | Background jobs (2-thread pool, Redis lock per connection), `build_schema_context(db, conn, engine, tables)` used by `/api/query/chat` and suggestions, staleness checks, and description editing. |
+| `service.py` | Background jobs (2-thread pool, Redis lock per connection), `build_schema_context(db, conn, engine, tables)` used by `/api/query/chat` and suggestions, `build_schema_view(...)` for the agent's schema tools, staleness checks, and description editing. |
+| `retriever.py` | `SchemaView`: the agent's scoped view of the schema (profile + descriptions, limited to the allowed tables; a minimal inspector-based profile before profiling finishes) and the lexical `search` behind `search_schema`. |
+| `join_graph.py` | `JoinGraph`: shortest join paths between tables over declared + inferred foreign keys (BFS), shown by `describe_tables`. |
 
 Lifecycle:
 1. Creating a connection (UI or guest sign-up) schedules a profile job; connections that predate profiling get one on their first chat. Until it finishes, the agent gets the basic schema; requests never wait.
@@ -602,25 +629,23 @@ Frontend POST /api/query/chat
 5. get_all_table_names(engine)                  [db_manager.py - Redis cached]
          |
          v
-6. get_schema_context(engine, context_tables)   [db_manager.py - Redis cached]
+6. build_schema_context(...) + build_schema_view(...)  [schema_index/service.py - cached per profile version]
          |
          v
-7. SQLAgent(engine, schema_context).run_query() [sql_agent.py]
+7. SQLAgent(engine, schema_context, schema_view=...).run_query()  [sql_agent.py -> agent/graph.py]
          |
-   7a. LangGraph invokes generate_response node (Gemini with schema in system prompt)
+   7a. agent node: LLM with schema in the system prompt and 5 tools bound
          |
-   7b. Gemini decides to call execute_sql_query tool with generated SQL
+   7b. Optional exploration: search_schema / describe_tables / find_values / run_sql,
+         |    several per turn, run in parallel within the per-turn budget
          |
-   7c. SafeSqlExecutor.run(sql)                 [validate_sql.py]
+   7c. submit_answer(sql, assumptions) -> SafeSqlExecutor.run(sql)  [validate_sql.py]
          |    - Layer 1: sqlglot AST validation (_check_structure)
          |    - Layer 2: Schema validation via EXPLAIN in read-only tx (_check_against_schema)
-         |    - Layer 3: Execute in read-only tx with 10s timeout & 50-row limit (_execute)
+         |    - Layer 3: Execute in read-only tx with 10s timeout (_execute)
+         |    (an error goes back to the LLM, which fixes the query and submits again)
          |
-   7d. Tool returns compact JSON string via QueryResult.to_llm_string() (or clean driver error)
-         |
-   7e. Tool result fed back to Gemini
-         |
-   7f. Gemini generates final response_text (natural language summary)
+   7d. LLM writes the final response_text from the submitted result
          |
          v
 8. Save QueryHistory to App DB

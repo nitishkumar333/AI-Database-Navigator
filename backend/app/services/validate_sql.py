@@ -75,19 +75,26 @@ class QueryResult:
     rows: List[Dict[str, Any]] = field(default_factory=list)
     truncated: bool = False
     error: Optional[str] = None
- 
-    def to_llm_string(self) -> str:
-        """Compact JSON the agent can read. Handles Decimal/datetime/UUID etc."""
-        payload: Dict[str, Any] = {
-            "columns": self.columns,
-            "row_count": len(self.rows),
-            "rows": self.rows,
-        }
-        if self.truncated:
-            payload["note"] = (
-                f"Only the first {len(self.rows)} rows are shown; the full "
-                "result has more."
-            )
+    # Rows in the full result, when counted (see SafeSqlExecutor count_limit);
+    # None when there were more than `counted`.
+    total_rows: Optional[int] = None
+    counted: Optional[int] = None
+
+    def to_llm_string(self, max_rows: Optional[int] = None) -> str:
+        """Compact JSON the agent can read. Handles Decimal/datetime/UUID etc.
+        `max_rows` shows fewer rows than were fetched."""
+        rows = self.rows if max_rows is None else self.rows[:max_rows]
+        hidden = len(rows) < len(self.rows) or self.truncated
+        if self.total_rows is not None:
+            row_count: Any = self.total_rows
+        elif self.truncated:
+            row_count = f">{self.counted or len(self.rows)}"
+        else:
+            row_count = len(rows)
+        payload: Dict[str, Any] = {"columns": self.columns, "row_count": row_count, "rows": rows}
+        if hidden:
+            total = row_count if isinstance(row_count, int) else "more than " + row_count[1:]
+            payload["note"] = f"Only the first {len(rows)} of {total} rows are shown."
         return json.dumps(payload, default=str, ensure_ascii=False)
  
  
@@ -109,10 +116,14 @@ class SafeSqlExecutor:
     For production, also connect with a database role that only has SELECT.
     """
 
-    def __init__(self, engine: Engine, *, max_rows: int = 50, timeout_ms: int = 10_000):
+    def __init__(self, engine: Engine, *, max_rows: int = 50, timeout_ms: int = 10_000,
+                 count_limit: int = 0):
+        """count_limit > max_rows also counts the result's rows, up to that
+        many (only max_rows of them are kept)."""
         self.engine = engine
         self.max_rows = max_rows
         self.timeout_ms = timeout_ms
+        self.count_limit = max(count_limit, max_rows)
     
     def validate(self, sql_query: str) -> ValidationResult:
         sql = refine_sql_from_markdown(sql_query).strip().rstrip(";").strip()
@@ -186,13 +197,15 @@ class SafeSqlExecutor:
             with self._read_only_connection() as conn:
                 cursor = conn.execute(_raw_sql(sql))
                 columns = list(cursor.keys())
-                fetched = cursor.fetchmany(self.max_rows + 1)
+                fetched = cursor.fetchmany(self.count_limit + 1)
         except Exception as exc:
             return QueryResult(sql=sql, success=False, error=self._clean_error(exc))
- 
+
         truncated = len(fetched) > self.max_rows
         rows = [dict(zip(columns, row)) for row in fetched[: self.max_rows]]
-        return QueryResult(sql=sql, success=True, columns=columns, rows=rows, truncated=truncated)
+        total = len(fetched) if len(fetched) <= self.count_limit else None
+        return QueryResult(sql=sql, success=True, columns=columns, rows=rows,
+                           truncated=truncated, total_rows=total, counted=self.count_limit)
     
     @contextmanager
     def _read_only_connection(self) -> Iterator[Connection]:

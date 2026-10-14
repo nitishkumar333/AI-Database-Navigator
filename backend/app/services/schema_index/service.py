@@ -36,6 +36,7 @@ from app.models.schema_profile import SchemaAnnotation, SchemaProfileRecord
 from app.services.redis_client import redis_client
 from app.services.schema_index.profiler import SchemaProfile, profile_database, schema_fingerprint
 from app.services.schema_index.render import Descriptions, render_schema
+from app.services.schema_index.retriever import SchemaView
 from app.utils.db_manager import get_schema_context as basic_schema_context
 from app.utils.db_manager import get_user_engine
 
@@ -47,6 +48,8 @@ _local_jobs: set[int] = set()
 _local_lock = threading.Lock()
 _last_check: dict[int, float] = {}
 _context_cache: TTLCache = TTLCache(maxsize=256, ttl=3600)
+# (conn_id, version) -> (SchemaProfile, Descriptions), parsed once per version.
+_profile_cache: TTLCache = TTLCache(maxsize=32, ttl=3600)
 _context_lock = threading.Lock()
 
 
@@ -308,11 +311,12 @@ def load_descriptions(db: Session, conn_id: int) -> Descriptions:
     return docs
 
 
-def build_schema_context(db: Session, conn: DBConnection, engine, tables: list[str]) -> str:
-    """Schema text for `tables`: enriched once a profile exists, basic until then."""
+def _profile_meta(db: Session, conn: DBConnection, engine):
+    """(version, schema_hash) of the connection's profile, or None if there is
+    none yet. Also keeps profiles current: schedules the first profile (or a
+    retry after a failure) and the periodic schema-change check."""
     if not get_settings().SCHEMA_PROFILING_ENABLED:
-        return basic_schema_context(engine, tables)
-
+        return None
     meta = (db.query(SchemaProfileRecord.version, SchemaProfileRecord.schema_hash,
                      SchemaProfileRecord.status)
             .filter_by(connection_id=conn.id).first())
@@ -320,8 +324,16 @@ def build_schema_context(db: Session, conn: DBConnection, engine, tables: list[s
         # Never profiled, or the first attempt failed (retried at most once per interval).
         if meta is None or (meta.status == "failed" and _due(conn.id)):
             schedule_refresh(conn.id)
-        return basic_schema_context(engine, tables)
+        return None
     _check_for_changes(conn.id, engine, meta.schema_hash)
+    return meta
+
+
+def build_schema_context(db: Session, conn: DBConnection, engine, tables: list[str]) -> str:
+    """Schema text for `tables`: enriched once a profile exists, basic until then."""
+    meta = _profile_meta(db, conn, engine)
+    if meta is None:
+        return basic_schema_context(engine, tables)
 
     key = (conn.id, meta.version, hashlib.md5(",".join(sorted(tables)).encode()).hexdigest())
     with _context_lock:
@@ -329,15 +341,37 @@ def build_schema_context(db: Session, conn: DBConnection, engine, tables: list[s
     if cached is not None:
         return cached
 
-    record = db.query(SchemaProfileRecord).filter_by(connection_id=conn.id).first()
-    profile = SchemaProfile.from_dict(record.profile)
-    context = render_schema(profile, tables, load_descriptions(db, conn.id))
+    profile, descriptions = _profile_and_descriptions(db, conn.id, meta.version)
+    context = render_schema(profile, tables, descriptions)
     missing = [t for t in tables if t not in profile.tables]
     if missing:       # created since the last profile; the fingerprint check will catch up
         context = "\n\n".join(p for p in (context, basic_schema_context(engine, missing)) if p)
     with _context_lock:
         _context_cache[key] = context
     return context
+
+
+def _profile_and_descriptions(db: Session, conn_id: int, version: int):
+    key = (conn_id, version)
+    with _context_lock:
+        cached = _profile_cache.get(key)
+    if cached is None:
+        record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
+        cached = (SchemaProfile.from_dict(record.profile), load_descriptions(db, conn_id))
+        with _context_lock:
+            _profile_cache[key] = cached
+    return cached
+
+
+def build_schema_view(db: Session, conn: DBConnection, engine, tables: list[str]) -> SchemaView:
+    """What the agent's schema tools (search_schema, describe_tables,
+    find_values) see: `tables` with their profile and descriptions, or names,
+    types and keys only until the connection has been profiled."""
+    profile = descriptions = None
+    meta = _profile_meta(db, conn, engine)
+    if meta is not None:
+        profile, descriptions = _profile_and_descriptions(db, conn.id, meta.version)
+    return SchemaView(tables, profile=profile, descriptions=descriptions, engine=engine)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

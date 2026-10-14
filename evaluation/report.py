@@ -8,11 +8,13 @@ from pathlib import Path
 from evaluation.dataset import DIFFICULTIES
 from evaluation.linking import failure_category
 
+# The first metric decides "correct" (runner) and is the headline accuracy.
 _METRICS = (
-    ("ex", "EX (BIRD official)"),
-    ("ex_column_tolerant", "EX (column-tolerant)"),
+    ("ex_column_tolerant", "Accuracy (answer present; extra columns allowed)"),
+    ("ex", "EX strict (BIRD official)"),
     ("soft_f1", "Soft-F1"),
 )
+PRIMARY = _METRICS[0][0]
 
 _LINKING = (
     ("context_recall", "Gold tables present in agent context"),
@@ -47,7 +49,8 @@ def _bucket(records: list[dict]) -> dict:
     for key, _ in _METRICS:
         values = [float(r["metrics"][key]) for r in scorable]
         out[key] = round(100 * sum(values) / n, 2) if n else None
-    out["ex_ci95"] = wilson_ci(sum(bool(r["metrics"]["ex"]) for r in scorable), n)
+    out["accuracy"] = out[PRIMARY]
+    out["accuracy_ci95"] = wilson_ci(sum(bool(r["metrics"][PRIMARY]) for r in scorable), n)
     return out
 
 
@@ -78,8 +81,8 @@ def _linking(records: list[dict]) -> dict:
     out["questions_with_pred_sql"] = sum(1 for link in links if link.get("pred_tables") is not None)
     exact = [r for r, link in zip(scorable, links) if link.get("tables_exact") is True]
     wrong = [r for r, link in zip(scorable, links) if link.get("tables_exact") is False]
-    out["ex_when_tables_exact"] = {"count": len(exact), "ex": _bucket(exact)["ex"]}
-    out["ex_when_tables_wrong"] = {"count": len(wrong), "ex": _bucket(wrong)["ex"]}
+    out["accuracy_when_tables_exact"] = {"count": len(exact), "accuracy": _bucket(exact)["accuracy"]}
+    out["accuracy_when_tables_wrong"] = {"count": len(wrong), "accuracy": _bucket(wrong)["accuracy"]}
     return out
 
 
@@ -96,6 +99,26 @@ def _behaviour(records: list[dict]) -> dict:
         "avg_tool_calls": round(sum(_tool_call_total(r) for r in records) / n, 2),
         "latency_p50": _percentile(latencies, 0.5),
         "latency_p95": _percentile(latencies, 0.95),
+    }
+
+
+def _agent_steps(records: list[dict]) -> dict | None:
+    """How the exploring agent reached its answers (runs from before the
+    submit_answer tool don't record answer_source and get None)."""
+    records = [r for r in records if "answer_source" in r]
+    if not records:
+        return None
+    n = len(records)
+    explored = [r for r in records if r.get("exploration_sql")]
+    direct = [r for r in records if not r.get("exploration_sql")]
+    budgets = [r.get("budget") or {} for r in records]
+    return {
+        "answer_source": dict(Counter(r.get("answer_source") or "none" for r in records).most_common()),
+        "questions_explored": len(explored),
+        "avg_sql_runs": round(sum(b.get("sql_runs", 0) for b in budgets) / n, 2),
+        "questions_forced_to_submit": sum(1 for b in budgets if b.get("forced_submits")),
+        "accuracy_when_explored": {"count": len(explored), "accuracy": _bucket(explored)["accuracy"]},
+        "accuracy_when_direct": {"count": len(direct), "accuracy": _bucket(direct)["accuracy"]},
     }
 
 
@@ -125,6 +148,9 @@ def summarize(records: list[dict], run_config: dict) -> dict:
         "accuracy_by_difficulty": by_difficulty,
         "accuracy_by_db": by_db,
         "status_counts": dict(Counter(r.get("status", "unscored") for r in records).most_common()),
+        # Correct answers that strict EX would reject (extra columns or another column order).
+        "correct_with_extra_columns": sum(
+            1 for r in records if r.get("status") == "correct" and not (r.get("metrics") or {}).get("ex")),
         "failure_categories": dict(Counter(
             c for c in (failure_category(r) for r in records) if c
         ).most_common()),
@@ -146,6 +172,7 @@ def summarize(records: list[dict], run_config: dict) -> dict:
             "questions_with_retries": len(multi_attempt),
             "correct_after_retry": sum(1 for r in multi_attempt if r.get("status") == "correct"),
         },
+        "agent_steps": _agent_steps(records),
     }
 
 
@@ -154,9 +181,10 @@ def _fmt(v) -> str:
 
 
 def schema_label(run: dict) -> str:
-    """Runs from before the key existed used the basic format."""
+    """Runs from before a key existed used the basic format / full-schema prompt."""
     label = run.get("schema_format", "basic")
-    return label + (" + descriptions" if run.get("describe") else "")
+    label += " + descriptions" if run.get("describe") else ""
+    return label + f", {run.get('schema_prompt', 'full')} prompt"
 
 
 def _fmt_ci(ci) -> str:
@@ -186,19 +214,26 @@ def render_markdown(summary: dict) -> str:
     ]
     for key, label in _METRICS:
         lines.append(f"| {label} | " + " | ".join(_fmt(diff[c][key]) for c in cols) + " |")
-    lines.append("| EX 95% CI | " + " | ".join(_fmt_ci(diff[c].get("ex_ci95")) for c in cols) + " |")
+    lines.append("| Accuracy 95% CI | " + " | ".join(_fmt_ci(diff[c].get("accuracy_ci95")) for c in cols) + " |")
     lines += [
         "",
-        "Two runs whose EX confidence intervals overlap heavily are not reliably different; "
+        "A question is correct when the gold answer is present in the output: extra columns "
+        "and a different column order are allowed, missing or wrong rows are not. Strict EX "
+        "(BIRD's official metric) also requires the exact columns.",
+        "",
+        "Two runs whose confidence intervals overlap heavily are not reliably different; "
         "use `python -m evaluation compare` for a paired test on the same questions.",
     ]
 
-    lines += ["", "## By database", "", "| db_id | n | EX | EX (col-tolerant) | Soft-F1 |", "|---|---:|---:|---:|---:|"]
+    lines += ["", "## By database", "", "| db_id | n | Accuracy | EX strict | Soft-F1 |", "|---|---:|---:|---:|---:|"]
     for db, b in summary["accuracy_by_db"].items():
-        lines.append(f"| {db} | {b['count']} | {_fmt(b['ex'])} | {_fmt(b['ex_column_tolerant'])} | {_fmt(b['soft_f1'])} |")
+        lines.append(f"| {db} | {b['count']} | {_fmt(b['accuracy'])} | {_fmt(b['ex'])} | {_fmt(b['soft_f1'])} |")
 
     lines += ["", "## Outcome breakdown", "", "| Status | Count |", "|---|---:|"]
     lines += [f"| {k} | {v} |" for k, v in summary["status_counts"].items()]
+    if summary.get("correct_with_extra_columns"):
+        lines.append(f"\nOf the correct answers, {summary['correct_with_extra_columns']} have extra "
+                     "columns or another column order (strict EX would count them as wrong).")
 
     if summary.get("failure_categories"):
         lines += [
@@ -217,10 +252,10 @@ def render_markdown(summary: dict) -> str:
             "", "| Metric | Value |", "|---|---:|",
         ]
         lines += [f"| {label} | {_fmt(link.get(key))} |" for key, label in _LINKING]
-        ex_ok, ex_bad = link["ex_when_tables_exact"], link["ex_when_tables_wrong"]
+        ok, bad = link["accuracy_when_tables_exact"], link["accuracy_when_tables_wrong"]
         lines += [
-            f"| EX when table set is exact (n={ex_ok['count']}) | {_fmt(ex_ok['ex'])} |",
-            f"| EX when table set is wrong (n={ex_bad['count']}) | {_fmt(ex_bad['ex'])} |",
+            f"| Accuracy when table set is exact (n={ok['count']}) | {_fmt(ok['accuracy'])} |",
+            f"| Accuracy when table set is wrong (n={bad['count']}) | {_fmt(bad['accuracy'])} |",
         ]
 
     cost, lat, sc = summary["cost"], summary["latency_s"], summary["self_correction"]
@@ -232,12 +267,25 @@ def render_markdown(summary: dict) -> str:
         f"(avg {cost['avg_tokens_per_question']:,} per question)",
         f"- Avg LLM calls per question: {cost['avg_llm_calls_per_question']}",
         f"- Latency: mean {lat['mean']}s, p50 {lat['p50']}s, p95 {lat['p95']}s",
-        f"- Questions where the agent retried after a tool error: {sc['questions_with_retries']} "
+        f"- Questions where the agent submitted more than once: {sc['questions_with_retries']} "
         f"({sc['correct_after_retry']} ended correct)",
     ]
     if summary.get("tool_usage"):
         lines.append("- Tool calls: " + ", ".join(
             f"`{name}` {count}" for name, count in summary["tool_usage"].items()))
+    steps = summary.get("agent_steps")
+    if steps:
+        sources = ", ".join(f"{k} {v}" for k, v in steps["answer_source"].items())
+        ex_exp, ex_dir = steps["accuracy_when_explored"], steps["accuracy_when_direct"]
+        lines += [
+            f"- Answers by source: {sources} (`exploration` = budget ran out, last "
+            "`run_sql` used; `none` = no SQL)",
+            f"- Questions where the agent explored first: {steps['questions_explored']} "
+            f"(accuracy {_fmt(ex_exp['accuracy'])}) vs. answered directly: {ex_dir['count']} "
+            f"(accuracy {_fmt(ex_dir['accuracy'])})",
+            f"- Avg SQL executions per question: {steps['avg_sql_runs']}; "
+            f"forced to submit: {steps['questions_forced_to_submit']}",
+        ]
 
     behaviour = summary.get("behaviour_by_difficulty")
     if behaviour:
@@ -253,8 +301,8 @@ def render_markdown(summary: dict) -> str:
 
     lines += [
         "",
-        "Status legend: `correct` = EX match; `wrong_result` = ran but rows differ; "
-        "`no_sql` = agent never produced a successful query; `pred_error`/`pred_timeout` = "
+        "Status legend: `correct` = gold answer present in the output; `wrong_result` = ran but rows differ; "
+        "`no_sql` = agent neither submitted nor ran a successful query; `pred_error`/`pred_timeout` = "
         "generated SQL failed on re-execution; `agent_error` = graph/LLM error; "
         "`gold_error` = gold SQL failed (excluded from accuracy).",
     ]

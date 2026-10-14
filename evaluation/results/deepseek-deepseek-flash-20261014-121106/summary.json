@@ -17,164 +17,179 @@
   "accuracy_by_difficulty": {
     "simple": {
       "count": 8,
-      "ex": 62.5,
       "ex_column_tolerant": 75.0,
+      "ex": 62.5,
       "soft_f1": 67.5,
-      "ex_ci95": [
-        30.57,
-        86.32
+      "accuracy": 75.0,
+      "accuracy_ci95": [
+        40.93,
+        92.85
       ]
     },
     "moderate": {
       "count": 16,
-      "ex": 31.25,
       "ex_column_tolerant": 56.25,
-      "soft_f1": 42.39,
-      "ex_ci95": [
-        14.16,
-        55.6
+      "ex": 31.25,
+      "soft_f1": 42.31,
+      "accuracy": 56.25,
+      "accuracy_ci95": [
+        33.18,
+        76.9
       ]
     },
     "challenging": {
       "count": 6,
-      "ex": 50.0,
       "ex_column_tolerant": 50.0,
+      "ex": 50.0,
       "soft_f1": 43.33,
-      "ex_ci95": [
+      "accuracy": 50.0,
+      "accuracy_ci95": [
         18.76,
         81.24
       ]
     },
     "total": {
       "count": 30,
-      "ex": 43.33,
       "ex_column_tolerant": 60.0,
-      "soft_f1": 49.27,
-      "ex_ci95": [
-        27.38,
-        60.8
+      "ex": 43.33,
+      "soft_f1": 49.23,
+      "accuracy": 60.0,
+      "accuracy_ci95": [
+        42.32,
+        75.41
       ]
     }
   },
   "accuracy_by_db": {
     "california_schools": {
       "count": 1,
-      "ex": 0.0,
       "ex_column_tolerant": 100.0,
+      "ex": 0.0,
       "soft_f1": 40.0,
-      "ex_ci95": [
-        0.0,
-        79.35
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        20.65,
+        100.0
       ]
     },
     "card_games": {
       "count": 4,
-      "ex": 75.0,
       "ex_column_tolerant": 75.0,
-      "soft_f1": 75.3,
-      "ex_ci95": [
+      "ex": 75.0,
+      "soft_f1": 75.0,
+      "accuracy": 75.0,
+      "accuracy_ci95": [
         30.06,
         95.44
       ]
     },
     "codebase_community": {
       "count": 2,
-      "ex": 50.0,
       "ex_column_tolerant": 50.0,
+      "ex": 50.0,
       "soft_f1": 50.0,
-      "ex_ci95": [
+      "accuracy": 50.0,
+      "accuracy_ci95": [
         9.45,
         90.55
       ]
     },
     "debit_card_specializing": {
       "count": 2,
-      "ex": 50.0,
       "ex_column_tolerant": 100.0,
+      "ex": 50.0,
       "soft_f1": 83.33,
-      "ex_ci95": [
-        9.45,
-        90.55
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        34.24,
+        100.0
       ]
     },
     "european_football_2": {
       "count": 4,
-      "ex": 25.0,
       "ex_column_tolerant": 25.0,
+      "ex": 25.0,
       "soft_f1": 30.0,
-      "ex_ci95": [
+      "accuracy": 25.0,
+      "accuracy_ci95": [
         4.56,
         69.94
       ]
     },
     "financial": {
       "count": 1,
-      "ex": 0.0,
       "ex_column_tolerant": 0.0,
+      "ex": 0.0,
       "soft_f1": 0.0,
-      "ex_ci95": [
+      "accuracy": 0.0,
+      "accuracy_ci95": [
         0.0,
         79.35
       ]
     },
     "formula_1": {
       "count": 5,
-      "ex": 40.0,
       "ex_column_tolerant": 60.0,
+      "ex": 40.0,
       "soft_f1": 50.0,
-      "ex_ci95": [
-        11.76,
-        76.93
+      "accuracy": 60.0,
+      "accuracy_ci95": [
+        23.07,
+        88.24
       ]
     },
     "student_club": {
       "count": 2,
-      "ex": 50.0,
       "ex_column_tolerant": 100.0,
+      "ex": 50.0,
       "soft_f1": 70.0,
-      "ex_ci95": [
-        9.45,
-        90.55
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        34.24,
+        100.0
       ]
     },
     "superhero": {
       "count": 4,
-      "ex": 75.0,
       "ex_column_tolerant": 75.0,
+      "ex": 75.0,
       "soft_f1": 75.0,
-      "ex_ci95": [
+      "accuracy": 75.0,
+      "accuracy_ci95": [
         30.06,
         95.44
       ]
     },
     "thrombosis_prediction": {
       "count": 3,
-      "ex": 0.0,
       "ex_column_tolerant": 0.0,
+      "ex": 0.0,
       "soft_f1": 0.0,
-      "ex_ci95": [
+      "accuracy": 0.0,
+      "accuracy_ci95": [
         0.0,
         56.15
       ]
     },
     "toxicology": {
       "count": 2,
-      "ex": 50.0,
       "ex_column_tolerant": 100.0,
+      "ex": 50.0,
       "soft_f1": 30.18,
-      "ex_ci95": [
-        9.45,
-        90.55
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        34.24,
+        100.0
       ]
     }
   },
   "status_counts": {
-    "wrong_result": 17,
-    "correct": 13
+    "correct": 18,
+    "wrong_result": 12
   },
+  "correct_with_extra_columns": 5,
   "failure_categories": {
     "wrong_tables": 7,
-    "extra_columns": 5,
     "wrong_columns": 4,
     "wrong_projection": 1
   },
@@ -186,13 +201,13 @@
     "column_recall": 83.69,
     "column_precision": 86.08,
     "questions_with_pred_sql": 30,
-    "ex_when_tables_exact": {
+    "accuracy_when_tables_exact": {
       "count": 22,
-      "ex": 59.09
+      "accuracy": 77.27
     },
-    "ex_when_tables_wrong": {
+    "accuracy_when_tables_wrong": {
       "count": 8,
-      "ex": 0.0
+      "accuracy": 12.5
     }
   },
   "cost": {
@@ -246,5 +261,6 @@
   "self_correction": {
     "questions_with_retries": 2,
     "correct_after_retry": 0
-  }
+  },
+  "agent_steps": null
 }

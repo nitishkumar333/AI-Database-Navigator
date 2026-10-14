@@ -4,8 +4,12 @@ Tests how well the SQL agent writes SQL. It asks the agent questions from the
 BIRD mini-dev dataset (500 questions), runs the agent's SQL and the correct
 ("gold") SQL, and checks whether both return the same rows.
 
-Only the SQL is tested, not the final text answer. The agent stops as soon as
-its query works, so no tokens are spent on writing an answer.
+Only the SQL is tested, not the final text answer. The agent may explore
+first (`search_schema`, `describe_tables`, `find_values`, `run_sql`); the query
+it submits with `submit_answer` is what gets scored, and the run stops there, so
+no tokens are spent on writing an answer. Exploratory queries are never scored,
+except as a fallback when the agent runs out of budget without submitting
+(`answer_source: exploration` in the record).
 
 ## Setup (once)
 
@@ -76,8 +80,8 @@ Results are saved in `evaluation/results/<run-name>/`:
 
 | Score | Meaning |
 |---|---|
-| **EX** | The main score: % of questions where the agent's rows exactly match the gold rows. Row order doesn't matter, but the columns must match. |
-| **EX (column-tolerant)** | Same, but extra columns are allowed. If this is much higher than EX, the agent often returns extra columns. |
+| **Accuracy** | The main score, and what `correct` means: % of questions where the gold answer is present in the agent's output. Some subset of its columns, in any order, must give exactly the gold rows. Extra columns (a name next to the asked-for value, an image URL) and a different column order are fine; missing, extra or wrong rows are not. |
+| **EX strict** | BIRD's official metric: the rows must match with exactly the gold columns, in order. Kept to compare with published BIRD numbers. |
 | **Soft-F1** | Partial credit: how many of the right rows and values the agent got, even if not all. |
 
 **Outcome breakdown**: what happened to each question.
@@ -111,7 +115,7 @@ after an error.
 
 ### Newer report sections
 
-- **EX 95% CI**: the range the true accuracy probably lies in. At 30 questions it
+- **Accuracy 95% CI**: the range the true accuracy probably lies in. At 30 questions it
   is about ±17 points, and at 150 questions about ±8. Two runs whose ranges
   overlap a lot are not reliably different.
 - **Why questions were missed**: one heuristic cause per missed question,
@@ -119,7 +123,6 @@ after an error.
 
   | Category | Meaning | What usually fixes it |
   |---|---|---|
-  | `extra_columns` | Right rows, plus extra columns | Prompt rules on what to SELECT |
   | `wrong_tables` | Used different tables than gold | Schema descriptions, retrieval (schema linking) |
   | `wrong_columns` | Same tables, missed a column gold uses | Column descriptions, sample values |
   | `wrong_projection` | Different number of output columns | Prompt rules on output shape |
@@ -130,11 +133,12 @@ after an error.
 - **Schema linking**: compares the tables and columns used by the predicted SQL
   with those used by the gold SQL. Aliases (`T1`, `T2`) and unqualified columns
   are resolved against the real schema with sqlglot.
-  - *Gold tables present in agent context* is always 100% for now, because the
-    agent gets the whole per-database schema. It becomes the main retrieval
-    metric once the agent retrieves schema itself (an agent can report what it
-    looked at as `trace["context_tables"]`).
-  - *EX when table set is exact/wrong* shows how much accuracy is lost to
+  - *Gold tables present in agent context* is 100% when the schema fits in the
+    prompt (`AGENT_FULL_SCHEMA_MAX_CHARS`; true for every single BIRD database).
+    When it doesn't (e.g. `--full-schema`), the prompt lists tables only and this
+    counts the tables the agent described, so it measures retrieval. Each record's
+    `schema_prompt` says which case applied.
+  - *Accuracy when table set is exact/wrong* shows how much accuracy is lost to
     picking the wrong tables versus writing the wrong SQL on the right tables.
 - **Cost & behaviour by difficulty**: tokens, LLM calls, tool calls and latency
   per difficulty level.
@@ -192,7 +196,7 @@ One row per agent change that was merged, all on `dev150` with the same model.
 The gap between the two baseline rows estimates how much a semantic layer could
 recover.
 
-| Change | Run | Evidence | EX | EX (col-tol.) | Tables exact | Avg tokens | Avg LLM calls | Net vs prev (fixed/broken) |
+| Change | Run | Evidence | Accuracy | EX strict | Tables exact | Avg tokens | Avg LLM calls | Net vs prev (fixed/broken) |
 |---|---|---|---:|---:|---:|---:|---:|---|
 | Baseline (single-shot agent) | _to run_ | off | | | | | | — |
 | Baseline (single-shot agent) | _to run_ | on | | | | | | — |

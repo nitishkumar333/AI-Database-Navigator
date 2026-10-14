@@ -1,0 +1,15 @@
+{
+  "run_name": "catalog-smoke30",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "dataset": "bird_minidev_postgresql.csv",
+  "split": "smoke30",
+  "use_evidence": false,
+  "full_schema": false,
+  "schema_format": "enriched",
+  "describe": true,
+  "schema_prompt": "catalog",
+  "float_precision": 4,
+  "started_at": "2026-10-14T17:17:39"
+}

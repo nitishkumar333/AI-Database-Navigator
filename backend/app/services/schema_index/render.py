@@ -23,10 +23,11 @@ Descriptions = dict[str, dict]
 
 DEFAULT_MAX_CHARS = 60_000      # ~15k tokens
 _MAX_CATEGORICAL = 25           # distinct values at or below this are listed
-_SHOWN_VALUES = {"full": 10, "compact": 5}
-_EXAMPLES = 3
+# "detail" is what the agent's describe_tables tool returns for a few tables.
+_SHOWN_VALUES = {"detail": 25, "full": 10, "compact": 5}
+_EXAMPLES = {"detail": 10, "full": 3}
 _SHOWN_CHARS = 40
-_DESCRIPTION_CHARS = {"full": 300, "compact": 100}
+_DESCRIPTION_CHARS = {"detail": 1000, "full": 300, "compact": 100}
 
 _SIMPLE_IDENT = re.compile(r"^[a-z_][a-z0-9_$]*$")
 # PostgreSQL reserved key words (cannot be used unquoted as table/column names).
@@ -101,10 +102,10 @@ def _value_notes(col: ColumnProfile, level: str, is_key: bool) -> list[str]:
             notes.append(f"top values: {listed} ({distinct} distinct)")
         else:
             notes.append(f"values: {listed}")
-    elif level == "full" and values and family == "text":
-        notes.append("e.g. " + ", ".join(_literal(v, family) for v in values[:_EXAMPLES]))
+    elif level in _EXAMPLES and values and family == "text":
+        notes.append("e.g. " + ", ".join(_literal(v, family) for v in values[:_EXAMPLES[level]]))
 
-    if (level == "full" and not categorical and not is_key and not (col.is_unique or col.all_distinct)
+    if (level != "compact" and not categorical and not is_key and not (col.is_unique or col.all_distinct)
             and family in ("int", "num", "temporal") and col.min_value and col.max_value):
         notes.append(f"range ~{_clip(col.min_value, 30)} .. {_clip(col.max_value, 30)}")
 
@@ -199,3 +200,49 @@ def render_schema(
         if len(rendered) <= max_chars:
             break
     return rendered
+
+
+DEFAULT_CATALOG_CHARS = 24_000      # ~6k tokens: ~300 tables with descriptions
+_CATALOG_DESCRIPTION_CHARS = 100
+
+
+def render_catalog(
+    tables: list[TableProfile | str],
+    descriptions: Descriptions | None = None,
+    *,
+    max_chars: int = DEFAULT_CATALOG_CHARS,
+) -> str:
+    """The table list the agent keeps in its prompt (columns come from the
+    describe_tables tool). One line per table with its row count and a short
+    description; plain names, then a cut-off list, when that doesn't fit.
+
+    A str entry is a table without a profile: only its name is shown.
+    """
+    def row_count(t) -> str:
+        if isinstance(t, str) or t.row_count is None:
+            return ""
+        return " (empty)" if t.row_count == 0 else f" (~{t.row_count:,} rows)"
+
+    def description(t) -> str:
+        if isinstance(t, str):
+            return ""
+        text = ((descriptions or {}).get(t.name) or {}).get("description") or t.comment
+        return " -- " + _clip(text, _CATALOG_DESCRIPTION_CHARS) if text else ""
+
+    ordered = sorted(tables, key=lambda t: t if isinstance(t, str) else t.name)
+    names = [sql_ident(t if isinstance(t, str) else t.name) for t in ordered]
+    full = "\n".join(f"{n}{row_count(t)}{description(t)}" for n, t in zip(names, ordered))
+    if len(full) <= max_chars:
+        return full
+    counts = "\n".join(f"{n}{row_count(t)}" for n, t in zip(names, ordered))
+    if len(counts) <= max_chars:
+        return counts
+    shown, size = [], 0
+    for n in names:
+        if size + len(n) + 2 > max_chars:
+            break
+        shown.append(n)
+        size += len(n) + 2
+    rest = len(names) - len(shown)
+    return ", ".join(shown) + (f"\n... and {rest} more tables: use search_schema to find them."
+                               if rest else "")

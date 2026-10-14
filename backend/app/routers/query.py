@@ -13,7 +13,7 @@ from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.sql_agent import SQLAgent
 from app.utils.db_manager import get_all_table_names
-from app.services.schema_index.service import build_schema_context
+from app.services.schema_index.service import build_schema_context, build_schema_view
 from app.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
@@ -106,9 +106,17 @@ def chat_query(
     else:
         context_tables = all_tables
     
+    # SQLAgent puts this in the prompt when it is small enough (see
+    # AGENT_FULL_SCHEMA_MAX_CHARS), else only the table list.
     schema_context = build_schema_context(db, conn, engine, context_tables)
 
-    sql_agent = SQLAgent(engine, schema_context)
+    # The graph is compiled once per process; SQLAgent only bundles this
+    # connection's engine, schema and scope for one turn.
+    sql_agent = SQLAgent(
+        engine,
+        schema_context,
+        schema_view=build_schema_view(db, conn, engine, context_tables),
+    )
     result = sql_agent.run_query(
         req.question,
         user_id=current_user.id,
@@ -153,6 +161,7 @@ def chat_query(
                 "rows": result.get("rows", [])[:50],  # Cap stored rows
                 "success": result.get("success", False),
                 "error": result.get("error", ""),
+                "assumptions": result.get("assumptions", ""),
             }
             msg_type = "result" if result.get("success") and result.get("rows") else "text"
             assistant_msg = ConversationMessage(
