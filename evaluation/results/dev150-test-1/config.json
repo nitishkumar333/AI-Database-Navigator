@@ -1,0 +1,16 @@
+{
+  "run_name": "dev150-test-1",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "dataset": "bird_minidev_postgresql.csv",
+  "split": "dev150",
+  "use_evidence": false,
+  "full_schema": false,
+  "schema_format": "enriched",
+  "describe": true,
+  "schema_prompt": "auto",
+  "full_schema_max_chars": 32000,
+  "float_precision": 4,
+  "started_at": "2026-10-14T18:53:09"
+}
