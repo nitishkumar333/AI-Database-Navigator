@@ -3,8 +3,9 @@ Must be imported before anything from the backend `app` package.
 
 - Loads env vars from evaluation/.env, then backend/.env as a fallback
   (existing variables are never overridden, so shell exports win).
-- Forces AGENT_MODE=evaluation so the agent stops right after the SQL tool
-  succeeds and never spends tokens on the final natural-language answer.
+- Forces AGENT_MODE=evaluation so the agent stops right after it submits its
+  answer (submit_answer) and never spends tokens on the final natural-language
+  answer.
 - Puts backend/ on sys.path so `import app...` resolves to the real agent code.
 """
 import os

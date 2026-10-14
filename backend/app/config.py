@@ -18,9 +18,17 @@ class Settings(BaseSettings):
     DEEPSEEK_THINKING: bool = False  # thinking mode: slower, ignores temperature
     LLM_PROVIDER: str = "gemini"  # "gemini" | "groq" | "deepseek"
     # "production": full agent loop (SQL tool -> natural-language answer).
-    # "evaluation": stop as soon as the SQL tool succeeds, skipping the
-    #               final answer-generation LLM call (saves tokens in evals).
+    # "evaluation": stop as soon as an answer is submitted (submit_answer),
+    #               skipping the final answer-writing LLM call (saves tokens in evals).
     AGENT_MODE: str = "production"
+    # Terminal log of every agent LLM call and tool call (services/agent/trace_log.py):
+    # INFO = calls with parameters and results, DEBUG = also full tool output, WARNING = off.
+    AGENT_LOG_LEVEL: str = "INFO"
+    # The agent's system prompt holds the full schema (every column of every
+    # allowed table) when it fits this size; above it, only the table list
+    # (names, row counts, descriptions) and the agent reads columns with its
+    # describe_tables tool.
+    AGENT_FULL_SCHEMA_MAX_CHARS: int = 32_000   # ~8k tokens
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
 
     # Schema profiling (services/schema_index). Profiling reads catalogs and

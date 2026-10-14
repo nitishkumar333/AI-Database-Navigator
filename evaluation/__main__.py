@@ -47,7 +47,8 @@ RESULTS_DIR = EVAL_DIR / "results"
 # so they are generated once (by whichever model runs first) and committed.
 DESCRIPTIONS_PATH = EVAL_DIR / "data" / "bird_descriptions.json"
 # Values runs made before a config key existed implicitly used.
-_LEGACY_CONFIG = {"schema_format": "basic", "describe": False}
+# Values for runs from before a key existed.
+_LEGACY_CONFIG = {"schema_format": "basic", "describe": False, "schema_prompt": "full"}
 PREDICTIONS = "predictions.jsonl"
 
 logger = logging.getLogger("evaluation")
@@ -79,8 +80,8 @@ def _write_records(path: Path, records: list[dict]) -> None:
 def _print_summary(summary: dict, run_dir: Path) -> None:
     total = summary["accuracy_by_difficulty"]["total"]
     print(
-        f"\nScored {total['count']} questions | EX {total['ex']}% | "
-        f"EX(col-tolerant) {total['ex_column_tolerant']}% | Soft-F1 {total['soft_f1']}%"
+        f"\nScored {total['count']} questions | Accuracy {total['accuracy']}% | "
+        f"EX strict {total['ex']}% | Soft-F1 {total['soft_f1']}%"
     )
     print(f"Status: {summary['status_counts']}")
     print(f"Report: {run_dir / 'report.md'}")
@@ -125,13 +126,17 @@ def cmd_run(args) -> int:
         "full_schema": args.full_schema,
         "schema_format": args.schema_format,
         "describe": describe,
+        # Full schema in the prompt when it fits AGENT_FULL_SCHEMA_MAX_CHARS, else
+        # the table list. Runs from before this rule used "full" or "catalog".
+        "schema_prompt": "auto",
+        "full_schema_max_chars": settings.AGENT_FULL_SCHEMA_MAX_CHARS,
         "float_precision": args.float_precision,
         "started_at": datetime.now().isoformat(timespec="seconds"),
     }
     if config_path.exists() and not args.fresh:
         previous = json.loads(config_path.read_text(encoding="utf-8"))
         for key in ("provider", "model", "thinking", "split", "use_evidence", "full_schema",
-                    "schema_format", "describe"):
+                    "schema_format", "describe", "schema_prompt"):
             before = previous.get(key, _LEGACY_CONFIG.get(key))
             if before != run_config[key]:
                 print(
