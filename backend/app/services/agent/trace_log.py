@@ -117,9 +117,10 @@ def llm_note(turn_id: str, message: str) -> None:
 # ── Schema linking ───────────────────────────────────────────────────────────
 
 def schema_linked(turn_id: str, method: str, tables: list[str], bridges: list[str],
-                  chars: int, seconds: float) -> None:
-    _log().info("[%s] LINK %s | %.2fs | tables=%s bridges=%s | %s chars added to the prompt",
-                turn_id, method, seconds, tables, bridges, f"{chars:,}")
+                  chars: int, seconds: float, carried: list[str] | None = None) -> None:
+    carried_text = f" carried={carried}" if carried else ""
+    _log().info("[%s] LINK %s | %.2fs | tables=%s bridges=%s%s | %s chars added to the prompt",
+                turn_id, method, seconds, tables, bridges, carried_text, f"{chars:,}")
 
 
 def schema_link_failed(turn_id: str, error: str) -> None:

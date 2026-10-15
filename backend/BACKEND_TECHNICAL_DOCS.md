@@ -414,13 +414,19 @@ large the database is. The choice is made per request in `SQLAgent.__init__`.
 **Schema linking** (table-list prompt only): before the first LLM call the
 `link` node searches the schema with the question (plus the previous question
 for short follow-ups), keeps the strongest foreign-key-connected group of
-tables, adds the bridge tables that join them (approximate Steiner tree on the
-FK graph) and any table holding a value the question mentions, and appends
-them in full to this turn's system prompt (`SCHEMA_LINK_MAX_TABLES` tables,
-`SCHEMA_LINK_MAX_CHARS` chars; compact detail before dropping a table). Most
-questions are then answered with a single `submit_answer`; `describe_tables`
-is only needed for tables linking missed. If linking fails or finds nothing,
-the turn proceeds with the plain table list.
+tables, adds the tables the top two of them reference (up to 3: lookups and
+parents such as `status` or `products`), the bridge tables that join them
+(approximate Steiner tree on the FK graph) and any table holding a value the
+question mentions, and appends them in full to this turn's system prompt
+(`SCHEMA_LINK_MAX_TABLES` tables, `SCHEMA_LINK_MAX_CHARS` chars; compact detail
+before dropping a table). A hit on a foreign-key column (`order_items.product_id`)
+also counts for the table it references, so a parent table isn't outranked by
+its children. A short follow-up (≤ 6 key terms, "who bought it?") also links
+the tables the conversation's last answer read (`topic_tables` in the graph
+state, from the submitted SQL), first. Most questions are then answered with a
+single `submit_answer`; `describe_tables` is only needed for tables linking
+missed. If linking fails or finds nothing, the turn proceeds with the plain
+table list.
 
 **Budgets** (`agent/state.py` `Budget`): 8 tool calls and 6 SQL executions per
 turn, kept in graph state. Calls beyond them are refused; once a budget is used
@@ -441,7 +447,7 @@ of only 2 + 3 connections.
 | `agent/graph.py` | Nodes, routing, budgets, history replay (whole current turn + 20 earlier messages, unanswered tool calls stripped), compiled graphs, checkpointer. |
 | `agent/tools.py` | Tool schemas the model sees (`TOOL_SCHEMAS`) and their implementations (`run_tool(ctx, name, args)`). |
 | `agent/prompts.py` | System prompt: workflow, query rules, schema legend, PostgreSQL pitfalls. |
-| `agent/state.py` | `AgentState`, `AgentContext`, `Budget`. |
+| `agent/state.py` | `AgentState` (incl. `topic_tables`, kept across turns), `AgentContext`, `Budget`. |
 
 **To change the LLM model:** set `LLM_PROVIDER` / `*_MODEL` (see `llm_factory.py`).
 

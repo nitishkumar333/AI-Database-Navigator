@@ -25,6 +25,9 @@ class AgentState(TypedDict, total=False):
     linked_schema: str | None
     linked_tables: list[str]
     link_method: str | None    # "hybrid" | "trigram" | "keyword"
+    # Tables the conversation's last answer read. Kept across turns, so a short
+    # follow-up ("who bought it?") links them even when it names none.
+    topic_tables: list[str]
 
 
 @dataclass(frozen=True)

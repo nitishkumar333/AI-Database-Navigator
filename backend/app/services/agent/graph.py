@@ -10,6 +10,7 @@ The SQL agent graph, compiled once per process and mode.
 instead of the full schema: it retrieves the tables the question most likely
 needs (plus the bridge tables joining them) and adds them, in full, to this
 turn's system prompt, so simple questions need no describe_tables call.
+A short follow-up also keeps the tables the conversation's last answer read.
 
 Budgets are enforced here, in graph state, rather than by the recursion limit:
 the tools node refuses calls beyond Budget.max_tool_calls / max_sql_runs, and
@@ -35,6 +36,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
+import sqlglot
+from sqlglot import exp
 
 from app.config import get_settings
 from app.services.agent import prompts, trace_log
@@ -183,18 +186,22 @@ def _llm_calls_so_far(history: list) -> int:
 _SHORT_QUESTION_TERMS = 6     # follow-ups this short also search with the previous question
 
 
+def _is_follow_up(state: AgentState) -> bool:
+    return len(question_terms(state.get("last_user_input") or "")) <= _SHORT_QUESTION_TERMS
+
+
 def _retrieval_query(state: AgentState) -> str:
     """The text schema linking searches with: the question, plus the previous
     question for short follow-ups ("and by year?") that name no tables."""
-    question =state.get("last_user_input") or ""
-    if len(question_terms(question)) > _SHORT_QUESTION_TERMS:
+    question = state.get("last_user_input") or ""
+    if not _is_follow_up(state):
         return question
     earlier = [m for m in state["messages"][:turn_start(state["messages"])]
                if isinstance(m, HumanMessage)]
     if not earlier:
         return question
     previous = earlier[-1].content if isinstance(earlier[-1].content, str) else ""
-    return f"{question}\n{previous}"
+    return f"{question} \n {previous}"
 
 
 def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
@@ -203,8 +210,10 @@ def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     if not ctx.catalog_prompt:
         return empty
     start = time.perf_counter()
+    carry = (state.get("topic_tables") or []) if _is_follow_up(state) else []
     try:
-        result = ctx.schema.link(_retrieval_query(state), ctx.link_max_tables, ctx.link_max_chars)
+        result = ctx.schema.link(_retrieval_query(state), ctx.link_max_tables, ctx.link_max_chars,
+                                 carry=carry)
     except Exception as exc:
         logger.exception("Schema linking failed")
         trace_log.schema_link_failed(ctx.turn_id, f"{type(exc).__name__}: {exc}")
@@ -214,7 +223,7 @@ def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
                                 time.perf_counter() - start)
         return empty
     trace_log.schema_linked(ctx.turn_id, result.method, result.tables, result.bridges,
-                            len(result.text), time.perf_counter() - start)
+                            len(result.text), time.perf_counter() - start, carried=result.carried)
     return {"linked_schema": result.text, "linked_tables": result.all_tables,
             "link_method": result.method}
 
@@ -336,8 +345,30 @@ def _tools(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
         ))
         if artifact.get("kind") == SUBMIT_ANSWER and artifact.get("success"):
             answer = artifact
-    return {"messages": messages, "tool_calls_used": used, "sql_runs_used": sql_used,
-            "answer": answer}
+    update = {"messages": messages, "tool_calls_used": used, "sql_runs_used": sql_used,
+              "answer": answer}
+    if answer is not None and answer is not state.get("answer"):
+        topic = _sql_tables(answer.get("sql"), ctx.schema)
+        if topic:
+            update["topic_tables"] = topic
+    return update
+
+
+def _sql_tables(sql: str | None, schema) -> list[str]:
+    """The scope tables `sql` reads, in order of appearance (CTE names excluded)."""
+    try:
+        tree = sqlglot.parse_one(sql or "", read="postgres")
+    except Exception:
+        return []
+    if tree is None:
+        return []
+    ctes = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
+    out: list[str] = []
+    for node in tree.find_all(exp.Table):
+        name = schema.resolve_table(node.name) if node.name.lower() not in ctes else None
+        if name and name not in out:
+            out.append(name)
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
