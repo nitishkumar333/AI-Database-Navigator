@@ -136,6 +136,10 @@ Uses `pydantic-settings` `BaseSettings`. All env vars are read from `.env`.
 
 ## 4. Database Layer
 
+### `app/logging_setup.py`
+
+One handler and format for the backend's own terminal lines, `HH:MM:SS LEVEL [area] message`. Areas: `agent` (`services/agent/trace_log.py`, every LLM and tool call; `AGENT_LOG_LEVEL`), `jobs` (`services/schema_index/job_log.py`, profile/index/describe steps; `JOB_LOG_LEVEL`), and every other `app.*` module at WARNING only. `get_logger(area)` returns an area's logger; `configure_logging()` runs at startup and is idempotent. The `app.*` handler is skipped when the root logger is already configured (evaluation runs), so nothing prints twice.
+
 ### `app/database.py`
 
 ```python
@@ -458,6 +462,7 @@ What the agent reads about a database. Replaces the bare column list from
 |---|---|
 | `profiler.py` | `profile_database(engine)`: tables, columns, keys and comments from `pg_catalog`; null fraction, distinct count, most-common values and ranges from `pg_stats` (no table scans); a `LIMIT 500` sample for tables without statistics; format detection for text columns (`'YYYYMM'`, dates, numbers or zero-padded codes stored as text); inferred foreign keys (name match confirmed by a containment probe). `schema_fingerprint(engine)` is the cheap change check (also used to match twin connections). |
 | `render.py` | `render_schema(profile, tables, descriptions)`: one compact line per column (`name type PK -> t.c -- description; values: ...; format; range`). Falls back to a compact level above ~60k chars. |
+| `job_log.py` | Terminal log of the background jobs, one `[jobs]` line per step: `PROFILE` start/done/reused/failed, `INDEX` ready (with the reason, mode and doc/value counts; silent when nothing changed), `DESCRIBE` start, progress per chunk of 5 (marks knowledge-base tables), failed tables, rate-limit waits and the final summary, `SCHEMA` changes. `JOB_LOG_LEVEL`: INFO (default), WARNING (problems only), ERROR (off). |
 | `describer.py` | One structured LLM call per table: what a row represents + ≤20-word column descriptions. |
 | `service.py` | Background jobs (2-thread pool, Redis lock per connection), `build_schema_context(db, conn, engine, tables)` used by `/api/query/chat` and suggestions, `build_schema_view(...)` for the agent's schema tools, staleness checks, and description editing. |
 | `retriever.py` | `SchemaView`: the agent's scoped view of the schema (profile + descriptions, limited to the allowed tables; a minimal inspector-based profile before profiling finishes). `search` (behind `search_schema`) uses the retrieval index when the connection has one, else keyword scoring; `link` is schema linking (see above). |

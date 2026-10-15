@@ -82,7 +82,7 @@ def describe_tables(
     """Describe tables one at a time (keeps provider rate limits predictable).
 
     `on_described(table, docs)` is called after each table so callers can
-    persist progress; a failed table is logged, reported to `on_failed(table)`
+    persist progress; a failed table is reported to `on_failed(table, error)`
     and skipped. A rate limit stops the run: the tables after it are neither
     described nor failed.
     """
@@ -94,11 +94,11 @@ def describe_tables(
             docs = describe_table(llm, profile, name)
         except Exception as exc:
             if _is_rate_limit(exc):
-                logger.warning("Rate limited while describing %s; stopping early", name)
+                logger.debug("Rate limited while describing %s; stopping early", name)
                 break
-            logger.warning("Could not describe table %s: %s", name, exc)
+            logger.debug("Could not describe table %s: %s", name, exc)
             if on_failed:
-                on_failed(name)
+                on_failed(name, exc)
             continue
         out[name] = docs
         if on_described:

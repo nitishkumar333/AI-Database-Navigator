@@ -42,6 +42,7 @@ from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.models.schema_profile import SchemaAnnotation, SchemaProfileRecord
 from app.services.redis_client import redis_client
+from app.services.schema_index import job_log
 from app.services.schema_index.index_store import get_store
 from app.services.schema_index.indexer import HybridIndex, update_index
 from app.services.schema_index.profiler import SchemaProfile, profile_database, schema_fingerprint
@@ -106,7 +107,8 @@ def schedule_refresh(conn_id: int, *, describe: bool | None = None, force: bool 
     def job():
         try:
             refresh_profile(conn_id, describe=describe, force=force)
-        except Exception:
+        except Exception as exc:
+            job_log.warning(conn_id, "PROFILE", f"job failed | {type(exc).__name__}: {exc}")
             logger.exception("Schema profile job failed for connection %s", conn_id)
         finally:
             _release(conn_id)
@@ -135,7 +137,9 @@ def schedule_describe(conn_id: int) -> bool:
     finally:
         db.close()
     if not _acquire(conn_id):
+        job_log.info(conn_id, "DESCRIBE", "knowledge base saved | the running job takes its tables next")
         return False
+    job_log.info(conn_id, "DESCRIBE", "queued | knowledge base saved")
 
     def job():
         db = SessionLocal()
@@ -145,7 +149,8 @@ def schedule_describe(conn_id: int) -> bool:
             if conn is None or record is None or not record.profile:
                 return
             _describe(db, record, SchemaProfile.from_dict(record.profile), None, get_user_engine(conn))
-        except Exception:
+        except Exception as exc:
+            job_log.warning(conn_id, "DESCRIBE", f"job failed | {type(exc).__name__}: {exc}")
             logger.exception("Describe job failed for connection %s", conn_id)
         finally:
             db.close()
@@ -174,10 +179,10 @@ def _check_for_changes(conn_id: int, engine, stored_hash: str | None) -> None:
         try:
             current, _ = schema_fingerprint(engine)
             if current != stored_hash:
-                logger.info("Schema of connection %s changed; re-profiling", conn_id)
+                job_log.info(conn_id, "SCHEMA", "changed | re-profiling")
                 schedule_refresh(conn_id)
         except Exception as exc:
-            logger.info("Schema fingerprint check failed for connection %s: %s", conn_id, exc)
+            job_log.warning(conn_id, "SCHEMA", f"change check failed | {exc}")
 
     _executor.submit(job)
 
@@ -241,8 +246,8 @@ def _reuse_twin(db: Session, conn: DBConnection, record: SchemaProfileRecord, en
     record.profiled_at = twin.profiled_at
     record.version += 1
     db.commit()
-    logger.info("Connection %s reused the schema profile of connection %s",
-                conn.id, twin.connection_id)
+    job_log.info(conn.id, "PROFILE", f"reused | same schema as connection {twin.connection_id}, "
+                                     f"{len(record.described_tables or {})} tables already described")
     return True
 
 
@@ -259,18 +264,20 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
         record = _record(db, conn_id)
         record.status, record.error = "running", None
         db.commit()
+        started = time.perf_counter()
+        job_log.info(conn_id, "PROFILE", f"start | {conn.name} ({conn.db_name})")
 
         try:
             engine = get_user_engine(conn)
             if not force and _reuse_twin(db, conn, record, engine):
                 twin_profile = SchemaProfile.from_dict(record.profile)
-                _index(db, conn_id, twin_profile, engine)
+                _index(db, conn_id, twin_profile, engine, "profile reused")
                 if describe:
                     _describe(db, record, twin_profile, llm, engine)
                 return
             profile = profile_database(engine)
         except Exception as exc:
-            logger.warning("Profiling connection %s failed: %s", conn_id, exc)
+            job_log.warning(conn_id, "PROFILE", f"failed | {exc}")
             record.status, record.error = "failed", str(exc)[:1000]
             db.commit()
             return
@@ -288,11 +295,12 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
         _drop_generated(db, conn_id, set(described) - set(record.described_tables))
         record.version += 1
         db.commit()
-        logger.info("Profiled connection %s: %d tables, %d relations",
-                    conn_id, len(profile.tables), len(profile.relations))
+        job_log.info(conn_id, "PROFILE", f"done | {len(profile.tables)} tables, "
+                                         f"{len(profile.relations)} relations | "
+                                         f"{job_log.seconds(time.perf_counter() - started)}")
 
         # Index right away (descriptions can take a while), again once described.
-        _index(db, conn_id, profile, engine)
+        _index(db, conn_id, profile, engine, "profiled")
         if describe:
             _describe(db, record, profile, llm, engine)
         elif record.description_status == "idle":
@@ -310,19 +318,33 @@ def index_key(conn_id: int) -> str:
     return f"conn:{conn_id}"
 
 
-def _index(db: Session, conn_id: int, profile: SchemaProfile, engine) -> None:
+def _index(db: Session, conn_id: int, profile: SchemaProfile, engine, reason: str = "") -> None:
     """Update the connection's retrieval index. Failures are logged, never
     raised: without an index the agent falls back to keyword search."""
     try:
         if db.get(DBConnection, conn_id) is None:      # deleted while profiling
             return
-        update_index(index_key(conn_id), profile, load_descriptions(db, conn_id),
-                     source_engine=engine)
-    except Exception:
+        store = get_store()
+        before = ((store.state(index_key(conn_id)) or {}).get("updated_at") if store else None)
+        started = time.perf_counter()
+        state = update_index(index_key(conn_id), profile, load_descriptions(db, conn_id),
+                             source_engine=engine)
+        if not state or state.get("updated_at") == before:
+            return                                     # store unavailable, or nothing changed
+        mode = "hybrid" if state.get("embedding_model") else "trigram"
+        job_log.info(conn_id, "INDEX", f"ready{f' ({reason})' if reason else ''} | {mode} | "
+                                       f"{state.get('doc_count', 0):,} docs "
+                                       f"({state.get('embedded_count', 0):,} embedded), "
+                                       f"{state.get('value_count', 0):,} values | "
+                                       f"{job_log.seconds(time.perf_counter() - started)}")
+        if state.get("error"):
+            job_log.warning(conn_id, "INDEX", f"embeddings failed, trigram search only | {state['error']}")
+    except Exception as exc:
+        job_log.warning(conn_id, "INDEX", f"failed | {type(exc).__name__}: {exc}")
         logger.exception("Indexing the schema of connection %s failed", conn_id)
 
 
-def schedule_index(conn_id: int) -> None:
+def schedule_index(conn_id: int, reason: str = "description edited") -> None:
     """Re-index in the background (after a description edit)."""
     if not get_settings().SCHEMA_RETRIEVAL_ENABLED:
         return
@@ -334,7 +356,7 @@ def schedule_index(conn_id: int) -> None:
             record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
             if conn is None or record is None or not record.profile:
                 return
-            _index(db, conn_id, SchemaProfile.from_dict(record.profile), get_user_engine(conn))
+            _index(db, conn_id, SchemaProfile.from_dict(record.profile), get_user_engine(conn), reason)
         except Exception:
             logger.exception("Re-indexing connection %s failed", conn_id)
         finally:
@@ -429,18 +451,24 @@ def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, 
     from app.services.schema_index.describer import describe_tables
 
     conn_id = record.connection_id
-    if not _undescribed(record, profile):
+    todo = _undescribed(record, profile)
+    if not todo:
         record.description_status = "done"
         db.commit()
         return
     record.description_status = "running"
     db.commit()
+    started = time.perf_counter()
+    in_kb_now = _kb_tables(db, conn_id) & set(todo)
+    job_log.info(conn_id, "DESCRIBE", f"start | {len(todo)} table{'s' if len(todo) != 1 else ''} to describe"
+                                      + (f", {len(in_kb_now)} in knowledge bases first" if in_kb_now else ""))
 
     try:
         llm = llm or create_chat_model(max_retries=2)
     except Exception as exc:          # e.g. no API key configured
         record.description_status, record.error = "failed", f"describe: {exc}"[:1000]
         db.commit()
+        job_log.warning(conn_id, "DESCRIBE", f"cannot start | {exc}")
         return
 
     def save(table: str, docs: dict) -> None:
@@ -467,31 +495,44 @@ def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, 
     while True:
         db.expire_all()
         if db.get(DBConnection, conn_id) is None:           # deleted meanwhile
+            job_log.info(conn_id, "DESCRIBE", "stopped | connection deleted")
             return
         pending = [t for t in _undescribed(record, profile) if t not in failed]
         if not pending:
             break
         in_kb = _kb_tables(db, conn_id)
         chunk = _describe_order(profile, pending, in_kb)[:_DESCRIBE_CHUNK]
-        failures: list[str] = []
+        failures: dict[str, Exception] = {}
+        chunk_started = time.perf_counter()
         try:
             result = describe_tables(llm, profile, chunk, on_described=save,
-                                     on_failed=failures.append)
+                                     on_failed=failures.__setitem__)
         except Exception:
             db.rollback()
             if db.get(DBConnection, conn_id) is None:       # deleted while saving
+                job_log.info(conn_id, "DESCRIBE", "stopped | connection deleted")
                 return
             raise
         failed.update(failures)
         described += len(result)
         unindexed.update(result)
         _extend_lock(conn_id)
+        if result:
+            kb_note = " | knowledge base" if set(result) & in_kb else ""
+            job_log.info(conn_id, "DESCRIBE", f"{described}/{len(todo)} | {job_log.names(list(result))}"
+                                              f"{kb_note} | {job_log.seconds(time.perf_counter() - chunk_started)}")
+        for table, exc in failures.items():
+            job_log.warning(conn_id, "DESCRIBE", f"{table} failed, retried next run | "
+                                                 f"{type(exc).__name__}: {str(exc)[:200]}")
 
         if len(result) + len(failures) < len(chunk):       # stopped by a rate limit
             if rate_limits == len(_RATE_LIMIT_WAITS_S):
-                logger.warning("Describing connection %s stopped: still rate limited", conn_id)
+                job_log.warning(conn_id, "DESCRIBE", "stopped | still rate limited")
                 break
-            time.sleep(_RATE_LIMIT_WAITS_S[rate_limits])
+            wait = _RATE_LIMIT_WAITS_S[rate_limits]
+            job_log.warning(conn_id, "DESCRIBE", f"rate limited | waiting {wait}s "
+                                                 f"({rate_limits + 1}/{len(_RATE_LIMIT_WAITS_S)})")
+            time.sleep(wait)
             rate_limits += 1
         else:
             rate_limits = 0
@@ -499,15 +540,19 @@ def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, 
         # are all described (so their searches use the descriptions right away).
         kb_left = any(t in in_kb for t in _undescribed(record, profile) if t not in failed)
         if len(unindexed) >= batch or (unindexed & in_kb and not kb_left):
-            _index(db, conn_id, profile, engine)
+            _index(db, conn_id, profile, engine,
+                   f"{len(unindexed)} new descriptions" if len(unindexed) >= batch
+                   else "knowledge-base tables described")
             unindexed.clear()
 
     if unindexed:
-        _index(db, conn_id, profile, engine)
+        _index(db, conn_id, profile, engine, "describing finished")
     remaining = len(_undescribed(record, profile))
     record.description_status = "done" if not remaining else ("partial" if described else "failed")
     db.commit()
-    logger.info("Described %d tables for connection %s (%d left)", described, conn_id, remaining)
+    job_log.info(conn_id, "DESCRIBE", f"{record.description_status} | {described} described, "
+                                      f"{len(failed)} failed, {remaining} left | "
+                                      f"{job_log.seconds(time.perf_counter() - started)}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -587,7 +632,7 @@ def build_schema_view(db: Session, conn: DBConnection, engine, tables: list[str]
         profile, descriptions = _profile_and_descriptions(db, conn.id, meta.version)
         index = HybridIndex.for_key(index_key(conn.id))
         if index is None and _index_due(conn.id):
-            schedule_index(conn.id)       # profiled before indexing existed, or it failed
+            schedule_index(conn.id, "no index yet")   # profiled before indexing existed, or it failed
     return SchemaView(tables, profile=profile, descriptions=descriptions, engine=engine,
                       index=index)
 

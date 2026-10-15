@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
+from app.logging_setup import configure_logging
 from app.routers import auth, connections, schema, knowledge, query, history, conversations, suggestions
 
 app = FastAPI(
@@ -31,6 +32,7 @@ app.include_router(suggestions.router)
 
 @app.on_event("startup")
 def on_startup():
+    configure_logging()
     init_db()
 
 

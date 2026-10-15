@@ -2,8 +2,7 @@
 Terminal log of what the agent does: every LLM call and every tool call, with
 their parameters, timing and outcome.
 
-Uses its own "sqlagent" logger with its own stderr handler, so the lines show
-up under uvicorn and in evaluation runs without any logging setup elsewhere.
+Lines go to the "agent" area of the shared log (app/logging_setup.py).
 AGENT_LOG_LEVEL controls it: INFO (default) logs calls and results, DEBUG also
 logs full tool output and the model's input messages, WARNING silences it.
 
@@ -14,36 +13,16 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
-import threading
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from app.config import get_settings
+from app.logging_setup import get_logger
 
 _MAX_ARG_CHARS = 2_000
 _MAX_TEXT_CHARS = 300
 
-logger = logging.getLogger("sqlagent")
-_setup_lock = threading.Lock()
-_configured = False
-
-
 def _log() -> logging.Logger:
-    global _configured
-    if not _configured:
-        with _setup_lock:
-            if not _configured:
-                level = getattr(logging, get_settings().AGENT_LOG_LEVEL.upper(), logging.INFO)
-                logger.setLevel(level)
-                if not logger.handlers:
-                    handler = logging.StreamHandler(sys.stderr)
-                    handler.setFormatter(logging.Formatter(
-                        "%(asctime)s %(levelname)s [sqlagent] %(message)s", "%H:%M:%S"))
-                    logger.addHandler(handler)
-                logger.propagate = False
-                _configured = True
-    return logger
+    return get_logger("agent")
 
 
 def _clip(text: str, limit: int) -> str:

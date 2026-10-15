@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # Terminal log of every agent LLM call and tool call (services/agent/trace_log.py):
     # INFO = calls with parameters and results, DEBUG = also full tool output, WARNING = off.
     AGENT_LOG_LEVEL: str = "INFO"
+    JOB_LOG_LEVEL: str = "INFO"          # schema background jobs: INFO, WARNING (problems only), ERROR (off)
     # The agent's system prompt holds the full schema (every column of every
     # allowed table) when it fits this size; above it, only the table list
     # (names, row counts, descriptions) and the agent reads columns with its
