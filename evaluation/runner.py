@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy.engine import Engine
 
 from app.services.schema_index.describer import _is_rate_limit, describe_table
+from app.services.schema_index.indexer import HybridIndex, update_index
 from app.services.schema_index.profiler import SchemaProfile, profile_database
 from app.services.schema_index.retriever import SchemaView
 from app.services.sql_agent import AGENT_MODE_EVALUATION, SQLAgent
@@ -84,6 +85,9 @@ class RunOptions:
     schema_format: str = "enriched"       # "enriched" (profiled) | "basic" (pre-Phase-1 format)
     describe: bool = True                 # add LLM table/column descriptions (enriched only)
     descriptions_cache: Path | None = None  # JSON file; each table is described once, ever
+    # Search the schema with the retrieval index (pgvector + pg_trgm in the app
+    # database), as production does; False = keyword search over the profile.
+    retrieval: bool = True
     rpm: float | None = None
     max_rate_limit_retries: int = 6
     backoff_base_s: float = 15.0
@@ -106,6 +110,7 @@ class AgentEvaluator:
         self._linker_lock = threading.Lock()
         self._profile: SchemaProfile | None = None
         self._descriptions: dict[str, dict] | None = None
+        self._index: HybridIndex | None = None
 
     # ── Agent ────────────────────────────────────────────────────────────────
 
@@ -199,6 +204,32 @@ class AgentEvaluator:
             for t in tables if t in self.profile.tables and self._is_described(t)
         }
 
+    # ── Retrieval index ──────────────────────────────────────────────────────
+
+    @property
+    def index_key(self) -> str:
+        # Documents differ with and without descriptions, so they are separate indexes.
+        return f"eval:bird:{'described' if self.opts.describe else 'plain'}"
+
+    def prepare_index(self) -> str:
+        """Build (or update) the retrieval index of the BIRD tables, the way
+        the backend indexes a profiled connection. Returns the retrieval
+        method the agent will use: "hybrid" (embeddings + trigrams + values),
+        "trigram" (no embedding key), or "keyword" (index off / no pgvector)."""
+        if not self.opts.retrieval or self.opts.schema_format == "basic":
+            return "keyword"
+        all_tables = sorted(self.profile.tables)
+        descriptions = self._descriptions_for(all_tables) if self.opts.describe else None
+        state = update_index(self.index_key, self.profile, descriptions,
+                             source_engine=self.engine)
+        if state is None:
+            logger.warning("Retrieval index unavailable; the agent uses keyword search")
+            return "keyword"
+        if state.get("error"):
+            logger.warning("Retrieval index built with an error: %s", state["error"])
+        self._index = HybridIndex.for_key(self.index_key)
+        return self._index.mode if self._index else "keyword"
+
     def _schema_view(self, tables: list[str]) -> SchemaView:
         """What the agent's schema tools see, as the backend builds it
         (schema_index.service.build_schema_view). It is limited to the
@@ -207,7 +238,13 @@ class AgentEvaluator:
             return SchemaView(tables, engine=self.engine)
         descriptions = self._descriptions_for(tables) if self.opts.describe else None
         return SchemaView(tables, profile=self.profile, descriptions=descriptions,
-                          engine=self.engine)
+                          engine=self.engine, index=self._index)
+
+    def link(self, ex: Example, max_tables: int, max_chars: int):
+        """Schema linking for one question, without the agent (link-recall)."""
+        tables = self._context_tables(ex.db_id)
+        return self._schema_view(tables).link(ex.prompt(self.opts.use_evidence),
+                                              max_tables, max_chars)
 
     def _agent_for(self, db_id: str) -> SQLAgent:
         key = "__all__" if self.opts.full_schema else db_id
@@ -262,6 +299,9 @@ class AgentEvaluator:
             "context_tables": (trace["context_tables"] if "context_tables" in trace
                                else self._context_tables(ex.db_id)),
             "schema_prompt": trace.get("schema_prompt"),   # "full" | "catalog" for this question
+            # Catalog prompt only: tables schema linking added in full, and how they were found.
+            "linked_tables": trace.get("linked_tables"),
+            "link_method": trace.get("link_method"),
             "usage": trace.get("usage", {}),
             "final_text": trace.get("final_text", "") if not result.get("generated_sql") else "",
             "latency_s": round(latency, 3),
@@ -301,7 +341,8 @@ class AgentEvaluator:
         context = rec.get("context_tables")
         if context is None:
             context = self._context_tables(rec["db_id"])
-        rec["linking"] = self.linker.analyze(rec["gold_sql"], rec.get("pred_sql"), context)
+        rec["linking"] = self.linker.analyze(rec["gold_sql"], rec.get("pred_sql"), context,
+                                             rec.get("linked_tables"))
         rec["failure_category"] = failure_category(rec)
         return rec
 

@@ -1,0 +1,17 @@
+{
+  "run_name": "dev150-phase3-full",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "dataset": "bird_minidev_postgresql.csv",
+  "split": "dev150",
+  "use_evidence": true,
+  "full_schema": true,
+  "schema_format": "enriched",
+  "describe": true,
+  "schema_prompt": "auto",
+  "full_schema_max_chars": 32000,
+  "float_precision": 4,
+  "started_at": "2026-10-14T22:42:26",
+  "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
+}

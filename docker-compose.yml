@@ -4,7 +4,23 @@
 services:
   # ── PostgreSQL ──────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    # postgres:16-alpine + pgvector (schema retrieval index). Same Alpine base as
+    # before, so existing data volumes keep working. pg_trgm ships with Postgres.
+    # with_llvm=no skips the JIT bitcode, so no clang/llvm is needed.
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM postgres:16-alpine
+        RUN <<EOF
+        set -e
+        apk add --no-cache --virtual .build-deps git build-base
+        git clone --branch v0.8.0 --depth 1 https://github.com/pgvector/pgvector.git /tmp/pgvector
+        make -C /tmp/pgvector with_llvm=no OPTFLAGS=""
+        make -C /tmp/pgvector install with_llvm=no
+        rm -rf /tmp/pgvector
+        apk del .build-deps
+        EOF
+    image: sqlnav-postgres:16-pgvector
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -81,6 +97,12 @@ services:
       SCHEMA_DESCRIBE_ENABLED: ${SCHEMA_DESCRIBE_ENABLED:-true}
       SCHEMA_DESCRIBE_MAX_TABLES: ${SCHEMA_DESCRIBE_MAX_TABLES:-50}
       SCHEMA_CHECK_INTERVAL_S: ${SCHEMA_CHECK_INTERVAL_S:-300}
+      SCHEMA_RETRIEVAL_ENABLED: ${SCHEMA_RETRIEVAL_ENABLED:-true}
+      JINA_API_KEY: ${JINA_API_KEY:-}
+      JINA_EMBEDDING_MODEL: ${JINA_EMBEDDING_MODEL:-jina-embeddings-v5-text-small}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+      SCHEMA_LINK_MAX_TABLES: ${SCHEMA_LINK_MAX_TABLES:-8}
+      SCHEMA_LINK_MAX_CHARS: ${SCHEMA_LINK_MAX_CHARS:-24000}
     volumes:
       - ./backend:/app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

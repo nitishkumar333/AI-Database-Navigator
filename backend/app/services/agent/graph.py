@@ -1,10 +1,15 @@
 """
 The SQL agent graph, compiled once per process and mode.
 
-    agent ──tool calls──► tools ──► agent ... ──► END
-      │                     │
-      └─ no tool calls ─► END   └─ answer submitted ─► END (evaluation)
-                                                    └─► agent writes the reply (production)
+    link ──► agent ──tool calls──► tools ──► agent ... ──► END
+               │                     │
+               └─ no tool calls ─► END   └─ answer submitted ─► END (evaluation)
+                                                             └─► agent writes the reply (production)
+
+`link` (schema linking) only does work when the prompt holds the table list
+instead of the full schema: it retrieves the tables the question most likely
+needs (plus the bridge tables joining them) and adds them, in full, to this
+turn's system prompt, so simple questions need no describe_tables call.
 
 Budgets are enforced here, in graph state, rather than by the recursion limit:
 the tools node refuses calls beyond Budget.max_tool_calls / max_sql_runs, and
@@ -37,6 +42,7 @@ from app.services.agent.state import AgentContext, AgentState, Budget
 from app.services.agent.tools import (
     SQL_TOOLS, SUBMIT_ANSWER, SUBMIT_SCHEMA, TOOL_SCHEMAS, run_tool,
 )
+from app.services.schema_index.index_store import question_terms
 
 logger = logging.getLogger(__name__)
 
@@ -174,10 +180,50 @@ def _llm_calls_so_far(history: list) -> int:
                for m in turn if isinstance(m, AIMessage))
 
 
+_SHORT_QUESTION_TERMS = 6     # follow-ups this short also search with the previous question
+
+
+def _retrieval_query(state: AgentState) -> str:
+    """The text schema linking searches with: the question, plus the previous
+    question for short follow-ups ("and by year?") that name no tables."""
+    question =state.get("last_user_input") or ""
+    if len(question_terms(question)) > _SHORT_QUESTION_TERMS:
+        return question
+    earlier = [m for m in state["messages"][:turn_start(state["messages"])]
+               if isinstance(m, HumanMessage)]
+    if not earlier:
+        return question
+    previous = earlier[-1].content if isinstance(earlier[-1].content, str) else ""
+    return f"{question}\n{previous}"
+
+
+def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
+    ctx = runtime.context
+    empty = {"linked_schema": None, "linked_tables": [], "link_method": None}
+    if not ctx.catalog_prompt:
+        return empty
+    start = time.perf_counter()
+    try:
+        result = ctx.schema.link(_retrieval_query(state), ctx.link_max_tables, ctx.link_max_chars)
+    except Exception as exc:
+        logger.exception("Schema linking failed")
+        trace_log.schema_link_failed(ctx.turn_id, f"{type(exc).__name__}: {exc}")
+        return empty
+    if result is None:
+        trace_log.schema_linked(ctx.turn_id, ctx.schema.search_method, [], [], 0,
+                                time.perf_counter() - start)
+        return empty
+    trace_log.schema_linked(ctx.turn_id, result.method, result.tables, result.bridges,
+                            len(result.text), time.perf_counter() - start)
+    return {"linked_schema": result.text, "linked_tables": result.all_tables,
+            "link_method": result.method}
+
+
 def _agent(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     ctx = runtime.context
     models = _models(ctx.llm)
-    system = prompts.system_prompt(ctx.schema_context, ctx.budget, catalog=ctx.catalog_prompt)
+    system = prompts.system_prompt(ctx.schema_context, ctx.budget, catalog=ctx.catalog_prompt,
+                                   linked=state.get("linked_schema"))
     history = _history(state["messages"])
     answered = state.get("answer") is not None
     number = _llm_calls_so_far(history) + 1
@@ -330,9 +376,11 @@ def get_graph(evaluation: bool):
     with _graphs_lock:
         if evaluation not in _graphs:
             graph = StateGraph(AgentState, context_schema=AgentContext)
+            graph.add_node("link", _link)
             graph.add_node("agent", _agent)
             graph.add_node("tools", _tools)
-            graph.set_entry_point("agent")
+            graph.set_entry_point("link")
+            graph.add_edge("link", "agent")
             graph.add_conditional_edges("agent", _after_agent, ["tools", END])
             graph.add_conditional_edges("tools", _after_tools_for(evaluation), ["agent", END])
             _graphs[evaluation] = graph.compile(

@@ -12,6 +12,9 @@ Flow
 - After profiling, tables whose structure changed (or that were never
   described) get LLM descriptions, capped per run. Descriptions written by
   users always win and are never overwritten.
+- The retrieval index (indexer.py: embeddings, trigrams, category values) is
+  updated after profiling, after describing and after a description edit.
+  Updates only re-embed documents whose text changed.
 
 Jobs run on a small in-process thread pool. A Redis lock stops two backend
 processes profiling the same connection at once; without Redis an in-process
@@ -34,6 +37,8 @@ from app.database import SessionLocal
 from app.models.connection import DBConnection
 from app.models.schema_profile import SchemaAnnotation, SchemaProfileRecord
 from app.services.redis_client import redis_client
+from app.services.schema_index.index_store import get_store
+from app.services.schema_index.indexer import HybridIndex, update_index
 from app.services.schema_index.profiler import SchemaProfile, profile_database, schema_fingerprint
 from app.services.schema_index.render import Descriptions, render_schema
 from app.services.schema_index.retriever import SchemaView
@@ -205,8 +210,11 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
         try:
             engine = get_user_engine(conn)
             if not force and _reuse_twin(db, conn, record, engine):
+                twin_profile = SchemaProfile.from_dict(record.profile)
+                _index(db, conn_id, twin_profile, engine)
                 if describe:
-                    _describe(db, record, SchemaProfile.from_dict(record.profile), llm)
+                    _describe(db, record, twin_profile, llm)
+                    _index(db, conn_id, twin_profile, engine)
                 return
             profile = profile_database(engine)
         except Exception as exc:
@@ -231,13 +239,77 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
         logger.info("Profiled connection %s: %d tables, %d relations",
                     conn_id, len(profile.tables), len(profile.relations))
 
+        # Index right away (descriptions can take a while), again once described.
+        _index(db, conn_id, profile, engine)
         if describe:
             _describe(db, record, profile, llm)
+            _index(db, conn_id, profile, engine)
         elif record.description_status == "idle":
             record.description_status = "disabled"
             db.commit()
     finally:
         db.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Retrieval index
+# ──────────────────────────────────────────────────────────────────────────────
+
+def index_key(conn_id: int) -> str:
+    return f"conn:{conn_id}"
+
+
+def _index(db: Session, conn_id: int, profile: SchemaProfile, engine) -> None:
+    """Update the connection's retrieval index. Failures are logged, never
+    raised: without an index the agent falls back to keyword search."""
+    try:
+        update_index(index_key(conn_id), profile, load_descriptions(db, conn_id),
+                     source_engine=engine)
+    except Exception:
+        logger.exception("Indexing the schema of connection %s failed", conn_id)
+
+
+def schedule_index(conn_id: int) -> None:
+    """Re-index in the background (after a description edit)."""
+    if not get_settings().SCHEMA_RETRIEVAL_ENABLED:
+        return
+
+    def job():
+        db = SessionLocal()
+        try:
+            conn = db.get(DBConnection, conn_id)
+            record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
+            if conn is None or record is None or not record.profile:
+                return
+            _index(db, conn_id, SchemaProfile.from_dict(record.profile), get_user_engine(conn))
+        except Exception:
+            logger.exception("Re-indexing connection %s failed", conn_id)
+        finally:
+            db.close()
+
+    _executor.submit(job)
+
+
+_index_attempts: dict[int, float] = {}
+
+
+def _index_due(conn_id: int) -> bool:
+    """True at most once per SCHEMA_CHECK_INTERVAL_S per connection."""
+    now = time.monotonic()
+    with _local_lock:
+        if now - _index_attempts.get(conn_id, -1e9) < get_settings().SCHEMA_CHECK_INTERVAL_S:
+            return False
+        _index_attempts[conn_id] = now
+        return True
+
+
+def delete_index(conn_id: int) -> None:
+    try:
+        store = get_store()
+        if store is not None:
+            store.delete(index_key(conn_id))
+    except Exception as exc:
+        logger.warning("Could not delete the schema index of connection %s: %s", conn_id, exc)
 
 
 def _drop_generated(db: Session, conn_id: int, tables: set[str]) -> None:
@@ -367,11 +439,15 @@ def build_schema_view(db: Session, conn: DBConnection, engine, tables: list[str]
     """What the agent's schema tools (search_schema, describe_tables,
     find_values) see: `tables` with their profile and descriptions, or names,
     types and keys only until the connection has been profiled."""
-    profile = descriptions = None
+    profile = descriptions = index = None
     meta = _profile_meta(db, conn, engine)
     if meta is not None:
         profile, descriptions = _profile_and_descriptions(db, conn.id, meta.version)
-    return SchemaView(tables, profile=profile, descriptions=descriptions, engine=engine)
+        index = HybridIndex.for_key(index_key(conn.id))
+        if index is None and _index_due(conn.id):
+            schedule_index(conn.id)       # profiled before indexing existed, or it failed
+    return SchemaView(tables, profile=profile, descriptions=descriptions, engine=engine,
+                      index=index)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -404,7 +480,24 @@ def profile_status(db: Session, conn_id: int) -> dict:
         "error": record.error,
         "profiled_at": record.profiled_at.isoformat() if record.profiled_at else None,
         "relation_count": len(profile.relations) if profile else 0,
+        "index": _index_status(conn_id),
         "tables": tables,
+    }
+
+
+def _index_status(conn_id: int) -> dict:
+    store = get_store()
+    if store is None:
+        return {"status": "unavailable"}
+    state = store.state(index_key(conn_id)) or {}
+    return {
+        "status": state.get("status", "none"),
+        "error": state.get("error"),
+        "documents": state.get("doc_count", 0),
+        "embedded": state.get("embedded_count", 0),
+        "values": state.get("value_count", 0),
+        "embedding_model": state.get("embedding_model"),
+        "updated_at": state["updated_at"].isoformat() if state.get("updated_at") else None,
     }
 
 
@@ -484,3 +577,4 @@ def set_description(db: Session, conn_id: int, table_name: str, column_name: str
                                 column_name=column_name, description=description, source="user"))
     record.version += 1
     db.commit()
+    schedule_index(conn_id)

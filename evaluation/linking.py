@@ -80,12 +80,15 @@ class SchemaLinker:
         return SqlRefs(frozenset(tables), frozenset(columns))
 
     def analyze(self, gold_sql: str, pred_sql: str | None,
-                context_tables: list[str] | None) -> dict:
+                context_tables: list[str] | None,
+                linked_tables: list[str] | None = None) -> dict:
         """Per-question linking metrics (fractions in [0, 1]; None = not measurable).
 
         context_recall: share of the gold tables the agent had in its context.
           Trivially 1.0 while the agent gets the whole per-database schema; it
           becomes the key retrieval metric once schema is retrieved.
+        linked_recall: share of the gold tables schema linking put in the
+          prompt before the agent's first step (catalog prompt only).
         table_* / column_*: predicted SQL vs gold SQL.
         """
         gold = self.references(gold_sql)
@@ -94,6 +97,7 @@ class SchemaLinker:
             "gold_tables": sorted(gold.tables) if gold else None,
             "pred_tables": sorted(pred.tables) if pred else None,
             "context_recall": None,
+            "linked_recall": None,
             "table_recall": None,
             "table_precision": None,
             "tables_exact": None,
@@ -104,6 +108,8 @@ class SchemaLinker:
             return out
         if context_tables is not None:
             out["context_recall"] = _recall(gold.tables, {t.lower() for t in context_tables})
+        if linked_tables is not None:
+            out["linked_recall"] = _recall(gold.tables, {t.lower() for t in linked_tables})
         if pred is None:
             return out
         out["table_recall"] = _recall(gold.tables, pred.tables)

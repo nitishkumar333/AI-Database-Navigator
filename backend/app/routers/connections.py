@@ -7,7 +7,7 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.utils.security import get_current_user, encrypt_value
 from app.utils.db_manager import test_connection as test_db_conn, remove_engine
-from app.services.schema_index.service import schedule_refresh
+from app.services.schema_index.service import delete_index, schedule_refresh
 from app.services.guest_service import is_guest
 from datetime import datetime
 
@@ -108,4 +108,5 @@ def delete_connection(
     remove_engine(conn_id)
     db.delete(conn)
     db.commit()
+    delete_index(conn_id)
     return {"message": "Connection deleted"}

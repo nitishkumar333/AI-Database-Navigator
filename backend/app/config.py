@@ -37,7 +37,23 @@ class Settings(BaseSettings):
     SCHEMA_DESCRIBE_ENABLED: bool = True
     SCHEMA_CHECK_INTERVAL_S: int = 300        # how often to look for schema changes
     SCHEMA_DESCRIBE_MAX_TABLES: int = 50      # per refresh; the rest follow on later refreshes
-    
+
+    # Schema retrieval (services/schema_index: index_store, hybrid). Table and
+    # column documents plus low-cardinality text values are indexed in the app
+    # database (pgvector + pg_trgm) and ranked with reciprocal rank fusion.
+    # Without pgvector the agent falls back to in-memory keyword search; without
+    # a Jina key the index uses trigram and value matching only.
+    SCHEMA_RETRIEVAL_ENABLED: bool = True
+    JINA_API_KEY: str = ""
+    JINA_EMBEDDING_MODEL: str = "jina-embeddings-v5-text-small"
+    EMBEDDING_DIM: int = 1024
+    # Text columns with at most this many distinct values have every value indexed.
+    SCHEMA_VALUE_INDEX_MAX_DISTINCT: int = 1000
+    # When the prompt holds only the table list (schema over AGENT_FULL_SCHEMA_MAX_CHARS),
+    # the tables retrieved for the question are added in full, up to:
+    SCHEMA_LINK_MAX_TABLES: int = 8
+    SCHEMA_LINK_MAX_CHARS: int = 24_000   # ~6k tokens
+
     # Guest user preloaded DB connection config
     GUEST_DB_HOST: str = "localhost"
     GUEST_DB_PORT: int = 5432
