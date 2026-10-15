@@ -472,7 +472,7 @@ Lifecycle:
 
 5. The retrieval index (key `conn:<id>`) is updated after profiling, again after describing, and in the background after a description edit; a connection profiled before indexing existed is indexed on its next chat. Deleting the connection deletes its index.
 
-Retrieval degrades step by step: no `JINA_API_KEY` (or an embedding outage) → trigram + value search; no pgvector in the app database or `SCHEMA_RETRIEVAL_ENABLED=false` → keyword search over the profile. The app database needs the `vector` extension (the compose file builds `docker/postgres`, i.e. `postgres:16-alpine` + pgvector); `pg_trgm` ships with Postgres. Index status is part of `GET /api/schema/{id}/profile` (`index`).
+Retrieval degrades step by step: no `JINA_API_KEY` (or an embedding outage) → trigram + value search; no pgvector in the app database or `SCHEMA_RETRIEVAL_ENABLED=false` → keyword search over the profile. The app database needs the `vector` extension (`docker-compose.yml` builds it inline: `postgres:16-alpine` + pgvector); `pg_trgm` ships with Postgres. Index status is part of `GET /api/schema/{id}/profile` (`index`).
 
 Storage: `schema_profiles` (one row per connection: status, profile JSON, `version` for cache invalidation, which tables are described at which structure hash) and `schema_annotations` (one row per table/column description). Both cascade on connection delete. Rendered context is cached in-process per `(connection, version, tables)`. The index tables (`schema_index_*`) are created on first use.
 
