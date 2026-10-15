@@ -10,6 +10,14 @@ import ConnectionForm from "../components/shared/ConnectionForm";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { RouterContext } from "../components/contexts/RouterContext";
 import { ConversationContext } from "../components/contexts/ConversationContext";
 import {
@@ -43,6 +51,9 @@ export default function SettingsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  // The connection waiting for delete confirmation, and whether the delete is running.
+  const [pendingDelete, setPendingDelete] = useState<Connection | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadConnections();
@@ -70,6 +81,7 @@ export default function SettingsPage() {
   };
 
   const deleteConnection = async (connId: number) => {
+    setDeleting(true);
     try {
       const response = await fetch(`${host}/api/connections/${connId}`, {
         method: "DELETE",
@@ -89,6 +101,8 @@ export default function SettingsPage() {
     } catch (e) {
       showErrorToast("Failed to Delete", String(e));
     }
+    setDeleting(false);
+    setPendingDelete(null);
   };
 
   const handleConnectionSaved = () => {
@@ -221,7 +235,7 @@ export default function SettingsPage() {
                     onClick={(e) => {
                       // The card itself opens the connection's page.
                       e.stopPropagation();
-                      deleteConnection(conn.id);
+                      setPendingDelete(conn);
                     }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
                   >
@@ -233,6 +247,44 @@ export default function SettingsPage() {
           )}
         </div>
       </motion.div>
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete connection?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes{" "}
+              <span className="font-medium text-primary">{pendingDelete?.name}</span>{" "}
+              and everything stored for it: its knowledge bases, query history, schema
+              descriptions and search index, and every conversation that used it. Your
+              database itself is not changed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setPendingDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => pendingDelete && deleteConnection(pendingDelete.id)}
+              className="gap-2"
+            >
+              {deleting ? <FaSpinner className="animate-spin" /> : <GoTrash />}
+              {deleting ? "Deleting..." : "Delete connection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
