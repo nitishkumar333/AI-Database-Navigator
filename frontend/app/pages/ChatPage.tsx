@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { CollectionContext } from "../components/contexts/CollectionContext";
+import { RouterContext } from "../components/contexts/RouterContext";
+import { GoDatabase } from "react-icons/go";
 
 // Stable reference so memoised values don't change when a conversation has no queries
 const EMPTY_QUERIES: { [key: string]: Query } = {};
@@ -40,7 +42,11 @@ export default function ChatPage() {
     conversations,
   } = useContext(ConversationContext);
 
-  const { fetchSuggestions, clearSuggestionsCache, connections } = useContext(CollectionContext);
+  const { fetchSuggestions, clearSuggestionsCache, connections, connectionsLoaded } =
+    useContext(CollectionContext);
+  const { changePage } = useContext(RouterContext);
+  // No connections left (e.g. all deleted): chatting is disabled.
+  const noConnections = connectionsLoaded && connections.length === 0;
 
   // Connection & KB selection state — restore from localStorage on mount
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(() => {
@@ -240,12 +246,17 @@ export default function ChatPage() {
     }
   }, [selectedKnowledgeBaseId]);
 
-  // Auto-select first connection only if nothing stored and none selected
+  // Keep the selection valid: the stored connection may have been deleted.
+  // Fall back to the first connection; its first knowledge base is then
+  // selected by KnowledgeBaseSelection.
   useEffect(() => {
-    if (!selectedConnectionId && connections.length > 0) {
-      setSelectedConnectionId(connections[0].id);
-    }
-  }, [connections]);
+    if (!connectionsLoaded) return;
+    if (selectedConnectionId !== null && connections.some((c) => c.id === selectedConnectionId)) return;
+    setSelectedConnectionId(connections[0]?.id ?? null);
+    setSelectedKnowledgeBaseId(null);
+    setRandomPrompts([]);
+    setSuggestionsReady(false);
+  }, [connections, connectionsLoaded]);
 
   return (
     <div className="flex flex-col w-full h-full items-center justify-start gap-3">
@@ -287,7 +298,7 @@ export default function ChatPage() {
             className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-start items-center"
           >
             <div className="flex flex-col w-[90vw] md:w-[85vw] lg:w-[70vw] min-h-[70vh]">
-              {sortedQueries.map(([queryId, query], index, array) => (
+              {!noConnections && sortedQueries.map(([queryId, query], index, array) => (
                 <ChatProvider key={queryId}>
                   <RenderChat
                     key={queryId + index}
@@ -312,7 +323,27 @@ export default function ChatPage() {
       </div>
 
       <AnimatePresence>
-        {isEmpty && (
+        {noConnections && (
+          <motion.div
+            key="no-connections"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{ y: -80 }}
+            className="absolute flex flex-col justify-center items-center w-full h-full gap-3 px-4 text-center"
+          >
+            <GoDatabase size={40} className="text-muted-foreground" />
+            <p className="text-xl font-semibold text-primary">No database connected</p>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Conversations are disabled until you add a database connection.
+            </p>
+            <Button onClick={() => changePage("settings", {}, true)} className="mt-2">
+              Add a connection
+            </Button>
+          </motion.div>
+        )}
+        {isEmpty && !noConnections && (
           <motion.div
             key="ask-anything"
             initial={{ opacity: 0 }}
@@ -443,6 +474,7 @@ export default function ChatPage() {
           handleSendQuery={handleSendQuery}
           selectedConnectionId={selectedConnectionId}
           selectedKnowledgeBaseId={selectedKnowledgeBaseId}
+          noConnections={noConnections}
         />
       </div>
     </div>

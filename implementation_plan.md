@@ -32,12 +32,10 @@ The final answer should still be one deliberate query.
 **Vector DB, graph DB, or hybrid?**
 - **Graph DB (Neo4j etc.): not worth it.** A foreign-key graph is a few thousand edges at most. Hold it in memory with `networkx`, cached per connection, and use it to compute join paths. A separate database adds ops cost for no benefit.
 - **Vector search: worth it, inside the Postgres you already run.** Use **pgvector** plus **pg_trgm**, not a separate vector DB. You already have Postgres for the checkpointer. `chromadb` is in requirements, but it's another stateful service to operate.
-- **Use hybrid retrieval.** Database identifiers and values match better lexically (`cust_seg` ↔ "segment", `'CZK'` ↔ "Czech koruna" via glossary). Combine trigram/BM25 with embeddings and merge the rankings with reciprocal rank fusion.
+- **Use hybrid retrieval.** Database identifiers and values match better lexically (`cust_seg` ↔ "segment", `'CZK'` ↔ "czech"). Combine trigram/BM25 with embeddings and merge the rankings with reciprocal rank fusion.
 - **What to index**, in order of value:
-  1. Verified question→SQL pairs, used as few-shot examples. In practice these give the largest gain.
-  2. Column documents: name, type, description and sample values.
-  3. Distinct values of low-cardinality text columns, for value linking.
-  4. Glossary terms.
+  1. Column documents: name, type, description and sample values.
+  2. Distinct values of low-cardinality text columns, for value linking.
 
 ---
 
@@ -57,7 +55,7 @@ The final answer should still be one deliberate query.
    │ standalone question (follow-ups rewritten using history)
    ▼
  [2 Schema Linker]  hybrid retrieval → candidate tables/cols/values
-   │                + FK-graph expansion (bridge tables) + few-shot examples
+   │                + FK-graph expansion (bridge tables)
    ▼
  [3 Agent loop]  tools: search_schema · describe_tables · find_values
    │             · run_sql (exploratory, parallel) · submit_answer
@@ -115,12 +113,11 @@ Replace the single tool in [sql_agent.py](backend/app/services/sql_agent.py) wit
 
 ### Phase 3: Retrieval for large schemas
 - Run `CREATE EXTENSION vector, pg_trgm` in the app database.
-- Embed the column and table documents and the verified queries (Phase 5) with any embedding model, behind a small `embeddings.py` factory like your [llm_factory.py](backend/app/services/llm_factory.py).
+- Embed the column and table documents with any embedding model, behind a small `embeddings.py` factory like your [llm_factory.py](backend/app/services/llm_factory.py).
 - **Schema linker node** (runs before the agent):
   1. Hybrid top-k columns, then group them by table.
   2. Expand to a connected subgraph using shortest paths or an approximate Steiner tree over the FK graph, so bridge tables get included.
-  3. Optionally have the LLM filter candidates, for example "which of these 15 tables are needed?".
-  4. Inject the result as Tier-2 context so the agent rarely has to call `describe_tables` on simple questions.
+  3. Inject the result as Tier-2 context so the agent rarely has to call `describe_tables` on simple questions.
 - Your existing `KnowledgeBase.tables` filter becomes a scope restriction applied on top of retrieval.
 - **Trigger:** use retrieval only when the enriched schema exceeds the token threshold; otherwise include the full schema.
 
@@ -133,18 +130,9 @@ Add a node after `submit_answer`:
   - The question says "which one" or "top N" but there's no `LIMIT`/`ORDER BY`, or the reverse.
   - Selected columns don't match what the question asks for.
   - The magnitude is implausible compared with column statistics from `pg_stats`.
-- **LLM critic** (cheap model, complex route only): sees the question, SQL, a result sample and the assumptions. It returns pass, or fail with a specific fix. Allow at most two revisions.
-- **Optional self-consistency on the complex route:** generate 3 candidate queries in parallel (different temperatures or prompts), run them all, and pick by majority over *result sets*, using the critic to break ties. Top BIRD systems do this, and it typically adds several points. It costs about 3× tokens, so gate it to questions classified as complex.
+- **LLM critic** (complex route only): sees the question, SQL, a result sample and the assumptions. It returns pass, or fail with a specific fix. Allow at most two revisions.
 
-### Phase 5: Semantic layer and feedback loop
-- Extend the `KnowledgeBase` concept with:
-  - **Glossary terms:** a term, its definition, and optionally an SQL snippet. Example: "monthly average consumption = AVG(consumption)/12".
-  - **Verified queries:** question, SQL, who verified it, and its embedding.
-- Retrieve the top 3–5 verified queries as few-shot examples.
-- Add thumbs up/down on answers in the frontend. A thumbs-up adds the pair to a **review queue**, and an admin approves it into verified queries. Never auto-promote, because errors would then compound.
-- A thumbs-down plus a correction becomes a regression test case for the eval set.
-
-### Phase 6: Production hardening
+### Phase 5: Production hardening
 - **Async and streaming:**
   - Make the endpoint `async def` with `graph.astream_events`.
   - Stream step events ("Searching schema…", "Running 3 checks…", "Verifying…") to the frontend through your socket context.
@@ -164,10 +152,10 @@ Add a node after `submit_answer`:
   - Retry LLM calls with tenacity (already a dependency), with a fallback provider.
   - Set a wall-clock timeout for the whole turn.
   - When budgets run out, return a partial answer with an explanation instead of an error.
-- **Caching:** per-connection normalized question → verified SQL, invalidated when the schema hash changes. Keep the existing Redis schema caches.
+- **Caching:** per-connection normalized question → SQL that passed the verifier, invalidated when the schema hash changes. Keep the existing Redis schema caches.
 - **Observability:**
   - Enable LangSmith (already installed), or OpenTelemetry (also installed).
-  - Persist an `AgentRun` row per turn: tool calls, tokens, latency, verifier verdicts and feedback.
+  - Persist an `AgentRun` row per turn: tool calls, tokens, latency, verifier verdicts.
   - Your `_collect_trace` is a good starting point.
 - **Cost controls:** per-user token budgets alongside the existing rate limiter. Use a cheap model for routing, descriptions and the critic, and a strong model for the agent loop.
 
@@ -188,7 +176,6 @@ backend/app/services/
   embeddings.py
 backend/app/models/
   schema_catalog.py   # SchemaTable, SchemaColumn, SchemaRelation
-  semantic.py         # GlossaryTerm, VerifiedQuery
   agent_run.py
 ```
 
@@ -200,6 +187,5 @@ Keep the `SQLAgent.run_query` signature as a thin wrapper so [query.py](backend/
 
 Rough expectations from BIRD-style systems:
 - Phases 1 and 2 (enriched schema plus exploration) usually give the largest gain on moderate and challenging questions.
-- Phase 5 (glossary and verified examples) gives the largest gain on real user databases, where most ambiguity is about business definitions.
 - Phase 3 is mainly about **scaling** (staying accurate as table count grows), not raw accuracy on small databases.
 - Phase 4 trades latency and cost for accuracy, so keep it on the complex route only.

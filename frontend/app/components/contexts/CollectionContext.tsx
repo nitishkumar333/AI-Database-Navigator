@@ -21,12 +21,15 @@ export type Connection = {
 export const CollectionContext = createContext<{
   collections: Collection[];
   connections: Connection[];
+  /** True once the connection list has been fetched (connections may be empty). */
+  connectionsLoaded: boolean;
   fetchCollections: () => void;
   fetchSuggestions: (connectionId: number, knowledgeBaseId?: number | null, forceRefresh?: boolean) => Promise<string[]>;
   clearSuggestionsCache: () => void;
 }>({
   collections: [],
   connections: [],
+  connectionsLoaded: false,
   fetchCollections: () => {},
   fetchSuggestions: async () => [],
   clearSuggestionsCache: () => {},
@@ -43,6 +46,7 @@ export const CollectionProvider = ({
   const { backendOnline } = useContext(QueryContext);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
 
   // Cache for suggestions keyed by "connId_kbId"
   const suggestionsCache = useRef<Record<string, string[]>>({});
@@ -54,6 +58,7 @@ export const CollectionProvider = ({
     if (!isAuthenticated) {
       setCollections([]);
       setConnections([]);
+      setConnectionsLoaded(false);
       suggestionsCache.current = {};
       initialFetch.current = false;
     }
@@ -84,6 +89,7 @@ export const CollectionProvider = ({
       if (response.ok) {
         const rawConnections: Connection[] = await response.json();
         setConnections(rawConnections);
+        setConnectionsLoaded(true);
         // Map connections to Collection type for compatibility
         const mapped: Collection[] = rawConnections.map(
           (conn) => ({
@@ -160,6 +166,7 @@ export const CollectionProvider = ({
       value={{
         collections,
         connections,
+        connectionsLoaded,
         fetchCollections,
         fetchSuggestions,
         clearSuggestionsCache,

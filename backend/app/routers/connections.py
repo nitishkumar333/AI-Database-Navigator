@@ -6,8 +6,9 @@ from app.database import get_db
 from app.models.user import User
 from app.models.connection import DBConnection
 from app.utils.security import get_current_user, encrypt_value
-from app.utils.db_manager import test_connection as test_db_conn, remove_engine
-from app.services.schema_index.service import delete_index, schedule_refresh
+from app.utils.db_manager import test_connection as test_db_conn
+from app.services.connection_cleanup import delete_connection as delete_connection_and_data
+from app.services.schema_index.service import schedule_refresh
 from app.services.guest_service import is_guest
 from datetime import datetime
 
@@ -105,8 +106,7 @@ def delete_connection(
     ).first()
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    remove_engine(conn_id)
-    db.delete(conn)
-    db.commit()
-    delete_index(conn_id)
-    return {"message": "Connection deleted"}
+    # Also deletes its knowledge bases, history, schema details, retrieval
+    # index and every conversation that used it.
+    deleted_conversations = delete_connection_and_data(db, conn)
+    return {"message": "Connection deleted", "deleted_conversations": deleted_conversations}

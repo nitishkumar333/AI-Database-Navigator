@@ -263,6 +263,8 @@ def _index(db: Session, conn_id: int, profile: SchemaProfile, engine) -> None:
     """Update the connection's retrieval index. Failures are logged, never
     raised: without an index the agent falls back to keyword search."""
     try:
+        if db.get(DBConnection, conn_id) is None:      # deleted while profiling
+            return
         update_index(index_key(conn_id), profile, load_descriptions(db, conn_id),
                      source_engine=engine)
     except Exception:
@@ -301,6 +303,17 @@ def _index_due(conn_id: int) -> bool:
             return False
         _index_attempts[conn_id] = now
         return True
+
+
+def forget_connection(conn_id: int) -> None:
+    """Drop the in-process caches and timers of a deleted connection."""
+    with _context_lock:
+        for cache in (_context_cache, _profile_cache):
+            for key in [k for k in list(cache.keys()) if k[0] == conn_id]:
+                cache.pop(key, None)
+    with _local_lock:
+        _last_check.pop(conn_id, None)
+        _index_attempts.pop(conn_id, None)
 
 
 def delete_index(conn_id: int) -> None:

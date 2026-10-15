@@ -8,7 +8,7 @@ class QueryHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    connection_id = Column(Integer, ForeignKey("db_connections.id"), nullable=False)
+    connection_id = Column(Integer, ForeignKey("db_connections.id", ondelete="CASCADE"), nullable=False)
     nl_query = Column(Text, nullable=False)
     generated_sql = Column(Text, default="")
     success = Column(Boolean, default=True)

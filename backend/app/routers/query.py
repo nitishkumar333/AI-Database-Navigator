@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -8,7 +9,7 @@ from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.models.query_history import QueryHistory
-from app.models.conversation import Conversation, ConversationMessage
+from app.models.conversation import Conversation, ConversationConnection, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
 from app.services.sql_agent import SQLAgent
@@ -143,6 +144,13 @@ def chat_query(
             Conversation.user_id == current_user.id,
         ).first()
         if conv:
+            # Remember that this conversation used the connection (deleting the
+            # connection deletes the conversation).
+            db.execute(
+                pg_insert(ConversationConnection)
+                .values(conversation_id=conv.id, connection_id=conn.id)
+                .on_conflict_do_nothing()
+            )
             # Save user message
             user_msg = ConversationMessage(
                 conversation_id=req.conversation_id,

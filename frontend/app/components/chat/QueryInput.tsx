@@ -21,6 +21,7 @@ interface QueryInputProps {
   currentStatus: string;
   selectedConnectionId: number | null;
   selectedKnowledgeBaseId: number | null;
+  noConnections?: boolean;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({
@@ -29,6 +30,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
   currentStatus,
   selectedConnectionId,
   selectedKnowledgeBaseId,
+  noConnections = false,
 }) => {
   const [query, setQuery] = useState("");
   const { getToken, clearAuth } = useContext(QueryContext);
@@ -98,7 +100,9 @@ const QueryInput: React.FC<QueryInputProps> = ({
             <textarea
               disabled={!selectedKnowledgeBaseId}
               placeholder={
-                !selectedKnowledgeBaseId
+                noConnections
+                  ? "Add a database connection to start chatting..."
+                  : !selectedKnowledgeBaseId
                   ? "Please select a Knowledge Base to chat..."
                   : query_length !== 0
                     ? "Ask a follow up question..."

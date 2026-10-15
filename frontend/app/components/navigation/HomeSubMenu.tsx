@@ -3,6 +3,7 @@
 import React, { useContext } from "react";
 
 import { ConversationContext } from "../contexts/ConversationContext";
+import { CollectionContext } from "../contexts/CollectionContext";
 
 import { FaPlus } from "react-icons/fa6";
 import { GoTrash } from "react-icons/go";
@@ -37,6 +38,9 @@ const HomeSubMenu: React.FC = () => {
     creatingNewConversation,
   } = useContext(ConversationContext);
   const { setOpenMobile } = useSidebar();
+  const { connections, connectionsLoaded } = useContext(CollectionContext);
+  // Without a database connection there is nothing to chat with.
+  const disabled = connectionsLoaded && connections.length === 0;
 
   return (
     <SidebarGroup>
@@ -50,12 +54,18 @@ const HomeSubMenu: React.FC = () => {
             startNewConversation();
             setOpenMobile(false);
           }}
-          disabled={creatingNewConversation}
+          disabled={creatingNewConversation || disabled}
+          className={disabled ? "opacity-40 cursor-not-allowed" : undefined}
         >
           <FaPlus /> <span className="sr-only">Add Conversation</span>
         </SidebarGroupAction>
       </div>
       <SidebarGroupContent>
+        {disabled && (
+          <p className="px-2 pb-2 text-xs text-muted-foreground">
+            Add a database connection to use conversations.
+          </p>
+        )}
         {conversations
           .sort(
             (a, b) =>
@@ -66,8 +76,10 @@ const HomeSubMenu: React.FC = () => {
             <SidebarMenuItem className="list-none fade-in" key={conv.id}>
               <SidebarMenuButton
                 variant={
-                  currentConversation === conv.id ? "active" : "default"
+                  currentConversation === conv.id && !disabled ? "active" : "default"
                 }
+                disabled={disabled}
+                className={disabled ? "opacity-40 cursor-not-allowed" : undefined}
                 onClick={() => {
                   selectConversation(conv.id);
                   setOpenMobile(false);

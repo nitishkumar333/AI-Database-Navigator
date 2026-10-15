@@ -21,6 +21,7 @@ export const ConversationContext = createContext<{
   creatingNewConversation: boolean;
   startNewConversation: () => void;
   removeConversation: (id: string) => void;
+  dropConversations: (ids: string[]) => void;
   selectConversation: (id: string) => void;
   setConversationStatus: (status: string, conversationId: string) => void;
   setConversationTitle: (title: string, conversationId: string) => void;
@@ -47,6 +48,7 @@ export const ConversationContext = createContext<{
   creatingNewConversation: false,
   startNewConversation: () => {},
   removeConversation: () => {},
+  dropConversations: () => {},
   selectConversation: () => {},
   setConversationStatus: () => {},
   setConversationTitle: () => {},
@@ -305,26 +307,33 @@ export const ConversationProvider = ({
     }
   };
 
-  const removeConversation = async (conversation_id: string) => {
-    // Update the UI first. If the open conversation is deleted, select the one
-    // below it in the sidebar (newest first), or the one above if it was last.
+  // Removes conversations from the UI only. If the open conversation goes,
+  // select the one below it in the sidebar (newest first), or the one above
+  // if it was last.
+  const dropConversations = (ids: string[]) => {
+    const gone = new Set(ids);
+    if (!conversations.some((c) => gone.has(c.id))) return;
     const ordered = [...conversations].sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-    const index = ordered.findIndex((c) => c.id === conversation_id);
-    const remaining = ordered.filter((c) => c.id !== conversation_id);
+    const index = ordered.findIndex((c) => c.id === currentConversation);
+    const remaining = ordered.filter((c) => !gone.has(c.id));
 
-    setConversations((prev) => prev.filter((c) => c.id !== conversation_id));
+    setConversations((prev) => prev.filter((c) => !gone.has(c.id)));
     if (remaining.length === 0) {
       startNewConversation();
-    } else if (currentConversation === conversation_id) {
+    } else if (currentConversation && gone.has(currentConversation)) {
       const next = remaining[Math.min(index, remaining.length - 1)];
       setCurrentConversation(next.id);
       if (currentPage === "chat") {
         changePage("chat", { conversation: next.id }, true);
       }
     }
+  };
+
+  const removeConversation = async (conversation_id: string) => {
+    dropConversations([conversation_id]);
 
     // Delete on backend
     try {
@@ -578,6 +587,7 @@ export const ConversationProvider = ({
         creatingNewConversation,
         startNewConversation,
         removeConversation,
+        dropConversations,
         selectConversation,
         setConversationStatus,
         setConversationTitle,

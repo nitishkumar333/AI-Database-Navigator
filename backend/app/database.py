@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import get_settings
 
@@ -26,3 +26,38 @@ def get_db():
 def init_db():
     from app.models import user, connection, knowledge, query_history, conversation, schema_profile  # noqa
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+
+# Foreign keys to db_connections that create_all doesn't update on existing
+# tables: (table, constraint). Deleting a connection deletes these rows.
+_CASCADE_FKS = [
+    ("knowledge_base", "knowledge_base_connection_id_fkey"),
+    ("query_history", "query_history_connection_id_fkey"),
+]
+
+
+def _migrate() -> None:
+    """Idempotent schema fixes for databases created by older versions."""
+    with engine.begin() as conn:
+        for table, name in _CASCADE_FKS:
+            rule = conn.execute(text(
+                "SELECT confdeltype FROM pg_constraint WHERE conname = :n"), {"n": name}).scalar()
+            if rule is not None and rule != "c":
+                conn.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT {name}"))
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD CONSTRAINT {name} FOREIGN KEY (connection_id) "
+                    f"REFERENCES db_connections(id) ON DELETE CASCADE"))
+        # Conversations that queried a connection before conversation_connections
+        # existed: the agent's checkpoint threads are named "user:connection:conversation".
+        if conn.execute(text("SELECT to_regclass('checkpoints')")).scalar():
+            conn.execute(text("""
+                INSERT INTO conversation_connections (conversation_id, connection_id, first_used_at)
+                SELECT c.id, dc.id, now()
+                FROM (SELECT DISTINCT thread_id FROM checkpoints) t
+                JOIN conversations c ON c.id = split_part(t.thread_id, ':', 3)
+                                    AND c.user_id::text = split_part(t.thread_id, ':', 1)
+                JOIN db_connections dc ON dc.id::text = split_part(t.thread_id, ':', 2)
+                                      AND dc.user_id = c.user_id
+                ON CONFLICT DO NOTHING
+            """))

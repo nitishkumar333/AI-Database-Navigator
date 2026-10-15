@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { RouterContext } from "../components/contexts/RouterContext";
+import { ConversationContext } from "../components/contexts/ConversationContext";
 import {
   GoDatabase,
   GoPlus,
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const isGuest = !!user?.is_guest;
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
   const { changePage } = useContext(RouterContext);
+  const { dropConversations } = useContext(ConversationContext);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,9 +76,15 @@ export default function SettingsPage() {
         headers: authHeaders(),
       });
       if (response.ok) {
+        // The backend also deleted every conversation that used this connection.
+        const data = await response.json();
+        dropConversations(data.deleted_conversations ?? []);
         showSuccessToast("Connection Removed");
         loadConnections();
         fetchCollections();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        showErrorToast("Failed to Delete", data.detail ?? `Error ${response.status}`);
       }
     } catch (e) {
       showErrorToast("Failed to Delete", String(e));
@@ -210,7 +218,11 @@ export default function SettingsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteConnection(conn.id)}
+                    onClick={(e) => {
+                      // The card itself opens the connection's page.
+                      e.stopPropagation();
+                      deleteConnection(conn.id);
+                    }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
                   >
                     <GoTrash size={16} />
