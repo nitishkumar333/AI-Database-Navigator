@@ -1,0 +1,291 @@
+{
+  "run": {
+    "run_name": "dev150-all-noev-hybrid-deepseek-flash-20261015-2243",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "thinking": false,
+    "dataset": "bird_minidev_postgresql.csv",
+    "split": "dev150",
+    "use_evidence": false,
+    "full_schema": true,
+    "schema_format": "enriched",
+    "describe": true,
+    "schema_prompt": "auto",
+    "full_schema_max_chars": 32000,
+    "float_precision": 4,
+    "started_at": "2026-10-15T22:43:02",
+    "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
+  },
+  "questions": 150,
+  "accuracy_by_difficulty": {
+    "simple": {
+      "count": 43,
+      "ex_column_tolerant": 67.44,
+      "ex": 65.12,
+      "soft_f1": 69.47,
+      "accuracy": 67.44,
+      "accuracy_ci95": [
+        52.52,
+        79.51
+      ]
+    },
+    "moderate": {
+      "count": 77,
+      "ex_column_tolerant": 55.84,
+      "ex": 48.05,
+      "soft_f1": 53.22,
+      "accuracy": 55.84,
+      "accuracy_ci95": [
+        44.74,
+        66.39
+      ]
+    },
+    "challenging": {
+      "count": 30,
+      "ex_column_tolerant": 26.67,
+      "ex": 13.33,
+      "soft_f1": 22.96,
+      "accuracy": 26.67,
+      "accuracy_ci95": [
+        14.18,
+        44.45
+      ]
+    },
+    "total": {
+      "count": 150,
+      "ex_column_tolerant": 53.33,
+      "ex": 46.0,
+      "soft_f1": 51.83,
+      "accuracy": 53.33,
+      "accuracy_ci95": [
+        45.37,
+        61.13
+      ]
+    }
+  },
+  "accuracy_by_db": {
+    "california_schools": {
+      "count": 8,
+      "ex_column_tolerant": 37.5,
+      "ex": 25.0,
+      "soft_f1": 46.67,
+      "accuracy": 37.5,
+      "accuracy_ci95": [
+        13.68,
+        69.43
+      ]
+    },
+    "card_games": {
+      "count": 16,
+      "ex_column_tolerant": 56.25,
+      "ex": 50.0,
+      "soft_f1": 56.27,
+      "accuracy": 56.25,
+      "accuracy_ci95": [
+        33.18,
+        76.9
+      ]
+    },
+    "codebase_community": {
+      "count": 14,
+      "ex_column_tolerant": 71.43,
+      "ex": 71.43,
+      "soft_f1": 71.67,
+      "accuracy": 71.43,
+      "accuracy_ci95": [
+        45.35,
+        88.28
+      ]
+    },
+    "debit_card_specializing": {
+      "count": 9,
+      "ex_column_tolerant": 66.67,
+      "ex": 44.44,
+      "soft_f1": 57.41,
+      "accuracy": 66.67,
+      "accuracy_ci95": [
+        35.42,
+        87.94
+      ]
+    },
+    "european_football_2": {
+      "count": 16,
+      "ex_column_tolerant": 43.75,
+      "ex": 37.5,
+      "soft_f1": 51.04,
+      "accuracy": 43.75,
+      "accuracy_ci95": [
+        23.1,
+        66.82
+      ]
+    },
+    "financial": {
+      "count": 10,
+      "ex_column_tolerant": 30.0,
+      "ex": 20.0,
+      "soft_f1": 26.67,
+      "accuracy": 30.0,
+      "accuracy_ci95": [
+        10.78,
+        60.32
+      ]
+    },
+    "formula_1": {
+      "count": 20,
+      "ex_column_tolerant": 55.0,
+      "ex": 45.0,
+      "soft_f1": 51.61,
+      "accuracy": 55.0,
+      "accuracy_ci95": [
+        34.21,
+        74.18
+      ]
+    },
+    "student_club": {
+      "count": 14,
+      "ex_column_tolerant": 71.43,
+      "ex": 64.29,
+      "soft_f1": 60.72,
+      "accuracy": 71.43,
+      "accuracy_ci95": [
+        45.35,
+        88.28
+      ]
+    },
+    "superhero": {
+      "count": 16,
+      "ex_column_tolerant": 68.75,
+      "ex": 68.75,
+      "soft_f1": 73.22,
+      "accuracy": 68.75,
+      "accuracy_ci95": [
+        44.4,
+        85.84
+      ]
+    },
+    "thrombosis_prediction": {
+      "count": 15,
+      "ex_column_tolerant": 13.33,
+      "ex": 13.33,
+      "soft_f1": 16.62,
+      "accuracy": 13.33,
+      "accuracy_ci95": [
+        3.74,
+        37.88
+      ]
+    },
+    "toxicology": {
+      "count": 12,
+      "ex_column_tolerant": 66.67,
+      "ex": 50.0,
+      "soft_f1": 49.49,
+      "accuracy": 66.67,
+      "accuracy_ci95": [
+        39.06,
+        86.19
+      ]
+    }
+  },
+  "status_counts": {
+    "correct": 80,
+    "wrong_result": 70
+  },
+  "correct_with_extra_columns": 11,
+  "failure_categories": {
+    "wrong_tables": 24,
+    "wrong_columns": 21,
+    "wrong_values": 11,
+    "wrong_row_count": 9,
+    "wrong_projection": 5
+  },
+  "schema_linking": {
+    "context_recall": 98.89,
+    "linked_recall": 98.22,
+    "table_recall": 91.78,
+    "table_precision": 96.33,
+    "tables_exact": 78.0,
+    "column_recall": 84.04,
+    "column_precision": 90.31,
+    "questions_with_pred_sql": 150,
+    "accuracy_when_tables_exact": {
+      "count": 117,
+      "accuracy": 60.68
+    },
+    "accuracy_when_tables_wrong": {
+      "count": 33,
+      "accuracy": 27.27
+    }
+  },
+  "cost": {
+    "input_tokens": 2453720,
+    "output_tokens": 50581,
+    "avg_tokens_per_question": 16695.3,
+    "avg_llm_calls_per_question": 2.06
+  },
+  "behaviour_by_difficulty": {
+    "simple": {
+      "count": 43,
+      "avg_tokens": 13022.3,
+      "avg_llm_calls": 1.67,
+      "avg_tool_calls": 1.91,
+      "latency_p50": 2.581,
+      "latency_p95": 5.713
+    },
+    "moderate": {
+      "count": 77,
+      "avg_tokens": 15916.1,
+      "avg_llm_calls": 1.99,
+      "avg_tool_calls": 2.71,
+      "latency_p50": 3.415,
+      "latency_p95": 8.011
+    },
+    "challenging": {
+      "count": 30,
+      "avg_tokens": 23959.9,
+      "avg_llm_calls": 2.8,
+      "avg_tool_calls": 3.93,
+      "latency_p50": 4.29,
+      "latency_p95": 9.598
+    },
+    "total": {
+      "count": 150,
+      "avg_tokens": 16695.3,
+      "avg_llm_calls": 2.06,
+      "avg_tool_calls": 2.73,
+      "latency_p50": 3.415,
+      "latency_p95": 8.242
+    }
+  },
+  "tool_usage": {
+    "run_sql": 210,
+    "submit_answer": 150,
+    "search_schema": 29,
+    "describe_tables": 11,
+    "find_values": 9
+  },
+  "latency_s": {
+    "mean": 3.839,
+    "p50": 3.415,
+    "p95": 8.242
+  },
+  "self_correction": {
+    "questions_with_retries": 0,
+    "correct_after_retry": 0
+  },
+  "agent_steps": {
+    "answer_source": {
+      "submit": 150
+    },
+    "questions_explored": 96,
+    "avg_sql_runs": 2.37,
+    "questions_forced_to_submit": 8,
+    "accuracy_when_explored": {
+      "count": 96,
+      "accuracy": 41.67
+    },
+    "accuracy_when_direct": {
+      "count": 54,
+      "accuracy": 74.07
+    }
+  }
+}

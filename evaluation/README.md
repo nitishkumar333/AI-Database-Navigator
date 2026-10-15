@@ -29,22 +29,38 @@ Run all commands from the repo root.
 
 ```bash
 # the frozen 30-question smoke set (cheap; use while iterating)
-backend/venv/Scripts/python -m evaluation run --provider groq --split smoke30 --run-name my-test
+backend/venv/Scripts/python -m evaluation run --provider groq --split smoke30
 
 # the frozen 150-question benchmark (use before merging a change)
-backend/venv/Scripts/python -m evaluation run --provider groq --split dev150 --rpm 20 --run-name my-change-dev150
+backend/venv/Scripts/python -m evaluation run --provider groq --split dev150 --rpm 20
 
 # all 500 questions with Groq, max 10 requests per minute
-backend/venv/Scripts/python -m evaluation run --provider groq --rpm 10 --run-name groq-full
+backend/venv/Scripts/python -m evaluation run --provider groq --rpm 10
 
 # re-score a finished run without calling the LLM
-backend/venv/Scripts/python -m evaluation score --run-name my-test
+backend/venv/Scripts/python -m evaluation score --run-name <run>
 
 # compare runs on the questions they share (first = baseline), no LLM calls
-backend/venv/Scripts/python -m evaluation compare baseline-dev150 my-change-dev150 --out my-change.md
+backend/venv/Scripts/python -m evaluation compare <baseline-run> <new-run> --out my-change.md
 ```
 
-- **Stopped halfway?** Run the same command again with the same `--run-name`.
+**Run names.** Without `--run-name`, a run is named after the settings that
+change its results, so the folder name says what was measured:
+
+    {split}-{scope}-{evidence}-{retrieval}[-basic|-nodesc][-think]-{model}-{YYYYMMDD-HHMM}
+    dev150-all-noev-hybrid-deepseek-flash-20261015-2243
+
+| Part | Values |
+|---|---|
+| split | `smoke30`, `dev150`, ... (`custom` for other filters) |
+| scope | `db` = the question's database, `all` = all 75 BIRD tables (`--full-schema`) |
+| evidence | `ev` = BIRD hints given, `noev` = `--no-evidence` |
+| retrieval | `hybrid` (Jina embeddings), `trigram` (no Jina key), `keyword` (`--no-retrieval`) |
+| flags | `basic` = `--schema-format basic`, `nodesc` = `--no-describe`, `think` = DeepSeek thinking mode |
+
+Pass `--run-name` only to resume a run or to give it a name of your own.
+
+- **Stopped halfway?** Run it again with `--run-name <its folder name>`.
   It skips questions that are already done. Add `--fresh` to start over.
 - **Out of quota?** The run stops on its own. Run it again later with the same `--run-name`.
 

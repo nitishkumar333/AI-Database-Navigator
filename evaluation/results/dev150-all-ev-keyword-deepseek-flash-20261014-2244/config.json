@@ -1,0 +1,17 @@
+{
+  "run_name": "dev150-all-ev-keyword-deepseek-flash-20261014-2244",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "dataset": "bird_minidev_postgresql.csv",
+  "split": "dev150",
+  "use_evidence": true,
+  "full_schema": true,
+  "schema_format": "enriched",
+  "describe": true,
+  "schema_prompt": "auto",
+  "full_schema_max_chars": 32000,
+  "float_precision": 4,
+  "started_at": "2026-10-14T22:44:44",
+  "retrieval": "keyword"
+}

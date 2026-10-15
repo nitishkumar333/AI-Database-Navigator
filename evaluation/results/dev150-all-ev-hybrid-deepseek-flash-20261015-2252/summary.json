@@ -1,0 +1,290 @@
+{
+  "run": {
+    "run_name": "dev150-all-ev-hybrid-deepseek-flash-20261015-2252",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "thinking": false,
+    "dataset": "bird_minidev_postgresql.csv",
+    "split": "dev150",
+    "use_evidence": true,
+    "full_schema": true,
+    "schema_format": "enriched",
+    "describe": true,
+    "schema_prompt": "auto",
+    "full_schema_max_chars": 32000,
+    "float_precision": 4,
+    "started_at": "2026-10-15T22:52:13",
+    "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
+  },
+  "questions": 150,
+  "accuracy_by_difficulty": {
+    "simple": {
+      "count": 43,
+      "ex_column_tolerant": 83.72,
+      "ex": 79.07,
+      "soft_f1": 81.14,
+      "accuracy": 83.72,
+      "accuracy_ci95": [
+        70.03,
+        91.88
+      ]
+    },
+    "moderate": {
+      "count": 77,
+      "ex_column_tolerant": 70.13,
+      "ex": 61.04,
+      "soft_f1": 65.34,
+      "accuracy": 70.13,
+      "accuracy_ci95": [
+        59.15,
+        79.2
+      ]
+    },
+    "challenging": {
+      "count": 30,
+      "ex_column_tolerant": 56.67,
+      "ex": 43.33,
+      "soft_f1": 52.0,
+      "accuracy": 56.67,
+      "accuracy_ci95": [
+        39.2,
+        72.62
+      ]
+    },
+    "total": {
+      "count": 150,
+      "ex_column_tolerant": 71.33,
+      "ex": 62.67,
+      "soft_f1": 67.2,
+      "accuracy": 71.33,
+      "accuracy_ci95": [
+        63.63,
+        77.97
+      ]
+    }
+  },
+  "accuracy_by_db": {
+    "california_schools": {
+      "count": 8,
+      "ex_column_tolerant": 37.5,
+      "ex": 37.5,
+      "soft_f1": 36.9,
+      "accuracy": 37.5,
+      "accuracy_ci95": [
+        13.68,
+        69.43
+      ]
+    },
+    "card_games": {
+      "count": 16,
+      "ex_column_tolerant": 75.0,
+      "ex": 62.5,
+      "soft_f1": 68.02,
+      "accuracy": 75.0,
+      "accuracy_ci95": [
+        50.5,
+        89.82
+      ]
+    },
+    "codebase_community": {
+      "count": 14,
+      "ex_column_tolerant": 78.57,
+      "ex": 71.43,
+      "soft_f1": 79.05,
+      "accuracy": 78.57,
+      "accuracy_ci95": [
+        52.41,
+        92.43
+      ]
+    },
+    "debit_card_specializing": {
+      "count": 9,
+      "ex_column_tolerant": 88.89,
+      "ex": 66.67,
+      "soft_f1": 79.63,
+      "accuracy": 88.89,
+      "accuracy_ci95": [
+        56.5,
+        98.01
+      ]
+    },
+    "european_football_2": {
+      "count": 16,
+      "ex_column_tolerant": 68.75,
+      "ex": 62.5,
+      "soft_f1": 70.42,
+      "accuracy": 68.75,
+      "accuracy_ci95": [
+        44.4,
+        85.84
+      ]
+    },
+    "financial": {
+      "count": 10,
+      "ex_column_tolerant": 50.0,
+      "ex": 30.0,
+      "soft_f1": 35.01,
+      "accuracy": 50.0,
+      "accuracy_ci95": [
+        23.66,
+        76.34
+      ]
+    },
+    "formula_1": {
+      "count": 20,
+      "ex_column_tolerant": 65.0,
+      "ex": 55.0,
+      "soft_f1": 57.41,
+      "accuracy": 65.0,
+      "accuracy_ci95": [
+        43.29,
+        81.88
+      ]
+    },
+    "student_club": {
+      "count": 14,
+      "ex_column_tolerant": 85.71,
+      "ex": 78.57,
+      "soft_f1": 80.61,
+      "accuracy": 85.71,
+      "accuracy_ci95": [
+        60.06,
+        95.99
+      ]
+    },
+    "superhero": {
+      "count": 16,
+      "ex_column_tolerant": 87.5,
+      "ex": 87.5,
+      "soft_f1": 95.62,
+      "accuracy": 87.5,
+      "accuracy_ci95": [
+        63.98,
+        96.5
+      ]
+    },
+    "thrombosis_prediction": {
+      "count": 15,
+      "ex_column_tolerant": 60.0,
+      "ex": 53.33,
+      "soft_f1": 48.64,
+      "accuracy": 60.0,
+      "accuracy_ci95": [
+        35.75,
+        80.18
+      ]
+    },
+    "toxicology": {
+      "count": 12,
+      "ex_column_tolerant": 75.0,
+      "ex": 66.67,
+      "soft_f1": 71.67,
+      "accuracy": 75.0,
+      "accuracy_ci95": [
+        46.77,
+        91.11
+      ]
+    }
+  },
+  "status_counts": {
+    "correct": 107,
+    "wrong_result": 43
+  },
+  "correct_with_extra_columns": 13,
+  "failure_categories": {
+    "wrong_tables": 11,
+    "wrong_values": 11,
+    "wrong_columns": 10,
+    "wrong_projection": 7,
+    "wrong_row_count": 4
+  },
+  "schema_linking": {
+    "context_recall": 99.33,
+    "linked_recall": 99.33,
+    "table_recall": 95.11,
+    "table_precision": 97.89,
+    "tables_exact": 86.0,
+    "column_recall": 90.67,
+    "column_precision": 93.69,
+    "questions_with_pred_sql": 150,
+    "accuracy_when_tables_exact": {
+      "count": 129,
+      "accuracy": 75.19
+    },
+    "accuracy_when_tables_wrong": {
+      "count": 21,
+      "accuracy": 47.62
+    }
+  },
+  "cost": {
+    "input_tokens": 1481042,
+    "output_tokens": 32758,
+    "avg_tokens_per_question": 10092.0,
+    "avg_llm_calls_per_question": 1.35
+  },
+  "behaviour_by_difficulty": {
+    "simple": {
+      "count": 43,
+      "avg_tokens": 8568.7,
+      "avg_llm_calls": 1.21,
+      "avg_tool_calls": 1.3,
+      "latency_p50": 2.186,
+      "latency_p95": 3.76
+    },
+    "moderate": {
+      "count": 77,
+      "avg_tokens": 10058.9,
+      "avg_llm_calls": 1.34,
+      "avg_tool_calls": 1.53,
+      "latency_p50": 2.703,
+      "latency_p95": 5.247
+    },
+    "challenging": {
+      "count": 30,
+      "avg_tokens": 12360.4,
+      "avg_llm_calls": 1.57,
+      "avg_tool_calls": 1.8,
+      "latency_p50": 3.284,
+      "latency_p95": 7.645
+    },
+    "total": {
+      "count": 150,
+      "avg_tokens": 10092.0,
+      "avg_llm_calls": 1.35,
+      "avg_tool_calls": 1.52,
+      "latency_p50": 2.667,
+      "latency_p95": 5.365
+    }
+  },
+  "tool_usage": {
+    "submit_answer": 154,
+    "run_sql": 67,
+    "find_values": 6,
+    "describe_tables": 1
+  },
+  "latency_s": {
+    "mean": 3.09,
+    "p50": 2.667,
+    "p95": 5.365
+  },
+  "self_correction": {
+    "questions_with_retries": 4,
+    "correct_after_retry": 3
+  },
+  "agent_steps": {
+    "answer_source": {
+      "submit": 150
+    },
+    "questions_explored": 33,
+    "avg_sql_runs": 1.47,
+    "questions_forced_to_submit": 1,
+    "accuracy_when_explored": {
+      "count": 33,
+      "accuracy": 54.55
+    },
+    "accuracy_when_direct": {
+      "count": 117,
+      "accuracy": 76.07
+    }
+  }
+}

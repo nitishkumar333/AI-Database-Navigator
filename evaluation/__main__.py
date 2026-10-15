@@ -104,14 +104,36 @@ def _select_examples(args) -> list:
 
 # ── run ──────────────────────────────────────────────────────────────────────
 
+def _default_run_name(args, model: str, describe: bool, thinking: bool) -> str:
+    """{split}-{scope}-{evidence}-{retrieval}[-basic|-nodesc][-think]-{model}-{YYYYMMDD-HHMM},
+    e.g. dev150-all-ev-hybrid-deepseek-flash-20261014-2242: the settings that
+    change results, readable from the folder name."""
+    settings = get_settings()
+    if args.no_retrieval or args.schema_format == "basic":
+        retrieval = "keyword"
+    else:
+        retrieval = "hybrid" if settings.JINA_API_KEY else "trigram"
+    parts = [load_split(args.split)["name"] if args.split else "custom",
+             "all" if args.full_schema else "db",
+             "noev" if args.no_evidence else "ev",
+             retrieval]
+    if args.schema_format == "basic":
+        parts.append("basic")
+    elif not describe:
+        parts.append("nodesc")
+    if thinking:
+        parts.append("think")
+    parts += [re.sub(r"[^A-Za-z0-9.]+", "-", model), f"{datetime.now():%Y%m%d-%H%M}"]
+    return "-".join(parts)
+
+
 def cmd_run(args) -> int:
     settings = get_settings()
     provider = (args.provider or settings.LLM_PROVIDER).lower()
     model = args.model or default_model_for(provider)
-    run_name = args.run_name or (
-        f"{provider}-{re.sub(r'[^A-Za-z0-9.-]+', '-', model)}-{datetime.now():%Y%m%d-%H%M%S}"
-    )
     describe = args.schema_format == "enriched" and not args.no_describe
+    thinking = bool(settings.DEEPSEEK_THINKING) if provider == "deepseek" else False
+    run_name = args.run_name or _default_run_name(args, model, describe, thinking)
     run_dir = RESULTS_DIR / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     pred_path = run_dir / PREDICTIONS
