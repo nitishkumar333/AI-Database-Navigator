@@ -77,11 +77,14 @@ def describe_tables(
     tables: list[str],
     *,
     on_described=None,
+    on_failed=None,
 ) -> dict[str, dict]:
     """Describe tables one at a time (keeps provider rate limits predictable).
 
     `on_described(table, docs)` is called after each table so callers can
-    persist progress; a failed table is logged and skipped.
+    persist progress; a failed table is logged, reported to `on_failed(table)`
+    and skipped. A rate limit stops the run: the tables after it are neither
+    described nor failed.
     """
     out: dict[str, dict] = {}
     for name in tables:
@@ -94,6 +97,8 @@ def describe_tables(
                 logger.warning("Rate limited while describing %s; stopping early", name)
                 break
             logger.warning("Could not describe table %s: %s", name, exc)
+            if on_failed:
+                on_failed(name)
             continue
         out[name] = docs
         if on_described:

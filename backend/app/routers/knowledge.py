@@ -9,6 +9,7 @@ from app.models.knowledge import KnowledgeBase
 from app.utils.security import get_current_user
 from app.services.guest_service import is_guest
 from app.services.redis_client import redis_client
+from app.services.schema_index.service import schedule_describe
 from fastapi.encoders import jsonable_encoder
 import json
 
@@ -137,6 +138,8 @@ def create_knowledge_group(
     db.add(kb)
     db.commit()
     db.refresh(kb)
+    # Describe its tables first (a running job switches to them at its next chunk).
+    schedule_describe(conn_id)
 
     cache_key = f"kb:user:{current_user.id}:connection:{conn_id}:groups"
     redis_client.delete(cache_key)

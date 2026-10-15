@@ -10,8 +10,12 @@ Flow
   the stored one; a change schedules a re-profile. Users can also re-profile
   on demand (POST /api/schema/{id}/profile/refresh, "Re-profile" button).
 - After profiling, tables whose structure changed (or that were never
-  described) get LLM descriptions, capped per run. Descriptions written by
-  users always win and are never overwritten.
+  described) get LLM descriptions, a few tables at a time until all are done:
+  tables of the connection's knowledge bases first (re-checked before every
+  chunk, so a knowledge base saved mid-run jumps the queue), then the most
+  connected and largest tables. Saving a knowledge base starts describing if
+  no job is running. Descriptions written by users always win and are never
+  overwritten.
 - The retrieval index (indexer.py: embeddings, trigrams, category values) is
   updated after profiling, after describing and after a description edit.
   Updates only re-embed documents whose text changed.
@@ -35,6 +39,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import SessionLocal
 from app.models.connection import DBConnection
+from app.models.knowledge import KnowledgeBase
 from app.models.schema_profile import SchemaAnnotation, SchemaProfileRecord
 from app.services.redis_client import redis_client
 from app.services.schema_index.index_store import get_store
@@ -74,6 +79,14 @@ def _acquire(conn_id: int) -> bool:
             return True
 
 
+def _extend_lock(conn_id: int) -> None:
+    """Keep a long-running job's lock from expiring."""
+    try:
+        redis_client.client.expire(f"schema_profile_job:{conn_id}", _JOB_LOCK_TTL_S)
+    except Exception:
+        pass
+
+
 def _release(conn_id: int) -> None:
     try:
         redis_client.client.delete(f"schema_profile_job:{conn_id}")
@@ -96,6 +109,46 @@ def schedule_refresh(conn_id: int, *, describe: bool | None = None, force: bool 
         except Exception:
             logger.exception("Schema profile job failed for connection %s", conn_id)
         finally:
+            _release(conn_id)
+
+    _executor.submit(job)
+    return True
+
+
+def schedule_describe(conn_id: int) -> bool:
+    """Describe the connection's undescribed tables in the background, without
+    re-profiling (e.g. after a knowledge base is saved). False if describing is
+    disabled, there is no profile yet (profiling will describe), nothing is
+    left to describe, or a job is already running (it picks up knowledge-base
+    tables at its next chunk)."""
+    settings = get_settings()
+    if not (settings.SCHEMA_PROFILING_ENABLED and settings.SCHEMA_DESCRIBE_ENABLED):
+        return False
+    db = SessionLocal()
+    try:
+        record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
+        if record is None or not record.profile:
+            return False
+        profile = SchemaProfile.from_dict(record.profile)
+        if not _undescribed(record, profile):
+            return False
+    finally:
+        db.close()
+    if not _acquire(conn_id):
+        return False
+
+    def job():
+        db = SessionLocal()
+        try:
+            conn = db.get(DBConnection, conn_id)
+            record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
+            if conn is None or record is None or not record.profile:
+                return
+            _describe(db, record, SchemaProfile.from_dict(record.profile), None, get_user_engine(conn))
+        except Exception:
+            logger.exception("Describe job failed for connection %s", conn_id)
+        finally:
+            db.close()
             _release(conn_id)
 
     _executor.submit(job)
@@ -213,8 +266,7 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
                 twin_profile = SchemaProfile.from_dict(record.profile)
                 _index(db, conn_id, twin_profile, engine)
                 if describe:
-                    _describe(db, record, twin_profile, llm)
-                    _index(db, conn_id, twin_profile, engine)
+                    _describe(db, record, twin_profile, llm, engine)
                 return
             profile = profile_database(engine)
         except Exception as exc:
@@ -242,8 +294,7 @@ def refresh_profile(conn_id: int, *, describe: bool | None = None, force: bool =
         # Index right away (descriptions can take a while), again once described.
         _index(db, conn_id, profile, engine)
         if describe:
-            _describe(db, record, profile, llm)
-            _index(db, conn_id, profile, engine)
+            _describe(db, record, profile, llm, engine)
         elif record.description_status == "idle":
             record.description_status = "disabled"
             db.commit()
@@ -334,18 +385,54 @@ def _drop_generated(db: Session, conn_id: int, tables: set[str]) -> None:
         ).delete(synchronize_session=False)
 
 
-def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, llm) -> None:
+_DESCRIBE_CHUNK = 5                  # tables per step; priorities are re-read between steps
+_RATE_LIMIT_WAITS_S = (30, 60, 120)  # back-off after consecutive rate limits, then give up
+
+
+def _undescribed(record: SchemaProfileRecord, profile: SchemaProfile) -> list[str]:
+    done = record.described_tables or {}
+    return [t for t, table in profile.tables.items() if done.get(t) != table.structure_hash]
+
+
+def _kb_tables(db: Session, conn_id: int) -> set[str]:
+    """Tables in any of the connection's knowledge bases."""
+    tables: set[str] = set()
+    for (kb_tables,) in db.query(KnowledgeBase.tables).filter(KnowledgeBase.connection_id == conn_id):
+        tables.update(kb_tables or [])
+    return tables
+
+
+def _describe_order(profile: SchemaProfile, tables: list[str], in_kb: set[str]) -> list[str]:
+    """Knowledge-base tables first, then the most connected tables (foreign
+    keys in and out), then the largest: before any knowledge base exists those
+    are the tables a knowledge base most likely holds."""
+    degree: dict[str, int] = {}
+    for rel in profile.relations:
+        degree[rel.from_table] = degree.get(rel.from_table, 0) + 1
+        degree[rel.to_table] = degree.get(rel.to_table, 0) + 1
+
+    def key(name: str):
+        return (name not in in_kb, -degree.get(name, 0),
+                -(profile.tables[name].row_count or 0), name)
+
+    return sorted(tables, key=key)
+
+
+def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, llm,
+              engine) -> None:
+    """Describe every undescribed table, a chunk at a time, re-indexing after
+    each SCHEMA_DESCRIBE_MAX_TABLES descriptions, as soon as the knowledge-base
+    tables are all described, and at the end. Stops early
+    if the connection is deleted or the provider keeps rate-limiting; tables
+    that failed are retried on the next run."""
     from app.services.llm_factory import create_chat_model
     from app.services.schema_index.describer import describe_tables
 
-    done = record.described_tables or {}
-    pending = sorted(t for t, table in profile.tables.items() if done.get(t) != table.structure_hash)
-    if not pending:
+    conn_id = record.connection_id
+    if not _undescribed(record, profile):
         record.description_status = "done"
         db.commit()
         return
-    limit = get_settings().SCHEMA_DESCRIBE_MAX_TABLES
-    batch = pending[:limit]
     record.description_status = "running"
     db.commit()
 
@@ -359,13 +446,13 @@ def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, 
     def save(table: str, docs: dict) -> None:
         user_rows = {
             a.column_name for a in db.query(SchemaAnnotation.column_name).filter_by(
-                connection_id=record.connection_id, table_name=table, source="user")
+                connection_id=conn_id, table_name=table, source="user")
         }
-        _drop_generated(db, record.connection_id, {table})
+        _drop_generated(db, conn_id, {table})
         entries = {"": docs["description"], **docs["columns"]}
         for column, description in entries.items():
             if column not in user_rows and description:
-                db.add(SchemaAnnotation(connection_id=record.connection_id, table_name=table,
+                db.add(SchemaAnnotation(connection_id=conn_id, table_name=table,
                                         column_name=column, description=description,
                                         source="generated"))
         record.described_tables = {**(record.described_tables or {}),
@@ -373,12 +460,54 @@ def _describe(db: Session, record: SchemaProfileRecord, profile: SchemaProfile, 
         record.version += 1
         db.commit()
 
-    described = describe_tables(llm, profile, batch, on_described=save)
-    complete = len(described) == len(pending)
-    record.description_status = "done" if complete else ("partial" if described else "failed")
+    batch = max(1, get_settings().SCHEMA_DESCRIBE_MAX_TABLES)
+    failed: set[str] = set()          # skipped for the rest of this run
+    unindexed: set[str] = set()       # described since the last re-index
+    described = rate_limits = 0
+    while True:
+        db.expire_all()
+        if db.get(DBConnection, conn_id) is None:           # deleted meanwhile
+            return
+        pending = [t for t in _undescribed(record, profile) if t not in failed]
+        if not pending:
+            break
+        in_kb = _kb_tables(db, conn_id)
+        chunk = _describe_order(profile, pending, in_kb)[:_DESCRIBE_CHUNK]
+        failures: list[str] = []
+        try:
+            result = describe_tables(llm, profile, chunk, on_described=save,
+                                     on_failed=failures.append)
+        except Exception:
+            db.rollback()
+            if db.get(DBConnection, conn_id) is None:       # deleted while saving
+                return
+            raise
+        failed.update(failures)
+        described += len(result)
+        unindexed.update(result)
+        _extend_lock(conn_id)
+
+        if len(result) + len(failures) < len(chunk):       # stopped by a rate limit
+            if rate_limits == len(_RATE_LIMIT_WAITS_S):
+                logger.warning("Describing connection %s stopped: still rate limited", conn_id)
+                break
+            time.sleep(_RATE_LIMIT_WAITS_S[rate_limits])
+            rate_limits += 1
+        else:
+            rate_limits = 0
+        # Re-index after a full batch, or as soon as the knowledge-base tables
+        # are all described (so their searches use the descriptions right away).
+        kb_left = any(t in in_kb for t in _undescribed(record, profile) if t not in failed)
+        if len(unindexed) >= batch or (unindexed & in_kb and not kb_left):
+            _index(db, conn_id, profile, engine)
+            unindexed.clear()
+
+    if unindexed:
+        _index(db, conn_id, profile, engine)
+    remaining = len(_undescribed(record, profile))
+    record.description_status = "done" if not remaining else ("partial" if described else "failed")
     db.commit()
-    logger.info("Described %d/%d tables for connection %s",
-                len(described), len(pending), record.connection_id)
+    logger.info("Described %d tables for connection %s (%d left)", described, conn_id, remaining)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

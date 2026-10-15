@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     SCHEMA_PROFILING_ENABLED: bool = True
     SCHEMA_DESCRIBE_ENABLED: bool = True
     SCHEMA_CHECK_INTERVAL_S: int = 300        # how often to look for schema changes
-    SCHEMA_DESCRIBE_MAX_TABLES: int = 50      # per refresh; the rest follow on later refreshes
+    SCHEMA_DESCRIBE_MAX_TABLES: int = 50      # re-index after this many new descriptions (and when KB tables are done)
 
     # Schema retrieval (services/schema_index: index_store, hybrid). Table and
     # column documents plus low-cardinality text values are indexed in the app
