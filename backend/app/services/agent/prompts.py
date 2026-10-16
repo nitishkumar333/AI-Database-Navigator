@@ -116,11 +116,28 @@ FORCE_SUBMIT_NOTE = (
 BUDGET_REASON = "the tool budget for this question is used up."
 UNSUBMITTED_REASON = "you ran queries but did not submit a final one."
 
+_SHORTENED_HISTORY_NOTE = (
+    "EARLIER TURNS: older questions of this conversation are shown in short form: the "
+    "question, the submitted SQL with the first rows of its result, and the start of the "
+    "reply; their exploration is left out, and the oldest questions may be missing. "
+    "Build follow-ups on the SQL shown."
+)
+_SHORTENED_CATALOG_NOTE = (
+    " Call `describe_tables` for columns you need that are not shown in this conversation."
+)
+_PREVIOUS_SQL_HEADER = (
+    "SQL OF THE LAST ANSWER (that turn is not shown in the conversation; a follow-up such "
+    "as 'now by year' usually changes this query):"
+)
+
 
 def system_prompt(schema_text: str, budget: Budget, *, catalog: bool = False,
-                  linked: str | None = None) -> str:
+                  linked: str | None = None, history_shortened: bool = False,
+                  previous_sql: str | None = None) -> str:
     """`schema_text` is the full schema, or with catalog=True the table list.
-    `linked` (catalog only) is the retrieved tables' full schema for this turn."""
+    `linked` (catalog only) is the retrieved tables' full schema for this turn.
+    `history_shortened`: earlier turns are sent in short form (agent/history.py);
+    `previous_sql` is the last answer's SQL when its turn was left out."""
     linked = linked if catalog else None
     if not catalog:
         first_step, typical = _FULL_FIRST_STEP, "a single `submit_answer`"
@@ -137,4 +154,8 @@ def system_prompt(schema_text: str, budget: Budget, *, catalog: bool = False,
     ) + "\n" + schema_text
     if linked:
         prompt += "\n\n" + _LINKED_HEADER + "\n" + linked
+    if history_shortened:
+        prompt += "\n\n" + _SHORTENED_HISTORY_NOTE + (_SHORTENED_CATALOG_NOTE if catalog else "")
+    if previous_sql:
+        prompt += "\n\n" + _PREVIOUS_SQL_HEADER + "\n" + previous_sql
     return prompt
