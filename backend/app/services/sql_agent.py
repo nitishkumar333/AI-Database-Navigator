@@ -20,7 +20,7 @@ from langgraph.errors import GraphRecursionError
 from app.config import get_settings
 from app.services.agent import trace_log
 from app.services.agent.graph import RECURSION_LIMIT, get_graph, is_rate_limit, turn_start
-from app.services.agent.state import AgentContext, Budget
+from app.services.agent.state import AgentContext, Budget, HistoryLimits
 from app.services.agent.tools import DESCRIBE_TABLES, RUN_SQL, SUBMIT_ANSWER
 from app.services.llm_factory import create_chat_model
 from app.services.schema_index.retriever import SchemaView
@@ -122,6 +122,8 @@ class SQLAgent:
             schema=schema_view,
             llm=llm or _get_default_llm(),
             budget=budget or Budget(),
+            history=HistoryLimits(full_turns=settings.AGENT_HISTORY_FULL_TURNS,
+                                  max_chars=settings.AGENT_HISTORY_MAX_CHARS),
         )
 
     @property

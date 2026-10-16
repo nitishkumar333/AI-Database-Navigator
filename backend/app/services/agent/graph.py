@@ -19,6 +19,10 @@ A model that explores but answers without submitting is asked to submit, too.
 If no answer is submitted after Budget.max_forced_submits forced calls, the
 graph ends and the caller falls back to the last successful exploratory query.
 
+Earlier turns of a conversation are replayed within a character budget, the
+older ones in short form (agent/history.py). If that drops the turn holding
+the last answer, its SQL (state["last_sql"]) goes in the system prompt.
+
 Everything connection-specific (engine, schema, model) comes from the
 AgentContext passed with `graph.invoke(..., context=ctx)`.
 """
@@ -41,6 +45,7 @@ from sqlglot import exp
 
 from app.config import get_settings
 from app.services.agent import prompts, trace_log
+from app.services.agent.history import History, build_history
 from app.services.agent.state import AgentContext, AgentState, Budget
 from app.services.agent.tools import (
     SQL_TOOLS, SUBMIT_ANSWER, SUBMIT_SCHEMA, TOOL_SCHEMAS, run_tool,
@@ -50,7 +55,6 @@ from app.services.schema_index.index_store import question_terms
 logger = logging.getLogger(__name__)
 
 RECURSION_LIMIT = 40           # safety net only; budgets end a turn long before
-MAX_HISTORY_MESSAGES = 20      # messages kept from earlier turns of a conversation
 
 _tool_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="agent-tool")
 
@@ -125,33 +129,13 @@ def turn_start(messages: list) -> int:
     return max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=0)
 
 
-def _history(messages: list) -> list:
-    """The whole current turn, plus the last MAX_HISTORY_MESSAGES messages of
-    earlier turns (starting at a question so tool results keep their calls)."""
-    start = turn_start(messages)
-    earlier = messages[:start][-MAX_HISTORY_MESSAGES:]
-    while earlier and not isinstance(earlier[0], HumanMessage):
-        earlier = earlier[1:]
-    return _drop_unanswered_calls(earlier + messages[start:])
-
-
-def _drop_unanswered_calls(messages: list) -> list:
-    """Providers reject a tool call without a result. Calls can be left
-    unanswered when a turn ends early (e.g. the model called a tool while
-    writing its final reply), so strip them before replaying history."""
-    answered = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
-    out = []
-    for m in messages:
-        if isinstance(m, AIMessage) and m.tool_calls:
-            kept = [c for c in m.tool_calls if c.get("id") in answered]
-            if len(kept) != len(m.tool_calls):
-                if not kept and not m.content:
-                    continue
-                extra = {k: v for k, v in m.additional_kwargs.items()
-                         if k not in ("tool_calls", "function_call")}
-                m = m.model_copy(update={"tool_calls": kept, "additional_kwargs": extra})
-        out.append(m)
-    return out
+def _previous_sql(state: AgentState, history: History) -> str | None:
+    """The conversation's last answered SQL, when shortening the history
+    removed the turn that holds it."""
+    sql = state.get("last_sql")
+    if not sql or not history.shortened or sql in history.submitted_sql():
+        return None
+    return sql
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -231,11 +215,17 @@ def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
 def _agent(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     ctx = runtime.context
     models = _models(ctx.llm)
+    shaped = build_history(state["messages"], ctx.history)
+    history = shaped.messages
     system = prompts.system_prompt(ctx.schema_context, ctx.budget, catalog=ctx.catalog_prompt,
-                                   linked=state.get("linked_schema"))
-    history = _history(state["messages"])
+                                   linked=state.get("linked_schema"),
+                                   history_shortened=shaped.shortened,
+                                   previous_sql=_previous_sql(state, shaped))
     answered = state.get("answer") is not None
     number = _llm_calls_so_far(history) + 1
+    if number == 1 and (shaped.forms or shaped.dropped):
+        trace_log.history_shaped(ctx.turn_id, shaped.forms, shaped.dropped, shaped.chars,
+                                 ctx.history.max_chars)
 
     if not answered and _budget_used_up(state, ctx.budget):
         trace_log.llm_note(ctx.turn_id, "budget used up: only submit_answer is allowed now")
@@ -348,6 +338,7 @@ def _tools(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     update = {"messages": messages, "tool_calls_used": used, "sql_runs_used": sql_used,
               "answer": answer}
     if answer is not None and answer is not state.get("answer"):
+        update["last_sql"] = answer.get("sql")
         topic = _sql_tables(answer.get("sql"), ctx.schema)
         if topic:
             update["topic_tables"] = topic

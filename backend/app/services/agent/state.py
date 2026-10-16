@@ -28,6 +28,9 @@ class AgentState(TypedDict, total=False):
     # Tables the conversation's last answer read. Kept across turns, so a short
     # follow-up ("who bought it?") links them even when it names none.
     topic_tables: list[str]
+    # SQL of the conversation's last answer, kept across turns: shown to the
+    # model when the history it sees no longer holds that turn.
+    last_sql: str | None
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,13 @@ class Budget:
     max_forced_submits: int = 2
 
 
+@dataclass(frozen=True)
+class HistoryLimits:
+    """How much of the earlier turns the model sees (agent/history.py)."""
+    full_turns: int = 2        # most recent earlier turns that may be sent in full
+    max_chars: int = 24_000    # all earlier turns together (~6k tokens)
+
+
 @dataclass
 class AgentContext:
     engine: Engine
@@ -44,6 +54,7 @@ class AgentContext:
     schema: SchemaView         # what the schema tools look at
     llm: BaseChatModel
     budget: Budget = field(default_factory=Budget)
+    history: HistoryLimits = field(default_factory=HistoryLimits)
     explore_rows: int = 20     # rows run_sql shows the model
     answer_rows: int = 200     # rows submit_answer returns to the caller
     answer_rows_shown: int = 50  # ... of which the model sees this many

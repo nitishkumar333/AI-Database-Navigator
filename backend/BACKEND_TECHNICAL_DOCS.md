@@ -437,6 +437,17 @@ forced submits without a valid answer the turn ends and the last successful
 `run_sql` query is returned (`answer_source="exploration"`) with an
 explanation instead of an error.
 
+**Conversation history** (`agent/history.py`): the checkpoint keeps every
+message, but the model sees the current turn in full plus earlier turns within
+`AGENT_HISTORY_MAX_CHARS` (~4 chars per token). Newest first, each earlier turn
+gets the richest form that fits: in full (only the last
+`AGENT_HISTORY_FULL_TURNS`), short (question, the successful `submit_answer`
+call with its first 5 rows, the start of the reply; exploration dropped), or
+question only (question and the start of the reply). Older turns that don't fit
+are left out. When the history is shortened the system prompt says so, and if
+the turn holding the last answer was left out, its SQL (`last_sql` in the graph
+state) is added to the prompt so follow-ups can still build on it.
+
 **Parallel tool calls** run on a shared thread pool; SQL from them is limited
 per engine by a semaphore (`tools.sql_slot`) because user engines have a pool
 of only 2 + 3 connections.
@@ -444,10 +455,11 @@ of only 2 + 3 connections.
 | File | Role |
 |---|---|
 | `sql_agent.py` | `SQLAgent(engine, schema_context, *, mode, llm, schema_view, budget)` and `run_query(...)`; result + evaluation trace. |
-| `agent/graph.py` | Nodes, routing, budgets, history replay (whole current turn + 20 earlier messages, unanswered tool calls stripped), compiled graphs, checkpointer. |
+| `agent/graph.py` | Nodes, routing, budgets, compiled graphs, checkpointer. |
+| `agent/history.py` | Conversation history sent to the model: earlier turns in full, short or question-only form within a character budget; unanswered tool calls stripped. |
 | `agent/tools.py` | Tool schemas the model sees (`TOOL_SCHEMAS`) and their implementations (`run_tool(ctx, name, args)`). |
 | `agent/prompts.py` | System prompt: workflow, query rules, schema legend, PostgreSQL pitfalls. |
-| `agent/state.py` | `AgentState` (incl. `topic_tables`, kept across turns), `AgentContext`, `Budget`. |
+| `agent/state.py` | `AgentState` (incl. `topic_tables` and `last_sql`, kept across turns), `AgentContext`, `Budget`, `HistoryLimits`. |
 
 **To change the LLM model:** set `LLM_PROVIDER` / `*_MODEL` (see `llm_factory.py`).
 

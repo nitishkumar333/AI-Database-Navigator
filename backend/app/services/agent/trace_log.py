@@ -110,6 +110,15 @@ def llm_failed(turn_id: str, number: int, seconds: float, exc: Exception) -> Non
                    turn_id, number, seconds, type(exc).__name__, _one_line(exc, 500))
 
 
+def history_shaped(turn_id: str, forms: list[str], dropped: int, chars: int,
+                   max_chars: int) -> None:
+    counts = {f: forms.count(f) for f in ("full", "short", "question") if f in forms}
+    _log().info("[%s] HISTORY %d earlier turn(s): %s%s | %s of %s chars",
+                turn_id, len(forms) + dropped,
+                ", ".join(f"{n} {f}" for f, n in counts.items()) or "none sent",
+                f", {dropped} left out" if dropped else "", f"{chars:,}", f"{max_chars:,}")
+
+
 def llm_note(turn_id: str, message: str) -> None:
     _log().info("[%s] NOTE: %s", turn_id, message)
 

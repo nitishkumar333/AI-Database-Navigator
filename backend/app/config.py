@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # (names, row counts, descriptions) and the agent reads columns with its
     # describe_tables tool.
     AGENT_FULL_SCHEMA_MAX_CHARS: int = 32_000   # ~8k tokens
+    # Earlier turns of a conversation the agent sees (services/agent/history.py):
+    # the most recent AGENT_HISTORY_FULL_TURNS may be sent in full, older ones in
+    # short form (question, final SQL, first result rows, reply), all within
+    # AGENT_HISTORY_MAX_CHARS. The current turn is always sent in full.
+    AGENT_HISTORY_FULL_TURNS: int = 2
+    AGENT_HISTORY_MAX_CHARS: int = 24_000       # ~6k tokens
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
 
     # Schema profiling (services/schema_index). Profiling reads catalogs and
