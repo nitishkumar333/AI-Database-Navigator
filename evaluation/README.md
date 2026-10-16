@@ -52,7 +52,7 @@ change its results, so the folder name says what was measured:
 
 | Part | Values |
 |---|---|
-| split | `smoke30`, `dev150`, ... (`custom` for other filters) |
+| split | `smoke30`, `quick50`, `dev150`, ... (`custom` for other filters) |
 | scope | `db` = the question's database, `all` = all 75 BIRD tables (`--full-schema`) |
 | evidence | `ev` = BIRD hints given, `noev` = `--no-evidence` |
 | retrieval | `hybrid` (Jina embeddings), `trigram` (no Jina key), `keyword` (`--no-retrieval`) |
@@ -196,6 +196,7 @@ the same questions.
 | Split | Questions | Use it for |
 |---|---:|---|
 | `smoke30` | 30 (a subset of `dev150`) | Quick checks while changing the agent |
+| `quick50` | 50 (a subset of `dev150`) | Comparing different configurations |
 | `dev150` | 150 | Deciding whether a change goes in |
 
 Create a new one with
