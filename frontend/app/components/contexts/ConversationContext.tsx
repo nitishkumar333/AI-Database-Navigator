@@ -27,7 +27,7 @@ export const ConversationContext = createContext<{
   conversations: Conversation[];
   currentConversation: string | null;
   creatingNewConversation: boolean;
-  startNewConversation: () => void;
+  startNewConversation: (openChat?: boolean) => void;
   removeConversation: (id: string) => void;
   dropConversations: (ids: string[]) => void;
   selectConversation: (id: string) => void;
@@ -111,14 +111,14 @@ export const ConversationProvider = ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!listRes.ok) {
-        // No conversations yet — start a fresh one
-        startNewConversation();
+        // No conversations yet â€” start a fresh one
+        createConversation();
         return;
       }
 
       const convList = await listRes.json();
       if (convList.length === 0) {
-        startNewConversation();
+        createConversation();
         return;
       }
 
@@ -146,12 +146,12 @@ export const ConversationProvider = ({
           changePage("chat", { conversation: initialConv.id }, true);
         }
       } else {
-        // No conversations yet — start a fresh empty conversation ("Ask Anything" screen)
-        startNewConversation();
+        // No conversations yet â€” start a fresh empty conversation ("Ask Anything" screen)
+        createConversation();
       }
     } catch (e) {
       console.error("Failed to fetch conversations:", e);
-      startNewConversation();
+      createConversation();
     }
   };
 
@@ -251,7 +251,7 @@ export const ConversationProvider = ({
           // Text response
           const statusText = meta.success
             ? msg.content
-            : `❌ ${meta.error || msg.content || "Query failed"}`;
+            : `âŒ ${meta.error || msg.content || "Query failed"}`;
 
           frontendMessages.push({
             type: "text",
@@ -348,12 +348,29 @@ export const ConversationProvider = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, openLoaded]);
 
-  const startNewConversation = async () => {
+  // Used by the "New Chat" / "+" buttons: opens a conversation that has no
+  // messages yet if there is one, instead of adding another.
+  // openChat also switches to the chat page when on another page.
+  const startNewConversation = (openChat: boolean = false) => {
+    const empty = conversations.find(
+      (c) => c.loaded && Object.keys(c.queries).length === 0
+    );
+    if (!empty) {
+      createConversation(openChat);
+      return;
+    }
+    setCurrentConversation(empty.id);
+    if (openChat || currentPage === "chat") {
+      changePage("chat", { conversation: empty.id }, true);
+    }
+  };
+
+  const createConversation = (openChat: boolean = false) => {
     if (creatingNewConversation) return;
     setCreatingNewConversation(true);
     const conversation_id = uuidv4();
 
-    // Only create locally — backend creation is deferred until the first message is sent
+    // Only create locally â€” backend creation is deferred until the first message is sent
     const newConversation: Conversation = {
       ...initialConversation,
       id: conversation_id,
@@ -362,7 +379,7 @@ export const ConversationProvider = ({
     setConversations((prev) => [...prev, newConversation]);
     setCurrentConversation(conversation_id);
     setCreatingNewConversation(false);
-    if (currentPage === "chat") {
+    if (openChat || currentPage === "chat") {
       changePage("chat", { conversation: conversation_id }, true);
     }
   };
@@ -382,7 +399,7 @@ export const ConversationProvider = ({
 
     setConversations((prev) => prev.filter((c) => !gone.has(c.id)));
     if (remaining.length === 0) {
-      startNewConversation();
+      createConversation();
     } else if (currentConversation && gone.has(currentConversation)) {
       const next = remaining[Math.min(index, remaining.length - 1)];
       setCurrentConversation(next.id);

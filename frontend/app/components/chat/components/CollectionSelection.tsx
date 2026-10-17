@@ -19,7 +19,7 @@ import { CollectionContext } from "../../contexts/CollectionContext";
 
 interface CollectionSelectionProps {
   selectedConnectionId: number | null;
-  onConnectionChange: (connectionId: number | null) => void;
+  onConnectionChange: (connectionId: number) => void;
 }
 
 const CollectionSelection: React.FC<CollectionSelectionProps> = ({
@@ -54,18 +54,9 @@ const CollectionSelection: React.FC<CollectionSelectionProps> = ({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
-          value={selectedConnectionId?.toString() || "auto"}
-          onValueChange={(value) => {
-            if (value === "auto") {
-              onConnectionChange(null);
-            } else {
-              onConnectionChange(parseInt(value));
-            }
-          }}
+          value={selectedConnectionId?.toString() ?? ""}
+          onValueChange={(value) => onConnectionChange(parseInt(value))}
         >
-          <DropdownMenuRadioItem value="auto">
-            <p className="text-primary text-xs">Auto (first available)</p>
-          </DropdownMenuRadioItem>
           {connections.map((conn) => (
             <DropdownMenuRadioItem
               key={conn.id}
