@@ -462,12 +462,18 @@ export const ConversationProvider = ({
       messages: [userMessage],
     };
 
+    // Next index after the existing queries, so the new query sorts last
+    // (loaded conversations already use indexes 0..n-1).
     setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? { ...c, queries: { ...c.queries, [query_id]: newQuery } }
-          : c
-      )
+      prev.map((c) => {
+        if (c.id !== conversationId) return c;
+        const nextIndex =
+          Math.max(-1, ...Object.values(c.queries).map((q) => q.index)) + 1;
+        return {
+          ...c,
+          queries: { ...c.queries, [query_id]: { ...newQuery, index: nextIndex } },
+        };
+      })
     );
   };
 
