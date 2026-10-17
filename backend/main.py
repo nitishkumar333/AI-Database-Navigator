@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from app.database import init_db  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
 from app.observability import configure_tracing, flush as flush_traces  # noqa: E402
+from app.services.rate_limiter import RateLimitMiddleware  # noqa: E402
 from app.routers import auth, connections, schema, knowledge, query, history, conversations, suggestions  # noqa: E402
 
 app = FastAPI(
@@ -19,6 +20,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Rate limits. Added before CORS so CORS wraps it: a 429 must still carry the
+# CORS headers, or the browser hides it from the frontend as a network error.
+app.add_middleware(RateLimitMiddleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +31,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Retry-After", "X-Rate-Limit"],     # readable by the frontend on a 429
 )
 
 # Include routers

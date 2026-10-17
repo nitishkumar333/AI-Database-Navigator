@@ -8,6 +8,11 @@ import {
   useRef,
 } from "react";
 import { host } from "../host";
+// Also installs the fetch wrapper that reports the API's rate limit.
+import {
+  RATE_LIMIT_LOGOUT_EVENT,
+  RateLimitLogoutDetail,
+} from "../../utils/rateLimitLogout";
 
 export type AuthUser = {
   id: number;
@@ -27,6 +32,8 @@ export const AuthContext = createContext<{
   isAuthenticated: boolean;
   isLoading: boolean;
   onboardingStatus: OnboardingStatus | null;
+  // Why the user was signed out (e.g. rate limit), shown on the login page.
+  signedOutNotice: string;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   register: (
     email: string,
@@ -43,6 +50,7 @@ export const AuthContext = createContext<{
   isAuthenticated: false,
   isLoading: true,
   onboardingStatus: null,
+  signedOutNotice: "",
   login: async () => ({ ok: false }),
   register: async () => ({ ok: false }),
   guestLogin: async () => ({ ok: false }),
@@ -62,9 +70,26 @@ export const AuthProvider = ({
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingStatus, setOnboardingStatus] =
     useState<OnboardingStatus | null>(null);
+  const [signedOutNotice, setSignedOutNotice] = useState("");
   const initialized = useRef(false);
 
   const isAuthenticated = !!user && !!token;
+
+  // The API's own rate limit refused a request: sign the user out.
+  useEffect(() => {
+    const onRateLimited = (event: Event) => {
+      const { seconds } = (event as CustomEvent<RateLimitLogoutDetail>).detail;
+      logout();
+      setSignedOutNotice(
+        "You were signed out because of too many requests. " +
+          (seconds
+            ? `Try again in ${seconds} second${seconds === 1 ? "" : "s"}.`
+            : "Please wait a moment and try again.")
+      );
+    };
+    window.addEventListener(RATE_LIMIT_LOGOUT_EVENT, onRateLimited);
+    return () => window.removeEventListener(RATE_LIMIT_LOGOUT_EVENT, onRateLimited);
+  }, []);
 
   // On mount — check for stored token and validate
   useEffect(() => {
@@ -153,6 +178,7 @@ export const AuthProvider = ({
           setUser(userData);
         }
         await fetchOnboardingStatus(newToken);
+        setSignedOutNotice("");
         return { ok: true };
       } else {
         const errData = await response.json().catch(() => ({}));
@@ -216,6 +242,7 @@ export const AuthProvider = ({
           setUser(userData);
         }
         await fetchOnboardingStatus(newToken);
+        setSignedOutNotice("");
         return { ok: true };
       } else {
         const errData = await response.json().catch(() => ({}));
@@ -253,6 +280,7 @@ export const AuthProvider = ({
         isAuthenticated,
         isLoading,
         onboardingStatus,
+        signedOutNotice,
         login,
         register,
         guestLogin,

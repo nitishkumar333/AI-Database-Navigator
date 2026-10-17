@@ -79,11 +79,12 @@ def thread_id_for(user_id: int, conn_id: int, conversation_id: str) -> str:
 
 
 # ── Failed turns ─────────────────────────────────────────────────────────────
-# A turn that fails (rate limit, error) leaves a note in the conversation's
-# checkpoint thread after its question, so the model knows the question went
-# unanswered and why, and a follow-up such as "try again" can answer it.
+# A turn the agent ran but couldn't finish (LLM rate limit, error) leaves a
+# note in the conversation's checkpoint thread after its question, so the model
+# knows the question went unanswered and why, and a follow-up such as "try
+# again" can answer it. Requests refused by the API's own rate limits never
+# reach the agent and leave nothing.
 
-FAILED_APP_RATE_LIMIT = "the user sent too many requests in a short time"
 FAILED_LLM_RATE_LIMIT = "the AI service's rate limit was reached"
 FAILED_TOO_MANY_STEPS = "answering it needed more steps than allowed"
 FAILED_ERROR = "an internal error occurred"
@@ -96,8 +97,8 @@ _FAILED_TURN_NOTE = (
 
 def record_failed_turn(thread_id: str, question: HumanMessage, reason: str) -> None:
     """Appends the failure note to the thread, and the question too when the
-    failed turn never stored it (e.g. rejected before the agent ran). Never
-    raises: losing the note must not hide the original error."""
+    failed turn never stored it (it failed before the first checkpoint).
+    Never raises: losing the note must not hide the original error."""
     config = {"configurable": {"thread_id": thread_id}}
     try:
         graph = get_graph(evaluation=False)

@@ -94,7 +94,7 @@ backend/
     |   ├── sql_agent.py         # SQLAgent: thin entry point for one agent turn
     |   ├── agent/               # Agent graph (compiled once), tools, prompt, budgets
     |   ├── validate_sql.py      # SafeSqlExecutor: AST validation (sqlglot) + EXPLAIN + read-only transaction sandbox
-    |   ├── rate_limiter.py      # Sliding-window rate limiter (Redis sorted sets)
+    |   ├── rate_limiter.py      # RateLimitMiddleware: API rate limits (Redis sliding windows)
     |   └── redis_client.py      # Redis wrapper (get/set/delete with JSON auto-encode)
     |
     └── utils/                   # Cross-cutting helpers
@@ -304,7 +304,7 @@ This is the **core** router for NL-to-SQL.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/chat` | JWT | Main NL-to-SQL endpoint. Accepts question, connection_id, knowledge_base_id, conversation_id, query_id. Resolves connection, runs rate limit, builds schema context, runs SQL agent, saves to history + conversation. A failed turn (our rate limit, the LLM's rate limit, an agent error, too many steps) is saved too, and leaves a note after its question in the agent's checkpoint thread (`sql_agent.record_failed_turn`), so a follow-up like "try again" answers the original question. |
+| POST | `/chat` | JWT | Main NL-to-SQL endpoint. Accepts question, connection_id, knowledge_base_id, conversation_id, query_id. Rate-limited by `RateLimitMiddleware` (refused requests are not saved). Resolves connection, builds schema context, runs SQL agent, saves to history + conversation. A turn the agent couldn't finish (the LLM's rate limit, an agent error, too many steps) is saved too, and leaves a note after its question in the agent's checkpoint thread (`sql_agent.record_failed_turn`), so a follow-up like "try again" answers the original question. |
 
 **ChatRequest schema:**
 
@@ -579,22 +579,8 @@ Validates and executes LLM-generated read-only SQL queries against user database
 
 ### `app/services/rate_limiter.py`
 
-Sliding-window rate limiter using Redis sorted sets.
-
-**Config constants (top of file):**
-
-```python
-RATE_LIMIT_MAX_REQUESTS = 3    # max requests allowed
-RATE_LIMIT_WINDOW_SECS  = 90   # sliding window in seconds
-```
-
-**`check_rate_limit(user_id, client_ip)`** enforces two independent limits:
-1. Per-IP: `rate_limit:chat:ip:{ip}` — prevents multi-account abuse.
-2. Per-User: `rate_limit:chat:user:{uid}` — prevents VPN/proxy abuse.
-
-Raises `HTTP 429` with `Retry-After` header when limit exceeded.
-
-**To change limits:** Modify `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_SECS`.
+`RateLimitMiddleware`: rate limits for every `/api` request, sliding windows in
+Redis sorted sets. See [12. Rate Limiting](#12-rate-limiting).
 
 ---
 
@@ -675,7 +661,7 @@ Two lambda prompt templates:
 Frontend POST /api/query/chat
          |
          v
-1. check_rate_limit(user_id, client_ip)         [rate_limiter.py]
+1. Rate limits (chat per user + per IP, API per IP) [RateLimitMiddleware]
          |
          v
 2. Resolve DBConnection from connection_id      [DB query, falls back to first connection]
@@ -760,20 +746,34 @@ GET  /api/auth/onboarding-status { onboarding_complete: true }
 | `kb:user:{u}:connections:all` | All KB groups | No TTL | On KB create/delete |
 | `kb:user:{u}:connection:{c}:groups` | KB groups for conn | No TTL | On KB create/delete |
 | `initial_suggestions:user:{u}:connection:{c}:kb:{k}` | Suggestions | 1h | force_refresh param |
-| `rate_limit:chat:ip:{ip}` | Request timestamps | window + 10s | Sliding removal |
-| `rate_limit:chat:user:{u}` | Request timestamps | window + 10s | Sliding removal |
+| `rl:{rule}:{count}/{seconds}:ip:{ip}` / `...:user:{u}` | Request timestamps (one key per window) | window | Sliding removal |
 
 ---
 
 ## 12. Rate Limiting
 
-**Algorithm:** Redis sorted sets — each request adds a member with `{timestamp: score=timestamp}`. Old members outside the window are pruned before counting.
+`RateLimitMiddleware` (`services/rate_limiter.py`, added in `main.py` inside
+CORS so a 429 keeps its CORS headers) checks every `/api` request (not
+`OPTIONS`, not `/health`) against the rules that match it:
 
-**Current limits:** 3 requests per 90 seconds per IP AND per user (both must pass).
+| Setting | Default | Requests | Counted per |
+|---|---|---|---|
+| `RATE_LIMIT_API_IP` | `240/60` | every `/api` request | IP |
+| `RATE_LIMIT_AUTH_IP` | `10/60,50/3600` | `POST /api/auth/login`, `/register` | IP |
+| `RATE_LIMIT_GUEST_IP` | `5/600,20/86400` | `POST /api/auth/guest`, `/guest-login` (each creates a user) | IP |
+| `RATE_LIMIT_CHAT_USER` | `5/60,60/3600` | `POST /api/query/chat` | user |
+| `RATE_LIMIT_CHAT_IP` | `10/60,150/3600` | `POST /api/query/chat` | IP |
+| `RATE_LIMIT_SUGGESTIONS_USER` | `10/60,120/3600` | `POST /api/suggestions/*` | user |
+| `RATE_LIMIT_HEAVY_USER` | `10/600` | `POST /api/connections`, `/api/connections/test`, `/api/schema/{id}/profile/refresh` | user |
 
-**Endpoints affected:** `POST /api/query/chat` only.
+- **Format:** `count/seconds`, comma-separated for several windows. An empty value turns a rule off; `RATE_LIMIT_ENABLED=false` turns all off (evaluation sets it).
+- **User:** the `sub` of a valid bearer token, read without a database query; requests without one are counted per IP.
+- **Algorithm:** one Lua script checks every window of every matching rule and records the request in all of them only if all have room, using Redis time. A refused request counts against no limit, and concurrent requests can't exceed a limit.
+- **Refused:** HTTP 429 `{"detail": "Too many requests. Try again in N seconds."}` with `Retry-After` and `X-Rate-Limit: api` (both exposed through CORS). The frontend signs the user out on a 429 with that header (not on the LLM provider's 429, which has none) and the login page says why (`frontend/app/utils/rateLimitLogout.ts`). Nothing is saved: no history, no conversation message, no checkpoint note. (A 429 from the LLM provider is different: it is saved and noted in the checkpoint so "try again" works.)
+- **Redis unavailable:** requests are let through and an error is logged (at most once a minute).
+- **Client IP** is the TCP peer. Behind a reverse proxy, run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy>`, or all users share the proxy's IP.
 
-**To add rate limiting to another endpoint:** Call `check_rate_limit(user_id, client_ip)` at the top of the handler.
+**To limit another endpoint:** add a row to the table in `build_rules()` and a setting for it.
 
 ---
 
@@ -807,7 +807,7 @@ main.py
 | Change suggestion prompt templates | `utils/prompts.py` - initial_suggestions_prompt / conversation_suggestions_prompt lambdas |
 | Add a new API endpoint | Create/edit the relevant router file in `routers/`, add app.include_router() in main.py |
 | Add a new database table | Create file in `models/`, add import to `database.py::init_db()` |
-| Change rate limit thresholds | `services/rate_limiter.py` - RATE_LIMIT_MAX_REQUESTS / RATE_LIMIT_WINDOW_SECS |
+| Change rate limit thresholds | `RATE_LIMIT_*` settings (`.env` / `docker-compose.yml`) |
 | Add a new allowed SQL query type | `services/validate_sql.py` - `_ALLOWED_ROOTS` or `_FORBIDDEN_NODES` in SafeSqlExecutor |
 | Change forbidden SQL functions or prefixes | `services/validate_sql.py` - `_FORBIDDEN_FUNCTIONS` or `_FORBIDDEN_FUNCTION_PREFIXES` |
 | Change query execution timeout or row limit | `services/validate_sql.py` - SafeSqlExecutor timeout_ms / max_rows, OR `services/sql_agent.py` create_sql_tool() |
@@ -815,7 +815,7 @@ main.py
 | Change Redis TTL for caching | Edit the ex= parameter in the relevant redis_client.set() call |
 | Change which tables LLM sees | `routers/query.py` - chat_query() table filtering logic |
 | Change CORS origins | `main.py` - allow_origins=[...] |
-| Disable rate limiting | Remove check_rate_limit() call from routers/query.py::chat_query() |
+| Disable rate limiting | `RATE_LIMIT_ENABLED=false` (or empty a single `RATE_LIMIT_*` rule) |
 | Add a new tool to the SQL agent | Define with @tool in services/sql_agent.py, add to build_workflow() ToolNode and llm.bind_tools([...]) |
 | Change schema display format for LLM | `utils/db_manager.py` - get_schema_context() function |
 | Modify markdown SQL cleanup logic | `utils/db_manager.py` - refine_sql_from_markdown() function |
