@@ -9,6 +9,9 @@ export type Conversation = {
   timestamp: Date;
   initialized: boolean;
   error: boolean;
+  // Messages are in `queries`. False for a conversation listed from the
+  // backend until it is opened and its messages are fetched.
+  loaded: boolean;
 };
 
 export const initialConversation: Conversation = {
@@ -19,4 +22,5 @@ export const initialConversation: Conversation = {
   current: "",
   queries: {},
   initialized: false,
+  loaded: true,
 };
