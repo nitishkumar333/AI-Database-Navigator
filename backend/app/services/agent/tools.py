@@ -19,6 +19,7 @@ from contextlib import contextmanager
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool
+from langsmith import traceable
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -139,6 +140,25 @@ def sql_slot(engine: Engine):
 # Dispatch
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _trace_inputs(inputs: dict) -> dict:
+    """LangSmith: record the tool's arguments only, not the AgentContext
+    (engine, model, schema text)."""
+    return dict(inputs.get("args") or {})
+
+
+def _trace_outputs(output) -> dict:
+    """LangSmith: what the model saw, plus a summary of the artifact (its
+    rows already appear in the content)."""
+    content, artifact = output
+    summary = {"content": content, "success": artifact.get("success")}
+    for key in ("row_count", "tables", "method"):
+        if key in artifact:
+            summary[key] = artifact[key]
+    return summary
+
+
+# The graph passes langsmith_extra={"name": <tool>} so each run is named after its tool.
+@traceable(run_type="tool", process_inputs=_trace_inputs, process_outputs=_trace_outputs)
 def run_tool(ctx: AgentContext, name: str, args: dict) -> tuple[str, dict]:
     impl = _IMPLEMENTATIONS.get(name)
     if impl is None:

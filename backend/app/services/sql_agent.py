@@ -149,9 +149,22 @@ class SQLAgent:
         """
         conv_segment = conversation_id or uuid4().hex
         thread_id = f"{user_id}:{conn_id}:{conv_segment}"
+        # A copy per turn: one SQLAgent can serve concurrent turns (evaluation workers).
+        context = dataclasses.replace(self.context, turn_id=uuid4().hex[:6])
         config = {
             "configurable": {"thread_id": thread_id},
             "recursion_limit": RECURSION_LIMIT,
+            # LangSmith: name of the turn's root run; tags and metadata are
+            # inherited by every run under it (nodes, LLM calls).
+            "run_name": "SQLAgent",
+            "tags": [self.mode],
+            "metadata": {
+                "user_id": user_id,
+                "conn_id": conn_id,
+                "conversation_id": conversation_id,
+                "schema_prompt": self.schema_prompt,
+                "turn_id": context.turn_id,     # matches the terminal log's [turn_id]
+            },
         }
         initial_state: dict = {
             "messages": [HumanMessage(content=user_input)],
@@ -166,8 +179,6 @@ class SQLAgent:
             "link_method": None,
         }
 
-        # A copy per turn: one SQLAgent can serve concurrent turns (evaluation workers).
-        context = dataclasses.replace(self.context, turn_id=uuid4().hex[:6])
         trace_log.turn_started(context.turn_id, self.mode, thread_id, user_input, context.llm,
                                f"{self.schema_prompt} ({len(context.schema_context):,} chars)")
         started = time.perf_counter()

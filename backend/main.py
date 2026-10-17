@@ -1,8 +1,17 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.database import init_db
-from app.logging_setup import configure_logging
-from app.routers import auth, connections, schema, knowledge, query, history, conversations, suggestions
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Settings reads .env itself, but libraries configured only by environment
+# variables (LangSmith tracing) need it in os.environ, before they are used.
+load_dotenv(Path(__file__).parent / ".env")
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from app.database import init_db  # noqa: E402
+from app.logging_setup import configure_logging  # noqa: E402
+from app.observability import configure_tracing, flush as flush_traces  # noqa: E402
+from app.routers import auth, connections, schema, knowledge, query, history, conversations, suggestions  # noqa: E402
 
 app = FastAPI(
     title="SQLNav",
@@ -33,7 +42,13 @@ app.include_router(suggestions.router)
 @app.on_event("startup")
 def on_startup():
     configure_logging()
+    configure_tracing()
     init_db()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    flush_traces()          # send traced runs still queued in the background
 
 
 @app.get("/")
