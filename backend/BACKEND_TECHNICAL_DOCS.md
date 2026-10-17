@@ -448,7 +448,20 @@ are left out. When the history is shortened the system prompt says so, and if
 the turn holding the last answer was left out, its SQL (`last_sql` in the graph
 state) is added to the prompt so follow-ups can still build on it.
 
-**Parallel tool calls** run on a shared thread pool; SQL from them is limited
+**Tracing** (`app/observability.py`, LangSmith): on when `LANGSMITH_TRACING=true`
+and `LANGSMITH_API_KEY` are set (`main.py` loads `.env` into the environment
+first). Each turn is one trace: the root run `SQLAgent`, the graph nodes, every
+LLM call (tokens, cost) and every tool call (`run_tool` is `@traceable`, one run
+per tool, named after it). Tags hold the agent mode; metadata holds `user_id`,
+`conn_id`, `conversation_id`, `schema_prompt` and `turn_id` (the id that starts
+the terminal log lines) and is inherited by every run, and `thread_id` groups a
+conversation's turns into a LangSmith thread. All runs go through one client set
+at startup that replaces query result rows with `[N rows hidden]` everywhere in
+the trace. Evaluation runs are never traced (`evaluation/bootstrap.py` turns it
+off).
+
+**Parallel tool calls** run on a shared thread pool (a `ContextThreadPoolExecutor`,
+so traced tool runs keep their parent run); SQL from them is limited
 per engine by a semaphore (`tools.sql_slot`) because user engines have a pool
 of only 2 + 3 connections.
 

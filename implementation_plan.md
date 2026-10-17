@@ -25,7 +25,7 @@
 
 The final answer should still be one deliberate query.
 
-**Reformulating when results are bad.** Yes. This is the biggest behavioural gap. Add a **verifier** that checks results, not just errors (Phase 4).
+**Reformulating when results are bad.** Yes. This is the biggest behavioural gap. Add a **verifier** that checks results, not just errors.
 
 **More agentic?** Yes, but **bounded**. A free-form ReAct loop with mid-tier models wanders and burns tokens. Use a structured graph instead: route → link schema → explore and draft → verify → answer, with explicit budgets and a fast path for simple questions.
 
@@ -121,18 +121,7 @@ Replace the single tool in [sql_agent.py](backend/app/services/sql_agent.py) wit
 - Your existing `KnowledgeBase.tables` filter becomes a scope restriction applied on top of retrieval.
 - **Trigger:** use retrieval only when the enriched schema exceeds the token threshold; otherwise include the full schema.
 
-### Phase 4: Verifier and result-aware self-correction
-Add a node after `submit_answer`:
-- **Deterministic checks (free):**
-  - Empty result → probe the filter values with `find_values`.
-  - All NULL.
-  - **Join fan-out:** compare `COUNT(*)` with `COUNT(DISTINCT pk)` on the driving table.
-  - The question says "which one" or "top N" but there's no `LIMIT`/`ORDER BY`, or the reverse.
-  - Selected columns don't match what the question asks for.
-  - The magnitude is implausible compared with column statistics from `pg_stats`.
-- **LLM critic** (complex route only): sees the question, SQL, a result sample and the assumptions. It returns pass, or fail with a specific fix. Allow at most two revisions.
-
-### Phase 5: Production hardening
+### Phase 4: Production hardening
 - **Async and streaming:**
   - Make the endpoint `async def` with `graph.astream_events`.
   - Stream step events ("Searching schema…", "Running 3 checks…", "Verifying…") to the frontend through your socket context.
@@ -188,4 +177,3 @@ Keep the `SQLAgent.run_query` signature as a thin wrapper so [query.py](backend/
 Rough expectations from BIRD-style systems:
 - Phases 1 and 2 (enriched schema plus exploration) usually give the largest gain on moderate and challenging questions.
 - Phase 3 is mainly about **scaling** (staying accurate as table count grows), not raw accuracy on small databases.
-- Phase 4 trades latency and cost for accuracy, so keep it on the complex route only.

@@ -31,10 +31,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables.config import ContextThreadPoolExecutor
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
@@ -56,7 +56,9 @@ logger = logging.getLogger(__name__)
 
 RECURSION_LIMIT = 40           # safety net only; budgets end a turn long before
 
-_tool_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="agent-tool")
+# Each task runs in a copy of the caller's contextvars, so tool runs traced in
+# the pool still find their parent run (LangSmith) instead of starting new traces.
+_tool_pool = ContextThreadPoolExecutor(max_workers=16, thread_name_prefix="agent-tool")
 
 
 def is_rate_limit(exc: Exception) -> bool:
@@ -320,7 +322,8 @@ def _tools(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
             return skip, {"kind": call["name"], "success": False, "skipped": True}
         trace_log.tool_started(ctx.turn_id, call)
         start = time.perf_counter()
-        content, artifact = run_tool(ctx, call["name"], call.get("args") or {})
+        content, artifact = run_tool(ctx, call["name"], call.get("args") or {},
+                                     langsmith_extra={"name": call["name"]})
         trace_log.tool_finished(ctx.turn_id, call, content, artifact, time.perf_counter() - start)
         return content, artifact
 
