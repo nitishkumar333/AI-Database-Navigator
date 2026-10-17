@@ -12,7 +12,10 @@ from app.models.query_history import QueryHistory
 from app.models.conversation import Conversation, ConversationConnection, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
-from app.services.sql_agent import SQLAgent
+from langchain_core.messages import HumanMessage
+from app.services.sql_agent import (
+    FAILED_APP_RATE_LIMIT, SQLAgent, record_failed_turn, thread_id_for,
+)
 from app.utils.db_manager import get_all_table_names
 from app.services.schema_index.service import build_schema_context, build_schema_view
 from app.services.rate_limiter import check_rate_limit
@@ -62,10 +65,6 @@ def chat_query(
     Otherwise, use the first available connection for the user.
     Returns structured response with SQL, results, and formatted text.
     """
-    # ── Rate limit check ──
-    client_ip = request.client.host if request.client else "unknown"
-    check_rate_limit(current_user.id, client_ip)
-
     # Find connection
     conn = None
     if req.connection_id:
@@ -84,6 +83,18 @@ def chat_query(
                 status_code=400,
                 detail="No database connections configured. Go to Settings to add a PostgreSQL connection.",
             )
+
+    # ── Rate limit check ── (after the connection is known, so a rejected
+    # question can still be noted in the conversation and its agent thread)
+    client_ip = request.client.host if request.client else "unknown"
+    try:
+        check_rate_limit(current_user.id, client_ip)
+    except HTTPException as exc:
+        if req.conversation_id:
+            record_failed_turn(thread_id_for(current_user.id, conn.id, req.conversation_id),
+                               HumanMessage(content=req.question), FAILED_APP_RATE_LIMIT)
+        _save_turn(db, current_user, conn, req, _rejected(req.question, exc))
+        raise
 
     engine = get_user_engine(conn)
 
@@ -118,16 +129,40 @@ def chat_query(
         schema_context,
         schema_view=build_schema_view(db, conn, engine, context_tables),
     )
-    result = sql_agent.run_query(
-        req.question,
-        user_id=current_user.id,
-        conn_id=conn.id,
-        conversation_id=req.conversation_id,
-    )
+    try:
+        result = sql_agent.run_query(
+            req.question,
+            user_id=current_user.id,
+            conn_id=conn.id,
+            conversation_id=req.conversation_id,
+        )
+    except HTTPException as exc:
+        # The LLM provider's rate limit. The agent noted it in its thread; save
+        # the turn too, so the conversation shows what the agent remembers.
+        _save_turn(db, current_user, conn, req, _rejected(req.question, exc))
+        raise
 
+    _save_turn(db, current_user, conn, req, result)
+    return {
+        **result,
+        "connection_name": conn.name,
+        "connection_id": conn.id,
+    }
+
+
+def _rejected(question: str, exc: HTTPException) -> dict:
+    """A turn that ended with an HTTP error, in run_query's result shape."""
+    detail = str(exc.detail)
+    return {"success": False, "question": question, "generated_sql": "", "columns": [],
+            "rows": [], "error": detail, "response_text": detail}
+
+
+def _save_turn(db: Session, user: User, conn: DBConnection, req: ChatRequest, result: dict) -> None:
+    """Saves the turn to the query history and, with a conversation_id, as the
+    conversation's user and assistant messages."""
     # Save to history
     history = QueryHistory(
-        user_id=current_user.id,
+        user_id=user.id,
         connection_id=conn.id,
         nl_query=req.question,
         generated_sql=result.get("generated_sql", ""),
@@ -141,7 +176,7 @@ def chat_query(
         # Ensure the conversation exists
         conv = db.query(Conversation).filter(
             Conversation.id == req.conversation_id,
-            Conversation.user_id == current_user.id,
+            Conversation.user_id == user.id,
         ).first()
         if conv:
             # Remember that this conversation used the connection (deleting the
@@ -183,9 +218,3 @@ def chat_query(
             db.add(assistant_msg)
 
     db.commit()
-
-    return {
-        **result,
-        "connection_name": conn.name,
-        "connection_id": conn.id,
-    }

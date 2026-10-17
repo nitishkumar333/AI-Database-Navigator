@@ -73,6 +73,44 @@ def _artifact(msg) -> dict:
     return artifact if isinstance(artifact, dict) else {}
 
 
+def thread_id_for(user_id: int, conn_id: int, conversation_id: str) -> str:
+    """The checkpoint thread of one conversation on one connection."""
+    return f"{user_id}:{conn_id}:{conversation_id}"
+
+
+# ── Failed turns ─────────────────────────────────────────────────────────────
+# A turn that fails (rate limit, error) leaves a note in the conversation's
+# checkpoint thread after its question, so the model knows the question went
+# unanswered and why, and a follow-up such as "try again" can answer it.
+
+FAILED_APP_RATE_LIMIT = "the user sent too many requests in a short time"
+FAILED_LLM_RATE_LIMIT = "the AI service's rate limit was reached"
+FAILED_TOO_MANY_STEPS = "answering it needed more steps than allowed"
+FAILED_ERROR = "an internal error occurred"
+
+_FAILED_TURN_NOTE = (
+    "(Not answered: {reason}. The question above is still open; if the user asks to try "
+    "again, answer it now.)"
+)
+
+
+def record_failed_turn(thread_id: str, question: HumanMessage, reason: str) -> None:
+    """Appends the failure note to the thread, and the question too when the
+    failed turn never stored it (e.g. rejected before the agent ran). Never
+    raises: losing the note must not hide the original error."""
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        graph = get_graph(evaluation=False)
+        stored = graph.get_state(config).values.get("messages") or []
+        messages = [] if any(m.id == question.id for m in stored) else [question]
+        messages.append(AIMessage(content=_FAILED_TURN_NOTE.format(reason=reason),
+                                  response_metadata={"turn_failed": True}))
+        # As if the agent node had replied: the thread ends cleanly (no pending step).
+        graph.update_state(config, {"messages": messages}, as_node="agent")
+    except Exception:
+        logger.exception("Could not note the failed turn in thread %s", thread_id)
+
+
 def _failure(question: str, error: str, response_text: str) -> dict:
     return {
         "success": False,
@@ -147,8 +185,11 @@ class SQLAgent:
         Without a conversation_id a unique thread is created so callers never
         accidentally share state.
         """
-        conv_segment = conversation_id or uuid4().hex
-        thread_id = f"{user_id}:{conn_id}:{conv_segment}"
+        thread_id = thread_id_for(user_id, conn_id, conversation_id or uuid4().hex)
+        # Failed turns are noted in the thread, so a later "try again" has the question.
+        # Only conversations are continued; evaluation keeps no checkpoint.
+        note_failure = conversation_id is not None and not self.is_evaluation
+        question = HumanMessage(content=user_input, id=uuid4().hex)
         # A copy per turn: one SQLAgent can serve concurrent turns (evaluation workers).
         context = dataclasses.replace(self.context, turn_id=uuid4().hex[:6])
         config = {
@@ -167,7 +208,7 @@ class SQLAgent:
             },
         }
         initial_state: dict = {
-            "messages": [HumanMessage(content=user_input)],
+            "messages": [question],
             "last_user_input": user_input,
             # Budgets and the answer are per turn.
             "tool_calls_used": 0,
@@ -188,6 +229,8 @@ class SQLAgent:
             logger.warning("Agent hit recursion limit (%d steps) for thread %s",
                            RECURSION_LIMIT, thread_id)
             trace_log.turn_failed(context.turn_id, "recursion limit", time.perf_counter() - started)
+            if note_failure:
+                record_failed_turn(thread_id, question, FAILED_TOO_MANY_STEPS)
             return _failure(
                 user_input,
                 "The query required too many steps. Please simplify your question.",
@@ -197,6 +240,9 @@ class SQLAgent:
         except Exception as e:
             trace_log.turn_failed(context.turn_id, f"{type(e).__name__}: {e}",
                                   time.perf_counter() - started)
+            if note_failure:
+                record_failed_turn(thread_id, question,
+                                   FAILED_LLM_RATE_LIMIT if is_rate_limit(e) else FAILED_ERROR)
             if is_rate_limit(e):
                 raise HTTPException(
                     status_code=429,

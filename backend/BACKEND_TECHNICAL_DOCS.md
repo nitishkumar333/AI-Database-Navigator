@@ -304,7 +304,7 @@ This is the **core** router for NL-to-SQL.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/chat` | JWT | Main NL-to-SQL endpoint. Accepts question, connection_id, knowledge_base_id, conversation_id, query_id. Runs rate limit, resolves connection, builds schema context, runs SQL agent, saves to history + conversation. |
+| POST | `/chat` | JWT | Main NL-to-SQL endpoint. Accepts question, connection_id, knowledge_base_id, conversation_id, query_id. Resolves connection, runs rate limit, builds schema context, runs SQL agent, saves to history + conversation. A failed turn (our rate limit, the LLM's rate limit, an agent error, too many steps) is saved too, and leaves a note after its question in the agent's checkpoint thread (`sql_agent.record_failed_turn`), so a follow-up like "try again" answers the original question. |
 
 **ChatRequest schema:**
 
