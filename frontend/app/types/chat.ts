@@ -1,11 +1,11 @@
-import { ProductPayload } from "@/app/types/displays";
+import { ResultData } from "@/app/types/results";
 
 export type Message = {
   type: "result" | "text" | "User" | "suggestion";
   conversation_id: string;
   id: string;
   query_id: string;
-  payload: ResultPayload | ResponsePayload | SuggestionPayload;
+  payload: ResultPayload | UserPayload | ResponsePayload | SuggestionPayload;
 };
 
 export type SuggestionPayload = {
@@ -18,11 +18,16 @@ export type ResponsePayload = {
   objects: TextPayload[];
 };
 
+// The user's own question.
+export type UserPayload = {
+  type: "text";
+  objects: string[];
+};
+
 export type ResultPayload = {
-  // "text" is the user's own question.
-  type: "text" | "product" | "table";
+  type: "result";
   code: CodePayload;
-  objects: string[] | ProductPayload[] | Record<string, unknown>[];
+  result: ResultData;
 };
 
 export type CodePayload = {

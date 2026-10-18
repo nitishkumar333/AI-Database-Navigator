@@ -4,15 +4,13 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { apiFetch, getStoredToken } from "../../utils/api";
 import { AuthContext } from "./AuthContext";
 import { ToastContext } from "./ToastContext";
+import { ResultSource } from "@/app/types/results";
 
 // Response of POST /api/query/chat (or a failure shaped like one).
-export type QueryResult = {
+export type QueryResult = ResultSource & {
   success: boolean;
   error?: string;
   response_text?: string;
-  generated_sql?: string;
-  rows?: Record<string, unknown>[];
-  columns?: string[];
 };
 
 export const QueryContext = createContext<{

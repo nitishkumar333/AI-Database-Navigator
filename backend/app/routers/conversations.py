@@ -4,10 +4,14 @@ from sqlalchemy import func
 from pydantic import BaseModel
 from typing import List, Optional
 import json
+import logging
 from app.database import get_db
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
+from app.services.display import upgrade_stored
 from app.utils.security import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
@@ -55,6 +59,22 @@ class ConversationDetailResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def _with_views(metadata_json: str | None) -> str:
+    """An answer stored before results had column types and views gets them
+    now, so the client never has to guess how to show it."""
+    try:
+        meta = json.loads(metadata_json or "{}")
+    except ValueError:
+        return metadata_json or "{}"
+    if not isinstance(meta, dict) or meta.get("views") or not meta.get("rows"):
+        return metadata_json or "{}"
+    try:
+        return json.dumps(upgrade_stored(meta), default=str)
+    except Exception:
+        logger.exception("Could not add views to a stored answer")
+        return metadata_json or "{}"
 
 
 @router.get("", response_model=List[ConversationListResponse])
@@ -156,7 +176,7 @@ def get_conversation(
                 role=m.role,
                 content=m.content,
                 message_type=m.message_type,
-                metadata_json=m.metadata_json or "{}",
+                metadata_json=_with_views(m.metadata_json),
                 query_id=m.query_id,
                 created_at=str(m.created_at) if m.created_at else None,
             )

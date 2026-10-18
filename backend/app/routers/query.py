@@ -12,6 +12,7 @@ from app.models.query_history import QueryHistory
 from app.models.conversation import Conversation, ConversationConnection, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
+from app.services.display import json_rows
 from app.services.sql_agent import SQLAgent
 from app.utils.db_manager import get_all_table_names
 from app.services.schema_index.service import build_schema_context, build_schema_view
@@ -127,6 +128,11 @@ def chat_query(
         _save_turn(db, current_user, conn, req, _rejected(req.question, exc))
         raise
 
+    # One JSON form for the response and the stored turn, so a reloaded answer
+    # renders exactly like the live one (numbers stay numbers). The rows are
+    # already trimmed by the SQL tools: AgentContext.answer_rows of them, the
+    # agent having seen the first answer_rows_shown.
+    result = {**result, "rows": json_rows(result.get("rows") or [])}
     _save_turn(db, current_user, conn, req, result)
     return {
         **result,
@@ -186,7 +192,11 @@ def _save_turn(db: Session, user: User, conn: DBConnection, req: ChatRequest, re
             assistant_metadata = {
                 "generated_sql": result.get("generated_sql", ""),
                 "columns": result.get("columns", []),
-                "rows": result.get("rows", [])[:50],  # Cap stored rows
+                "rows": result.get("rows", []),
+                "row_count": result.get("row_count"),
+                "truncated": result.get("truncated", False),
+                "column_meta": result.get("column_meta", []),
+                "views": result.get("views", []),
                 "success": result.get("success", False),
                 "error": result.get("error", ""),
                 "assumptions": result.get("assumptions", ""),

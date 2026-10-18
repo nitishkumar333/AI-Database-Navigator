@@ -73,6 +73,23 @@ highest/top values.
 - Text comparison is case-sensitive; use ILIKE only for user-typed text that \
 does not match a stored value exactly.
 
+DISPLAY: `submit_answer` also sets how the UI shows the result (`display`). The \
+display never changes the query: write the SQL the question needs, then pick the \
+display that fits its result:
+- "cards" for individual records that include an image column (see rule 6);
+- "stat" for a single row of values (a count, a total, one record's figures);
+- a chart when the user asks for one (chart, graph, plot, visualize) or the \
+question is about a trend over time, a comparison across categories, or a share \
+of a whole: "line" (over time or another ordered value), "bar" (compare \
+categories), "pie" (parts of a whole, at most 8 slices), "scatter" (two numeric \
+measures). Each row is one point, so a chart needs a result with one row per x \
+(and series) value; order a line chart by its x column. Set `x` (the category or \
+time column) and `y` (the numeric columns). `series` splits one `y` into a line \
+or bar per value of another column (long format: one row per x and series value);
+- "table" otherwise, or "auto" to let the UI choose.
+The tool result says which display was used; if a chart was not possible, do not \
+describe the answer as a chart.
+
 ANSWER: after `submit_answer` succeeds, reply with a clear, concise answer based \
 only on its result, and mention any assumption you made. If the result is \
 empty, say so.

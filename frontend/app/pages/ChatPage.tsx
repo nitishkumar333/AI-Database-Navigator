@@ -109,17 +109,14 @@ export default function ChatPage() {
     // Build response messages
     const messages: Message[] = [];
 
-    // If there are rows to display, render them as products or a table
+    // Rows are shown in the views the backend chose for them.
     if (result.success && result.rows && result.rows.length > 0) {
       messages.push({
         type: "result",
         id: uuidv4(),
         conversation_id: conversation.id,
         query_id: query_id,
-        payload: buildResultPayload(result.rows, result.columns, result.generated_sql, {
-          product: 50,
-          table: 50,
-        }),
+        payload: buildResultPayload(result),
       });
     }
 

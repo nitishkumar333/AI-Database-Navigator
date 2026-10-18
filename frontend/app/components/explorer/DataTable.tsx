@@ -1,23 +1,25 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, Variants } from "framer-motion";
 
 import { PiDatabase, PiCheck, PiX } from "react-icons/pi";
+import { ColumnMeta } from "@/app/types/results";
+import { formatValue, safeUrl } from "@/app/utils/formatValue";
+import ResultImage from "@/app/components/chat/displays/Result/ResultImage";
 
-// Rows fade in one after another once the table is on screen. Later rows
-// share the last delay so long tables don't take ages to appear.
+// Rows fade in one after another, in place, once the table is on screen.
+// Later rows share the last delay so long tables don't take ages to appear.
 const MAX_STAGGERED_ROWS = 15;
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
+  hidden: { opacity: 0 },
   visible: (rowIndex: number) => ({
     opacity: 1,
-    y: 0,
     transition: {
       duration: 0.25,
       ease: "easeOut",
-      delay: 0.2 + Math.min(rowIndex, MAX_STAGGERED_ROWS) * 0.1,
+      delay: 0.02 + Math.min(rowIndex, MAX_STAGGERED_ROWS) * 0.05,
     },
   }),
 };
@@ -27,45 +29,71 @@ interface DataTableProps {
   data: { [key: string]: any }[] | null;
   stickyHeaders?: boolean;
   maxHeight?: string;
+  // Column order, types and roles; without them columns come from the first
+  // row and values are shown as they are.
+  columns?: ColumnMeta[];
+  // A fixed height (px) the rows stretch to fill. Rows never get shorter
+  // than their content; when they don't fit at that height, the table scrolls.
+  fillHeight?: number;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
   data,
   stickyHeaders = false,
   maxHeight,
+  columns: columnMeta,
+  fillHeight,
 }) => {
+  const headRef = useRef<HTMLTableSectionElement>(null);
+  const xScrollRef = useRef<HTMLDivElement>(null);
+  const [rowHeight, setRowHeight] = useState<number | null>(null);
+  const rowCount = data?.length ?? 0;
+
+  // Each row's share of the height left under the header (and under a
+  // horizontal scrollbar, if any). A row's height is a minimum, so rows
+  // taller than their share keep their content height and the table scrolls.
+  useEffect(() => {
+    if (!fillHeight || !rowCount) return;
+    const measure = () => {
+      const header = headRef.current?.offsetHeight ?? 0;
+      const x = xScrollRef.current;
+      const scrollbar = x ? x.offsetHeight - x.clientHeight : 0;
+      setRowHeight(Math.floor((fillHeight - header - scrollbar) / rowCount));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (headRef.current) observer.observe(headRef.current);
+    if (xScrollRef.current) observer.observe(xScrollRef.current);
+    return () => observer.disconnect();
+  }, [fillHeight, rowCount]);
+
   if (!data) return null;
 
-  const containerStyle =
-    stickyHeaders && maxHeight
-      ? {
-          maxHeight,
-          overflowY: "auto" as const,
-        }
+  const containerStyle = fillHeight
+    ? { height: fillHeight, overflowY: "auto" as const }
+    : stickyHeaders && maxHeight
+      ? { maxHeight, overflowY: "auto" as const }
       : {};
 
   const containerClassName = stickyHeaders
     ? "flex flex-col w-full"
     : "flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full";
 
-  const columns = Object.keys(data[0] || {});
-  const rowCount = data.length;
-  const columnCount = columns.length;
+  const columns = columnMeta?.length
+    ? columnMeta.map((c) => c.name)
+    : Object.keys(data[0] || {});
+  const meta = Object.fromEntries((columnMeta || []).map((c) => [c.name, c]));
 
   return (
     <div
-      className={`flex flex-col w-full ${stickyHeaders ? "" : "flex-1 min-w-0 min-h-0"} chat-animation-fast`}
+      className={`flex flex-col w-full ${stickyHeaders ? "" : "flex-1 min-w-0 min-h-0"}`}
     >
-      {/* Outside the scroll area so it stays visible */}
-      <p className="px-3 pb-3 text-xs text-secondary">
-        {rowCount} {rowCount === 1 ? "row" : "rows"} · {columnCount}{" "}
-        {columnCount === 1 ? "column" : "columns"}
-      </p>
       <div className={containerClassName} style={containerStyle}>
         {/* Scrollable wrapper */}
-        <div className="w-full max-w-full overflow-x-auto">
+        <div ref={xScrollRef} className="w-full max-w-full overflow-x-auto">
           <table className="w-full table-auto whitespace-nowrap border-separate border-spacing-0 overflow-auto no-scrollbar">
             <thead
+              ref={headRef}
               className={
                 stickyHeaders
                   ? "sticky top-0 z-10 bg-background_alt backdrop-blur"
@@ -94,13 +122,14 @@ const DataTable: React.FC<DataTableProps> = ({
             <motion.tbody
               initial="hidden"
               whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
+              viewport={{ once: true, amount: 'some' }}
             >
               {data.map((item, rowIndex) => (
                 <motion.tr
                   key={rowIndex}
                   custom={rowIndex}
                   variants={rowVariants}
+                  style={fillHeight && rowHeight ? { height: rowHeight } : undefined}
                   className={rowIndex % 2 === 1 ? "bg-background_alt/50" : ""}
                 >
                   <td className="border-b border-r border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
@@ -110,13 +139,44 @@ const DataTable: React.FC<DataTableProps> = ({
                   {columns.map((key, colIndex) => {
                     const value = item[key];
                     const isBoolean = typeof value === "boolean";
+                    const column = meta[key];
+                    const href = column?.role === "url" || column?.role === "image"
+                      ? safeUrl(value)
+                      : null;
+                    const isNumber = column?.type === "number" && typeof value === "number";
 
                     return (
                       <td
                         key={`${rowIndex}-${colIndex}`}
-                        className="max-w-[250px] truncate border-b border-r border-foreground_alt px-3 py-3 text-sm"
+                        className={`max-w-[250px] truncate border-b border-r border-foreground_alt px-3 py-3 text-sm ${
+                          isNumber ? "tabular-nums" : ""
+                        }`}
                       >
-                        {value !== undefined && value !== null ? (
+                        {column?.role === "image" && href ? (
+                          <a href={href} target="_blank" rel="noopener noreferrer" title={href}>
+                            <ResultImage
+                              key={href}
+                              src={href}
+                              alt={key}
+                              className="h-10 w-10 rounded-md"
+                            />
+                          </a>
+                        ) : href ? (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-highlight underline-offset-2 hover:underline"
+                          >
+                            {href}
+                          </a>
+                        ) : column && value !== null && value !== undefined &&
+                          (column.type === "number" || column.type === "date" ||
+                            column.type === "datetime") ? (
+                          <span className="text-primary" title={String(value)}>
+                            {formatValue(value, column.type)}
+                          </span>
+                        ) : value !== undefined && value !== null ? (
                           typeof value === "object" ? (
                             <span className="rounded-md bg-foreground_alt px-1.5 py-0.5 font-mono text-xs text-primary">
                               {JSON.stringify(value, null, 0)}

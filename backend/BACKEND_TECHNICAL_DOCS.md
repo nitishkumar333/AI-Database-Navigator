@@ -324,13 +324,28 @@ class ChatRequest(BaseModel):
   "success": true,
   "question": "...",
   "generated_sql": "SELECT ...",
-  "columns": ["col1", "col2"],
-  "rows": [{ "col1": "val1" }],
+  "columns": ["month", "revenue"],
+  "rows": [{ "month": "2024-01-01", "revenue": 1250.5 }],
+  "row_count": 12,
+  "truncated": false,
+  "column_meta": [
+    { "name": "month", "type": "date", "role": null },
+    { "name": "revenue", "type": "number", "role": null }
+  ],
+  "views": [
+    { "type": "line", "x": "month", "y": ["revenue"], "series": null },
+    { "type": "table" }
+  ],
   "response_text": "Here are the results...",
   "connection_name": "My DB",
   "connection_id": 1
 }
 ```
+
+`rows` are JSON-safe (numbers stay numbers, dates are ISO strings) and stored
+the same way with the conversation. `views[0]` is the default view, the rest
+are alternatives; see `services/display.py`. Answers stored before views
+existed get them when the conversation is read (`routers/conversations.py`).
 
 ### `app/routers/history.py` — prefix `/api/history`
 
@@ -394,7 +409,7 @@ agent (LLM with schema in system prompt + 5 tools) <--------------------+
      |                    describe_tables  full detail + FK join paths
      |                    find_values      how a mentioned value is stored
      |                    run_sql          exploratory, <=20 rows + row count
-     |                    submit_answer    final query, up to 200 rows -> ends the search
+     |                    submit_answer    final query, up to 200 rows (model sees 50) -> ends the search
      |
      +-- answer submitted --> production: agent writes the reply --> END
      |                        evaluation: END (the SQL is what gets scored)
@@ -688,11 +703,16 @@ Frontend POST /api/query/chat
    7c. Optional exploration: search_schema / describe_tables / find_values / run_sql,
          |    several per turn, run in parallel within the per-turn budget
          |
-   7d. submit_answer(sql, assumptions) -> SafeSqlExecutor.run(sql)  [validate_sql.py]
+   7d. submit_answer(sql, assumptions, display, x, y, series) -> SafeSqlExecutor.run(sql)  [validate_sql.py]
          |    - Layer 1: sqlglot AST validation (_check_structure)
          |    - Layer 2: Schema validation via EXPLAIN in read-only tx (_check_against_schema)
          |    - Layer 3: Execute in read-only tx with 10s timeout (_execute)
          |    (an error goes back to the LLM, which fixes the query and submits again)
+         |    - Display [services/display.py]: column types/roles from the values
+         |      (describe_columns) and view specs checked against the rows (build_views).
+         |      A display hint that doesn't fit (missing/non-numeric column, truncated
+         |      result, too many categories) falls back to a view that does; the tool
+         |      result tells the LLM which display was used.
          |
    7e. LLM writes the final response_text from the submitted result
          |
@@ -820,4 +840,6 @@ main.py
 | Change schema display format for LLM | `utils/db_manager.py` - get_schema_context() function |
 | Modify markdown SQL cleanup logic | `utils/db_manager.py` - refine_sql_from_markdown() function |
 | Change number of preview rows | `routers/schema.py` - LIMIT clause in preview_table() |
-| Change max rows stored in conversation | `routers/query.py` - rows[:50] slice in chat_query() |
+| Change max rows per answer | `services/agent/state.py` - `AgentContext.answer_rows` (rows returned, stored and displayed) and `answer_rows_shown` (the first rows the agent sees) |
+| Change how long cell values are cut | `services/display.py` - `TEXT_LIMIT`, `LINK_LIMIT`, `TOKEN_LIMIT`, `PASSWORD_LIMIT` (applied by `trim_rows` to every SQL tool result, before the agent, the API response and the stored conversation see it) |
+| Change how results are displayed | `services/display.py` - view rules and limits; the agent's guidance is the DISPLAY section of `agent/prompts.py` |
