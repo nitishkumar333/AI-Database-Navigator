@@ -14,7 +14,7 @@ value turns that rule off; RATE_LIMIT_ENABLED=false turns them all off.
     setting                      requests                                 counted per
     RATE_LIMIT_API_IP            every /api request                       client IP
     RATE_LIMIT_AUTH_IP           login, register (password guessing)      client IP
-    RATE_LIMIT_GUEST_IP          guest login (each one creates a user)    client IP
+    RATE_LIMIT_GUEST_LOGIN_IP    guest login                              client IP
     RATE_LIMIT_CHAT_USER         chat questions                           user
     RATE_LIMIT_CHAT_IP           chat questions                           client IP
     RATE_LIMIT_SUGGESTIONS_USER  question suggestions (LLM calls)         user
@@ -22,9 +22,10 @@ value turns that rule off; RATE_LIMIT_ENABLED=false turns them all off.
                                  outside hosts), re-profile a schema
 
 "user" is the id in the request's bearer token (checked without a database
-query); requests without a valid token are counted per IP instead. The client
-IP is the TCP peer: behind a reverse proxy, run uvicorn with --proxy-headers
-and --forwarded-allow-ips set to the proxy, or every user shares its IP.
+query); requests without a valid token, and guests (who all share one
+account), are counted per IP instead. The client IP is the TCP peer: behind
+a reverse proxy, run uvicorn with --proxy-headers and --forwarded-allow-ips
+set to the proxy, or every user shares its IP.
 
 If Redis can't be reached, requests are let through (and an error is logged):
 an outage of the limiter must not take the API down.
@@ -115,7 +116,7 @@ def build_rules(settings) -> list[Rule]:
         # name, setting, methods, path, counted per
         ("api", "RATE_LIMIT_API_IP", (), r"/api/.*", _IP),
         ("auth", "RATE_LIMIT_AUTH_IP", ("POST",), r"/api/auth/(login|register)", _IP),
-        ("guest", "RATE_LIMIT_GUEST_IP", ("POST",), r"/api/auth/(guest|guest-login)", _IP),
+        ("guest", "RATE_LIMIT_GUEST_LOGIN_IP", ("POST",), r"/api/auth/(guest|guest-login)", _IP),
         ("chat-user", "RATE_LIMIT_CHAT_USER", ("POST",), r"/api/query/chat", _USER),
         ("chat-ip", "RATE_LIMIT_CHAT_IP", ("POST",), r"/api/query/chat", _IP),
         ("suggestions", "RATE_LIMIT_SUGGESTIONS_USER", ("POST",), r"/api/suggestions/.*", _USER),
@@ -132,15 +133,17 @@ def build_rules(settings) -> list[Rule]:
 
 def _user_id(request: Request, secret: str, algorithm: str) -> str | None:
     """The user id in a valid bearer token, else None. No database query:
-    the token's signature and expiry are enough to count by user."""
+    the token's signature and expiry are enough to count by user. Guest
+    tokens give None: all guests share one account, so they count per IP."""
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         return None
     try:
-        sub = jwt.decode(header[7:].strip(), secret, algorithms=[algorithm]).get("sub")
+        claims = jwt.decode(header[7:].strip(), secret, algorithms=[algorithm])
     except JWTError:
         return None
-    return str(sub) if sub is not None else None
+    sub = claims.get("sub")
+    return str(sub) if sub is not None and not claims.get("guest") else None
 
 
 class RateLimitMiddleware:

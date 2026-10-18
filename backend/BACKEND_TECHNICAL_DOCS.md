@@ -760,14 +760,14 @@ CORS so a 429 keeps its CORS headers) checks every `/api` request (not
 |---|---|---|---|
 | `RATE_LIMIT_API_IP` | `240/60` | every `/api` request | IP |
 | `RATE_LIMIT_AUTH_IP` | `10/60,50/3600` | `POST /api/auth/login`, `/register` | IP |
-| `RATE_LIMIT_GUEST_IP` | `5/600,20/86400` | `POST /api/auth/guest`, `/guest-login` (each creates a user) | IP |
+| `RATE_LIMIT_GUEST_LOGIN_IP` | `5/600,20/86400` | `POST /api/auth/guest`, `/guest-login` | IP |
 | `RATE_LIMIT_CHAT_USER` | `5/60,60/3600` | `POST /api/query/chat` | user |
 | `RATE_LIMIT_CHAT_IP` | `10/60,150/3600` | `POST /api/query/chat` | IP |
 | `RATE_LIMIT_SUGGESTIONS_USER` | `10/60,120/3600` | `POST /api/suggestions/*` | user |
 | `RATE_LIMIT_HEAVY_USER` | `10/600` | `POST /api/connections`, `/api/connections/test`, `/api/schema/{id}/profile/refresh` | user |
 
 - **Format:** `count/seconds`, comma-separated for several windows. An empty value turns a rule off; `RATE_LIMIT_ENABLED=false` turns all off (evaluation sets it).
-- **User:** the `sub` of a valid bearer token, read without a database query; requests without one are counted per IP.
+- **User:** the `sub` of a valid bearer token, read without a database query; requests without one are counted per IP. Guests all share one account, so guest tokens carry a `guest: true` claim and are counted per IP too.
 - **Algorithm:** one Lua script checks every window of every matching rule and records the request in all of them only if all have room, using Redis time. A refused request counts against no limit, and concurrent requests can't exceed a limit.
 - **Refused:** HTTP 429 `{"detail": "Too many requests. Try again in N seconds."}` with `Retry-After` and `X-Rate-Limit: api` (both exposed through CORS). The frontend signs the user out on a 429 with that header (not on the LLM provider's 429, which has none) and the login page says why (`frontend/app/utils/rateLimitLogout.ts`). Nothing is saved: no history, no conversation message, no checkpoint note. (A 429 from the LLM provider is different: it is saved and noted in the checkpoint so "try again" works.)
 - **Redis unavailable:** requests are let through and an error is logged (at most once a minute).

@@ -70,7 +70,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 def guest_login(db: Session = Depends(get_db)):
     """Log in to the shared guest account (fixed connection to the shop database)."""
     guest_user = get_guest_account(db)
-    token = create_access_token(data={"sub": str(guest_user.id)})
+    # "guest" tells the rate limiter to count this token per IP: every guest
+    # shares this one user id.
+    token = create_access_token(data={"sub": str(guest_user.id), "guest": True})
     return TokenResponse(access_token=token)
 
 

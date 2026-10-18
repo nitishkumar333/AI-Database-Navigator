@@ -66,7 +66,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_API_IP: str = "10/60"                # every /api request, per IP
     RATE_LIMIT_AUTH_IP: str = "10/60,50/3600"        # login, register, per IP
-    RATE_LIMIT_GUEST_IP: str = "5/600,20/86400"      # guest logins (new user each), per IP
+    RATE_LIMIT_GUEST_LOGIN_IP: str = "5/600,20/86400"  # guest logins, per IP
+    # "per user" limits count guests per IP: all guests share one account.
     RATE_LIMIT_CHAT_USER: str = "5/60,60/3600"       # chat questions, per user
     RATE_LIMIT_CHAT_IP: str = "10/60,150/3600"       # chat questions, per IP
     RATE_LIMIT_SUGGESTIONS_USER: str = "10/60,120/3600"  # question suggestions, per user
