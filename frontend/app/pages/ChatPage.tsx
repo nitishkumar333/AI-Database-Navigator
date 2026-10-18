@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from "uuid";
 import { IoRefresh } from "react-icons/io5";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { CollectionContext } from "../components/contexts/CollectionContext";
@@ -75,7 +76,9 @@ export default function ChatPage() {
     () => Object.entries(currentQuery).sort((a, b) => a[1].index - b[1].index),
     [currentQuery]
   );
-  const isEmpty = sortedQueries.length === 0;
+  // The open conversation's messages are still being fetched.
+  const loadingMessages = !!activeConversation && !activeConversation.loaded;
+  const isEmpty = sortedQueries.length === 0 && !loadingMessages;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -90,7 +93,7 @@ export default function ChatPage() {
     !!selectedConnectionId && (loadingSuggestions || !suggestionsReady);
 
   const handleSendQuery = async (query: string) => {
-    if (query.trim() === "" || currentStatus !== "") return;
+    if (query.trim() === "" || currentStatus !== "" || loadingMessages) return;
     const trimmedQuery = query.trim();
     const query_id = uuidv4();
 
@@ -298,6 +301,14 @@ export default function ChatPage() {
             className="flex flex-col w-full max-h-[calc(100vh-120px)] overflow-y-auto justify-start items-center"
           >
             <div className="flex flex-col w-[90vw] md:w-[85vw] lg:w-[70vw] min-h-[70vh]">
+              {loadingMessages && !noConnections && (
+                <div className="w-full flex-col flex gap-2 justify-start items-start fade-in">
+                  <Skeleton className="w-full h-[1rem]" />
+                  <Skeleton className="w-1/2 h-[1rem]" />
+                  <Skeleton className="w-2/5 h-[1rem]" />
+                  <Skeleton className="w-2/5 h-[1rem]" />
+                </div>
+              )}
               {!noConnections && sortedQueries.map(([queryId, query], index, array) => (
                 <ChatProvider key={queryId}>
                   <RenderChat

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -12,13 +12,9 @@ from app.models.query_history import QueryHistory
 from app.models.conversation import Conversation, ConversationConnection, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
-from langchain_core.messages import HumanMessage
-from app.services.sql_agent import (
-    FAILED_APP_RATE_LIMIT, SQLAgent, record_failed_turn, thread_id_for,
-)
+from app.services.sql_agent import SQLAgent
 from app.utils.db_manager import get_all_table_names
 from app.services.schema_index.service import build_schema_context, build_schema_view
-from app.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
@@ -55,7 +51,6 @@ def _get_connection(conn_id: int, user: User, db: Session) -> DBConnection:
 @router.post("/chat")
 def chat_query(
     req: ChatRequest,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -84,18 +79,8 @@ def chat_query(
                 detail="No database connections configured. Go to Settings to add a PostgreSQL connection.",
             )
 
-    # ── Rate limit check ── (after the connection is known, so a rejected
-    # question can still be noted in the conversation and its agent thread)
-    client_ip = request.client.host if request.client else "unknown"
-    try:
-        check_rate_limit(current_user.id, client_ip)
-    except HTTPException as exc:
-        if req.conversation_id:
-            record_failed_turn(thread_id_for(current_user.id, conn.id, req.conversation_id),
-                               HumanMessage(content=req.question), FAILED_APP_RATE_LIMIT)
-        _save_turn(db, current_user, conn, req, _rejected(req.question, exc))
-        raise
-
+    # Rate limits are enforced before this runs (RateLimitMiddleware); a request
+    # refused there is not saved anywhere.
     engine = get_user_engine(conn)
 
     # If knowledge_base_id provided (which points to a KnowledgeBase)

@@ -15,11 +15,19 @@ import { AuthContext } from "./AuthContext";
 import { host } from "../host";
 import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
 
+// One entry of GET /api/conversations.
+type ConversationSummary = {
+  id: string;
+  name?: string;
+  created_at?: string | null;
+  message_count?: number;
+};
+
 export const ConversationContext = createContext<{
   conversations: Conversation[];
   currentConversation: string | null;
   creatingNewConversation: boolean;
-  startNewConversation: () => void;
+  startNewConversation: (openChat?: boolean) => void;
   removeConversation: (id: string) => void;
   dropConversations: (ids: string[]) => void;
   selectConversation: (id: string) => void;
@@ -74,6 +82,7 @@ export const ConversationProvider = ({
   );
   const [creatingNewConversation, setCreatingNewConversation] = useState(false);
   const initialized = useRef(false);
+  const loadingIds = useRef(new Set<string>()); // conversations whose messages are being fetched
 
   // Reset all conversation state when user logs out
   useEffect(() => {
@@ -102,31 +111,29 @@ export const ConversationProvider = ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!listRes.ok) {
-        // No conversations yet — start a fresh one
-        startNewConversation();
+        // No conversations yet â€” start a fresh one
+        createConversation();
         return;
       }
 
       const convList = await listRes.json();
       if (convList.length === 0) {
-        startNewConversation();
+        createConversation();
         return;
       }
 
-      // 2. Fetch full details (with messages) for each conversation
-      const fullConversations: Conversation[] = [];
-      for (const convSummary of convList) {
-        const detailRes = await fetch(
-          `${host}/api/conversations/${convSummary.id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!detailRes.ok) continue;
-        const detail = await detailRes.json();
-
-        // Rebuild the frontend Conversation object from backend data
-        const conv = rebuildConversation(detail);
-        fullConversations.push(conv);
-      }
+      // 2. The list only: each conversation's messages are fetched when it is
+      // opened (loadConversation). One with no messages needs no fetch.
+      const fullConversations: Conversation[] = (convList as ConversationSummary[]).map((summary) => ({
+        id: summary.id,
+        name: summary.name || "New Conversation",
+        queries: {},
+        current: "",
+        timestamp: new Date(summary.created_at || new Date()),
+        initialized: (summary.message_count ?? 0) > 0,
+        error: false,
+        loaded: (summary.message_count ?? 0) === 0,
+      }));
 
       if (fullConversations.length > 0) {
         setConversations(fullConversations);
@@ -139,12 +146,12 @@ export const ConversationProvider = ({
           changePage("chat", { conversation: initialConv.id }, true);
         }
       } else {
-        // No conversations yet — start a fresh empty conversation ("Ask Anything" screen)
-        startNewConversation();
+        // No conversations yet â€” start a fresh empty conversation ("Ask Anything" screen)
+        createConversation();
       }
     } catch (e) {
       console.error("Failed to fetch conversations:", e);
-      startNewConversation();
+      createConversation();
     }
   };
 
@@ -244,7 +251,7 @@ export const ConversationProvider = ({
           // Text response
           const statusText = meta.success
             ? msg.content
-            : `❌ ${meta.error || msg.content || "Query failed"}`;
+            : `âŒ ${meta.error || msg.content || "Query failed"}`;
 
           frontendMessages.push({
             type: "text",
@@ -285,15 +292,85 @@ export const ConversationProvider = ({
       timestamp: new Date(detail.created_at || new Date()),
       initialized: Object.keys(queries).length > 0,
       error: false,
+      loaded: true,
     };
   };
 
-  const startNewConversation = async () => {
+  /**
+   * Fetches an opened conversation's messages (once). Queries sent while the
+   * fetch was running are kept, after the loaded ones. On failure the
+   * conversation stays unloaded, so opening it again retries.
+   */
+  const loadConversation = async (conversationId: string) => {
+    if (loadingIds.current.has(conversationId)) return;
+    const token = getToken();
+    if (!token) return;
+    loadingIds.current.add(conversationId);
+    try {
+      const res = await fetch(`${host}/api/conversations/${conversationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const loaded = rebuildConversation(await res.json());
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== conversationId || c.loaded) return c;
+          const offset = Object.keys(loaded.queries).length;
+          const sentMeanwhile = Object.fromEntries(
+            Object.entries(c.queries)
+              .filter(([qid]) => !(qid in loaded.queries))
+              .map(([qid, q]) => [qid, { ...q, index: offset + q.index }])
+          );
+          return {
+            ...loaded,
+            name: c.name,
+            current: c.current,
+            queries: { ...loaded.queries, ...sentMeanwhile },
+            initialized: loaded.initialized || Object.keys(sentMeanwhile).length > 0,
+          };
+        })
+      );
+    } catch (e) {
+      console.error("Failed to load conversation:", e);
+    } finally {
+      loadingIds.current.delete(conversationId);
+    }
+  };
+
+  // Load the open conversation's messages when it hasn't been loaded yet
+  // (first open after login, selecting it in the sidebar, the URL, ...).
+  const openConversation = conversations.find((c) => c.id === currentConversation);
+  const openId = openConversation?.id;
+  const openLoaded = openConversation?.loaded;
+  useEffect(() => {
+    if (openId && openLoaded === false) loadConversation(openId);
+    // loadConversation is recreated each render; it guards repeat calls itself
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, openLoaded]);
+
+  // Used by the "New Chat" / "+" buttons: opens a conversation that has no
+  // messages yet if there is one, instead of adding another.
+  // openChat also switches to the chat page when on another page.
+  const startNewConversation = (openChat: boolean = false) => {
+    const empty = conversations.find(
+      (c) => c.loaded && Object.keys(c.queries).length === 0
+    );
+    if (!empty) {
+      createConversation(openChat);
+      return;
+    }
+    setCurrentConversation(empty.id);
+    if (openChat || currentPage === "chat") {
+      changePage("chat", { conversation: empty.id }, true);
+    }
+  };
+
+  const createConversation = (openChat: boolean = false) => {
     if (creatingNewConversation) return;
     setCreatingNewConversation(true);
     const conversation_id = uuidv4();
 
-    // Only create locally — backend creation is deferred until the first message is sent
+    // Only create locally â€” backend creation is deferred until the first message is sent
     const newConversation: Conversation = {
       ...initialConversation,
       id: conversation_id,
@@ -302,7 +379,7 @@ export const ConversationProvider = ({
     setConversations((prev) => [...prev, newConversation]);
     setCurrentConversation(conversation_id);
     setCreatingNewConversation(false);
-    if (currentPage === "chat") {
+    if (openChat || currentPage === "chat") {
       changePage("chat", { conversation: conversation_id }, true);
     }
   };
@@ -322,7 +399,7 @@ export const ConversationProvider = ({
 
     setConversations((prev) => prev.filter((c) => !gone.has(c.id)));
     if (remaining.length === 0) {
-      startNewConversation();
+      createConversation();
     } else if (currentConversation && gone.has(currentConversation)) {
       const next = remaining[Math.min(index, remaining.length - 1)];
       setCurrentConversation(next.id);

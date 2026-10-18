@@ -7,6 +7,8 @@ Must be imported before anything from the backend `app` package.
   answer (submit_answer) and never spends tokens on the final natural-language
   answer.
 - Turns LangSmith tracing off: backend/.env may switch it on for the app.
+- Turns the API's rate limits off. Evaluation calls the agent directly, not
+  through the API, so they don't apply today; this keeps it so.
 - Puts backend/ on sys.path so `import app...` resolves to the real agent code.
 """
 import os
@@ -25,6 +27,7 @@ os.environ["AGENT_MODE"] = "evaluation"
 # langsmith reads LANGSMITH_* before LANGCHAIN_*, so these win over either.
 os.environ["LANGSMITH_TRACING"] = "false"
 os.environ["LANGSMITH_TRACING_V2"] = "false"
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))

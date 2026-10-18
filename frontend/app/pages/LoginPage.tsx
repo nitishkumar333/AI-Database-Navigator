@@ -17,7 +17,7 @@ import {
 import ThemeToggle from "../components/shared/ThemeToggle";
 
 export default function LoginPage() {
-  const { login, register, guestLogin } = useContext(AuthContext);
+  const { login, register, guestLogin, signedOutNotice } = useContext(AuthContext);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -291,16 +291,16 @@ export default function LoginPage() {
                 </motion.div>
               </AnimatePresence>
 
-              {/* Error */}
+              {/* Error, or why the user was signed out (e.g. rate limit) */}
               <AnimatePresence>
-                {error && (
+                {(error || signedOutNotice) && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
                     className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
                   >
-                    {error}
+                    {error || signedOutNotice}
                   </motion.div>
                 )}
               </AnimatePresence>

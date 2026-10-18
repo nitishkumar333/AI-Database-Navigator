@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     SCHEMA_LINK_MAX_TABLES: int = 8
     SCHEMA_LINK_MAX_CHARS: int = 24_000   # ~6k tokens
 
+    # API rate limits (services/rate_limiter.py): "count/seconds", comma-separated
+    # for several windows; an empty value turns that limit off.
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_API_IP: str = "10/60"                # every /api request, per IP
+    RATE_LIMIT_AUTH_IP: str = "10/60,50/3600"        # login, register, per IP
+    RATE_LIMIT_GUEST_IP: str = "5/600,20/86400"      # guest logins (new user each), per IP
+    RATE_LIMIT_CHAT_USER: str = "5/60,60/3600"       # chat questions, per user
+    RATE_LIMIT_CHAT_IP: str = "10/60,150/3600"       # chat questions, per IP
+    RATE_LIMIT_SUGGESTIONS_USER: str = "10/60,120/3600"  # question suggestions, per user
+    RATE_LIMIT_HEAVY_USER: str = "10/600"            # add/test connection, re-profile, per user
+
     # Guest user preloaded DB connection config
     GUEST_DB_HOST: str = "localhost"
     GUEST_DB_PORT: int = 5432

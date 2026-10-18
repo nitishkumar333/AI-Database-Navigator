@@ -4,6 +4,7 @@ import React, { useContext } from "react";
 
 import { ConversationContext } from "../contexts/ConversationContext";
 import { CollectionContext } from "../contexts/CollectionContext";
+import { RouterContext } from "../contexts/RouterContext";
 
 import { FaPlus } from "react-icons/fa6";
 import { GoTrash } from "react-icons/go";
@@ -38,6 +39,7 @@ const HomeSubMenu: React.FC = () => {
     creatingNewConversation,
   } = useContext(ConversationContext);
   const { setOpenMobile } = useSidebar();
+  const { currentPage } = useContext(RouterContext);
   const { connections, connectionsLoaded } = useContext(CollectionContext);
   // Without a database connection there is nothing to chat with.
   const disabled = connectionsLoaded && connections.length === 0;
@@ -76,7 +78,11 @@ const HomeSubMenu: React.FC = () => {
             <SidebarMenuItem className="list-none fade-in" key={conv.id}>
               <SidebarMenuButton
                 variant={
-                  currentConversation === conv.id && !disabled ? "active" : "default"
+                  currentConversation === conv.id &&
+                  currentPage === "chat" &&
+                  !disabled
+                    ? "active"
+                    : "default"
                 }
                 disabled={disabled}
                 className={disabled ? "opacity-40 cursor-not-allowed" : undefined}

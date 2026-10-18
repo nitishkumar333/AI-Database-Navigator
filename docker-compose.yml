@@ -104,6 +104,15 @@ services:
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
       SCHEMA_LINK_MAX_TABLES: ${SCHEMA_LINK_MAX_TABLES:-8}
       SCHEMA_LINK_MAX_CHARS: ${SCHEMA_LINK_MAX_CHARS:-24000}
+      # Rate limits (backend/app/services/rate_limiter.py): "count/seconds[,count/seconds]"
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_API_IP: ${RATE_LIMIT_API_IP:-240/60}
+      RATE_LIMIT_AUTH_IP: ${RATE_LIMIT_AUTH_IP:-10/60,50/3600}
+      RATE_LIMIT_GUEST_IP: ${RATE_LIMIT_GUEST_IP:-5/600,20/86400}
+      RATE_LIMIT_CHAT_USER: ${RATE_LIMIT_CHAT_USER:-5/60,60/3600}
+      RATE_LIMIT_CHAT_IP: ${RATE_LIMIT_CHAT_IP:-10/60,150/3600}
+      RATE_LIMIT_SUGGESTIONS_USER: ${RATE_LIMIT_SUGGESTIONS_USER:-10/60,120/3600}
+      RATE_LIMIT_HEAVY_USER: ${RATE_LIMIT_HEAVY_USER:-10/600}
     volumes:
       - ./backend:/app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

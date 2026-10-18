@@ -34,14 +34,28 @@ import { Separator } from "@/components/ui/separator";
 import { RouterContext } from "../contexts/RouterContext";
 import { CollectionContext } from "../contexts/CollectionContext";
 import { SessionContext } from "../contexts/SessionContext";
+import { ConversationContext } from "../contexts/ConversationContext";
+import { ToastContext } from "../contexts/ToastContext";
 
 import ThemeToggle from "../shared/ThemeToggle";
 
 const SidebarComponent: React.FC = () => {
   const { backendOnline } = useContext(QueryContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { collections } = useContext(CollectionContext);
+  const { collections, connections, connectionsLoaded } =
+    useContext(CollectionContext);
   const { unsavedChanges } = useContext(SessionContext);
+  const { startNewConversation, conversations, currentConversation } =
+    useContext(ConversationContext);
+  const openConversation = conversations.find(
+    (c) => c.id === currentConversation
+  );
+  // Unloaded conversations have messages on the backend.
+  const openConversationEmpty =
+    !!openConversation &&
+    openConversation.loaded &&
+    Object.keys(openConversation.queries).length === 0;
+  const { showConfirmModal } = useContext(ToastContext);
   const { isAuthenticated, user, logout, onboardingStatus } =
     useContext(AuthContext);
   const { setOpenMobile } = useSidebar();
@@ -50,6 +64,7 @@ const SidebarComponent: React.FC = () => {
     {
       title: string;
       mode: string[];
+      active?: boolean;
       icon: React.ReactNode;
       warning?: boolean;
       loading?: boolean;
@@ -60,12 +75,28 @@ const SidebarComponent: React.FC = () => {
   useEffect(() => {
     const _items = [
       {
-        title: "Chat",
+        title: "New Chat",
         mode: ["chat"],
+        // Only highlighted while the open conversation has no messages yet.
+        active: currentPage === "chat" && openConversationEmpty,
         icon: <MdChatBubbleOutline />,
         onClick: () => {
-          changePage("chat", {}, true, unsavedChanges);
           setOpenMobile(false);
+          // Without a database connection there is nothing to chat with,
+          // so just open the chat page.
+          if (connectionsLoaded && connections.length === 0) {
+            changePage("chat", {}, true, unsavedChanges);
+            return;
+          }
+          if (unsavedChanges) {
+            showConfirmModal(
+              "Unsaved Changes",
+              "You have unsaved changes. Are you sure you want to leave this page? You will lose your changes.",
+              () => startNewConversation(true)
+            );
+          } else {
+            startNewConversation(true);
+          }
         },
       },
       {
@@ -88,7 +119,15 @@ const SidebarComponent: React.FC = () => {
       },
     ];
     setItems(_items);
-  }, [collections, unsavedChanges]);
+  }, [
+    collections,
+    unsavedChanges,
+    connections,
+    connectionsLoaded,
+    startNewConversation,
+    currentPage,
+    openConversationEmpty,
+  ]);
 
   // Don't render sidebar if not authenticated or onboarding not complete
   if (
@@ -137,7 +176,7 @@ const SidebarComponent: React.FC = () => {
                   <SidebarMenuButton
                     asChild
                     variant={
-                      item.mode.includes(currentPage)
+                      (item.active ?? item.mode.includes(currentPage))
                         ? "active"
                         : item.warning
                           ? "warning"
