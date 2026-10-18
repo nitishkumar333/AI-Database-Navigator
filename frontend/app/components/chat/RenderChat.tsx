@@ -7,18 +7,16 @@ import {
   ResponsePayload,
   ResultPayload,
   SuggestionPayload,
+  UserPayload,
 } from "@/app/types/chat";
-import { ProductPayload } from "@/app/types/displays";
 
 import UserMessageDisplay from "./displays/SystemMessages/UserMessageDisplay";
 import TextDisplay from "./displays/Generic/TextDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QueryContext } from "../contexts/QueryContext";
 import SuggestionDisplay from "./displays/SystemMessages/SuggestionDisplay";
-import RenderDisplay from "./RenderDisplay";
 import CodeView from "./displays/QueryCode/CodeView";
-import ProductView from "./displays/Product/ProductView";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import ResultView from "./displays/Result/ResultView";
 
 interface RenderChatProps {
   messages: Message[];
@@ -29,10 +27,7 @@ interface RenderChatProps {
   isLastQuery: boolean;
 }
 
-const ResultItemDisplay: React.FC<{
-  payload: ResultPayload;
-  onOpenProduct: (product: ProductPayload) => void;
-}> = ({ payload, onOpenProduct }) => {
+const ResultItemDisplay: React.FC<{ payload: ResultPayload }> = ({ payload }) => {
   const [showCode, setShowCode] = useState(true);
 
   return (
@@ -42,7 +37,7 @@ const ResultItemDisplay: React.FC<{
           <CodeView code={payload.code} onClose={() => setShowCode(false)} />
         </div>
       )}
-      <RenderDisplay payload={payload} onOpenProduct={onOpenProduct} />
+      <ResultView result={payload.result} />
     </div>
   );
 };
@@ -57,15 +52,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState<boolean>(_collapsed);
   const { backendOnline } = useContext(QueryContext);
-  // The product shown in the details dialog. Kept while the dialog closes so
-  // its content stays visible during the close animation.
-  const [product, setProduct] = useState<ProductPayload | null>(null);
-  const [productOpen, setProductOpen] = useState(false);
-
-  const openProduct = (p: ProductPayload) => {
-    setProduct(p);
-    setProductOpen(true);
-  };
 
   const messagesTopRef = React.useRef<HTMLDivElement>(null);
 
@@ -115,7 +101,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
             <div key={`${index}-${message.id}-message`} className="w-full flex">
               <UserMessageDisplay
                 onClick={() => setCollapsed((prev) => !prev)}
-                text={(message.payload as ResultPayload).objects[0] as string}
+                text={(message.payload as UserPayload).objects[0]}
                 collapsed={collapsed}
               />
             </div>
@@ -134,10 +120,7 @@ const RenderChat: React.FC<RenderChatProps> = ({
               {outputItems.map((message, index) => (
                 <div key={`${index}-${message.id}-processed-item`} className="w-full flex">
                   {message.type === "result" && (
-                    <ResultItemDisplay
-                      payload={message.payload as ResultPayload}
-                      onOpenProduct={openProduct}
-                    />
+                    <ResultItemDisplay payload={message.payload as ResultPayload} />
                   )}
                   {message.type === "text" && (
                     <div className="w-full flex flex-col justify-start items-start ">
@@ -170,17 +153,6 @@ const RenderChat: React.FC<RenderChatProps> = ({
           </div>
         )}
       </div>
-      <Dialog open={productOpen} onOpenChange={setProductOpen}>
-        <DialogContent
-          aria-describedby={undefined}
-          className="w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden bg-background_alt border-foreground_alt rounded-2xl p-0"
-        >
-          <DialogTitle className="sr-only">
-            {product?.name || "Product details"}
-          </DialogTitle>
-          {product && <ProductView product={product} />}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

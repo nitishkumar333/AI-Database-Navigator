@@ -22,6 +22,7 @@ from app.services.agent import trace_log
 from app.services.agent.graph import RECURSION_LIMIT, get_graph, is_rate_limit, turn_start
 from app.services.agent.state import AgentContext, Budget, HistoryLimits
 from app.services.agent.tools import DESCRIBE_TABLES, RUN_SQL, SUBMIT_ANSWER
+from app.services.display import describe_result
 from app.services.llm_factory import create_chat_model
 from app.services.schema_index.retriever import SchemaView
 
@@ -279,12 +280,22 @@ class SQLAgent:
         else:
             response_text = final_text or "I wasn't able to answer that. Please try rephrasing."
 
+        if answer.get("rows") and "views" not in answer:   # an exploration query: no hint
+            count = answer.get("row_count")
+            truncated = count is None or count > len(answer["rows"])
+            answer = {**answer, "truncated": truncated,
+                      **describe_result(answer.get("columns") or [], answer["rows"],
+                                        truncated=truncated)}
         result = {
             "success": True,
             "question": user_input,
             "generated_sql": answer.get("sql", ""),
             "columns": answer.get("columns", []),
             "rows": answer.get("rows", []),
+            "row_count": answer.get("row_count"),
+            "truncated": bool(answer.get("truncated")),
+            "column_meta": answer.get("column_meta", []),
+            "views": answer.get("views", []),
             "assumptions": answer.get("assumptions", ""),
             "answer_source": source,
             "response_text": response_text,

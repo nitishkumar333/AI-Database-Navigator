@@ -1,28 +1,30 @@
 import { v4 as uuidv4 } from "uuid";
 import { Message, ResultPayload } from "@/app/types/chat";
-import { detectProductData, mapRowsToProducts } from "./detectProductdata";
+import { ColumnMeta, ResultSource } from "@/app/types/results";
 
 /**
- * Result payload for query rows: product cards when the rows look like a
- * product catalogue, a table otherwise. `limits` caps the rows kept for each
- * kind (no product limit keeps every row).
+ * Result payload for an answer, live or stored. The backend sends the column
+ * types and the views; an answer without them (never expected) is a table.
  */
-export function buildResultPayload(
-  rows: Record<string, unknown>[],
-  columns: string[] | undefined,
-  sql: string | undefined,
-  limits: { product?: number; table: number }
-): ResultPayload {
-  const code = { language: "sql", title: "Generated SQL", text: sql || "" };
-  const { isProduct, fieldMapping } = detectProductData(rows, columns);
-  if (isProduct) {
-    return {
-      type: "product",
-      code,
-      objects: mapRowsToProducts(rows.slice(0, limits.product), fieldMapping),
-    };
-  }
-  return { type: "table", code, objects: rows.slice(0, limits.table) };
+export function buildResultPayload(source: ResultSource): ResultPayload {
+  const rows = source.rows || [];
+  const names = source.columns?.length
+    ? source.columns
+    : Object.keys(rows[0] || {});
+  const columns: ColumnMeta[] = source.column_meta?.length
+    ? source.column_meta
+    : names.map((name) => ({ name, type: "text", role: null }));
+  return {
+    type: "result",
+    code: { language: "sql", title: "Generated SQL", text: source.generated_sql || "" },
+    result: {
+      rows,
+      columns,
+      views: source.views?.length ? source.views : [{ type: "table" }],
+      rowCount: source.row_count ?? null,
+      truncated: !!source.truncated,
+    },
+  };
 }
 
 export const textMessage = (

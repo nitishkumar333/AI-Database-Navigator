@@ -16,6 +16,7 @@ import logging
 import threading
 import weakref
 from contextlib import contextmanager
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool
@@ -24,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.agent.state import AgentContext
+from app.services.display import DisplayHint, describe_result
 from app.services.schema_index.join_graph import JoinGraph
 from app.services.schema_index.profiler import quote_ident, type_family
 from app.services.schema_index.render import render_table, sql_ident
@@ -76,6 +78,17 @@ class SubmitAnswerArgs(BaseModel):
     assumptions: str = Field(
         default="",
         description="Interpretations you made (definitions, filters, ambiguous terms); empty if none")
+    # Flat, null-free fields: every supported provider accepts them in a tool schema.
+    display: Literal["auto", "table", "stat", "cards", "bar", "line", "pie", "scatter"] = Field(
+        default="auto",
+        description="How the UI shows the result: table, stat (one row of values), cards "
+                    "(records with an image column), bar / line / pie / scatter chart, or auto")
+    x: str = Field(default="", description="Charts: the result column for the x axis, "
+                                           "categories or pie slices; empty to let the UI pick")
+    y: list[str] = Field(default_factory=list,
+                         description="Charts: the numeric result columns to plot; empty for all")
+    series: str = Field(default="", description="Bar/line/scatter charts: optional result column "
+                                                "whose values become separate series (one y only)")
 
 
 def _schema(name: str, description: str, args: type[BaseModel]) -> StructuredTool:
@@ -378,7 +391,9 @@ def run_sql(ctx: AgentContext, sql: str, purpose: str = "") -> tuple[str, dict]:
     }
 
 
-def submit_answer(ctx: AgentContext, sql: str, assumptions: str = "") -> tuple[str, dict]:
+def submit_answer(ctx: AgentContext, sql: str, assumptions: str = "", display: str = "auto",
+                  x: str = "", y: list[str] | str | None = None,
+                  series: str = "") -> tuple[str, dict]:
     executor = SafeSqlExecutor(ctx.engine, max_rows=ctx.answer_rows,
                                count_limit=_ANSWER_COUNT_LIMIT, timeout_ms=ctx.sql_timeout_ms)
     with sql_slot(ctx.engine):
@@ -387,10 +402,15 @@ def submit_answer(ctx: AgentContext, sql: str, assumptions: str = "") -> tuple[s
         return (f"Error: {result.error}\nFix the query and call submit_answer again.",
                 {"kind": SUBMIT_ANSWER, "success": False, "sql": result.sql})
     content = result.to_llm_string(max_rows=ctx.answer_rows_shown)
+    shown = describe_result(result.columns, result.rows, truncated=result.truncated,
+                            hint=DisplayHint.parse(display, x, y, series))
+    if shown["display_note"]:
+        content += "\n" + shown["display_note"]
     return content, {
         "kind": SUBMIT_ANSWER, "success": True, "sql": result.sql,
         "columns": result.columns, "rows": result.rows, "truncated": result.truncated,
         "row_count": result.total_rows, "assumptions": (assumptions or "").strip(),
+        "column_meta": shown["column_meta"], "views": shown["views"],
     }
 
 

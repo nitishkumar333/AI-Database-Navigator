@@ -94,7 +94,6 @@ frontend/
 |   |   ├── chat/                # Chat interface components
 |   |   |   ├── QueryInput.tsx        # Text area input + send button (bottom of chat)
 |   |   |   ├── RenderChat.tsx        # Main chat message list renderer
-|   |   |   ├── RenderDisplay.tsx     # Routes a display to its component
 |   |   |   |
 |   |   |   ├── components/           # Chat UI sub-components
 |   |   |   |   ├── CollectionSelection.tsx # DB connection dropdown in chat
@@ -104,12 +103,16 @@ frontend/
 |   |   |   |
 |   |   |   └── displays/             # Result display components by type
 |   |   |       ├── Generic/
-|   |   |       |   ├── BoringGeneric.tsx   # Fallback plain table display
 |   |   |       |   └── TextDisplay.tsx     # Text/markdown response display
-|   |   |       ├── Product/
-|   |   |       |   ├── ProductCard.tsx     # Single product card
-|   |   |       |   ├── ProductDisplay.tsx  # Product grid container
-|   |   |       |   └── ProductView.tsx     # Full product detail view (opened in a modal)
+|   |   |       ├── Result/             # A query result in the views the backend chose
+|   |   |       |   ├── ResultView.tsx      # View switcher (default view + alternatives)
+|   |   |       |   ├── ResultCards.tsx     # Records with an image as cards + details dialog
+|   |   |       |   ├── ResultChart.tsx     # Bar / line / pie / scatter (Recharts, lazy-loaded)
+|   |   |       |   ├── ResultStat.tsx      # One-row results as headline tiles
+|   |   |       |   ├── ResultImage.tsx     # Lazy, no-referrer image with loading/error states
+|   |   |       |   ├── ResultValue.tsx     # A value as text, or a link for URL columns
+|   |   |       |   ├── chartData.ts        # Rows -> chart points (series pivot, x sorting)
+|   |   |       |   └── useChartTheme.ts    # Chart colours from the theme's CSS tokens
 |   |   |       ├── QueryCode/
 |   |   |       |   └── CodeView.tsx        # SQL code viewer + copy
 |   |   |       └── SystemMessages/
@@ -132,15 +135,14 @@ frontend/
 |   |
 |   ├── types/                   # TypeScript type definitions
 |   |   ├── chat.ts              # Conversation, Query, Message, payload types
-|   |   ├── displays.ts          # ProductPayload
+|   |   ├── results.ts           # ColumnMeta, View, ResultData (the backend's result description)
 |   |   └── objects.ts           # Connection, KnowledgeBaseGroup, TableInfo
 |   |
 |   └── utils/                   # Frontend utilities
 |       ├── api.ts                # apiFetch(): backend fetch with auth token + JSON body
-|       ├── detectProductdata.ts  # Heuristic detection of product-like query results
-|       ├── formatPrice.ts        # Shared USD price formatter
+|       ├── formatValue.ts        # Value formatting by column type, safe URLs
 |       ├── rateLimitLogout.ts    # Signs the user out when the API rate limit refuses a request
-|       └── resultMessages.ts     # Builds product/table result and text messages
+|       └── resultMessages.ts     # Builds result and text messages
 |
 ├── components/
 |   └── ui/                      # shadcn/ui component library (Radix UI based)
@@ -334,15 +336,14 @@ handleSendQuery(query)
   |
   result received:
   |
-  +-- if result.rows + detectProductData() --> add "result" message (ProductDisplay)
-  +-- else --> add "result" message (generic table)
+  +-- if result.rows --> add "result" message (rows + column_meta + views)
   +-- add "text" message (response_text)
   +-- finishQuery(convId, queryId)
   +-- setConversationTitle(generated name, convId)
   +-- addSuggestionToConversation(convId, queryId, connId, kbId)
 ```
 
-**Product detection:** Uses `detectProductData(rows, columns)` to auto-detect if results look like a product catalog and renders `ProductDisplay` instead of a generic table.
+**Result views:** the frontend never guesses how to show a result. The backend sends `column_meta` (each column's type and role: image, url, id) and `views` (the default view first, then alternatives), already checked against the rows (see `backend/app/services/display.py`). `ResultView` renders them.
 
 ---
 
@@ -455,10 +456,8 @@ Main message list renderer (~16KB). Iterates over all queries in the current con
 Routes messages by `message.type`:
 - `"User"` → `UserMessageDisplay`
 - `"suggestion"` → `SuggestionDisplay` (last query only)
-- `"result"` → `CodeView` + `RenderDisplay` (product cards or table)
+- `"result"` → `CodeView` + `ResultView` (table, cards, stat or chart)
 - `"text"` → `TextDisplay` (markdown; consecutive text messages are merged)
-
-It also owns the product details dialog for its query.
 
 #### `app/components/chat/components/KnowledgeBaseSelection.tsx`
 
@@ -482,9 +481,13 @@ Shows the generated SQL with:
 - Syntax highlighting (react-syntax-highlighter's light Prism build with only SQL registered; register more languages there if needed).
 - Copy to clipboard button.
 
-#### `app/components/chat/displays/Product/ProductDisplay.tsx`
+#### `app/components/chat/displays/Result/ResultView.tsx`
 
-Renders a grid of `ProductCard` components when results are detected as product data.
+Renders a result's default view, with a tab per alternative view (always including the table). Views:
+- `table` → `DataTable` with column types: image thumbnails, links, right-aligned numbers, formatted dates, "Showing the first N of M rows" when truncated.
+- `cards` → `ResultCards`: any records with an image column (not only products); a card shows the title and 3 fields, its dialog every column.
+- `stat` → `ResultStat`: the values of a one-row result as tiles.
+- `bar` / `line` / `pie` / `scatter` → `ResultChart` (Recharts, loaded only when a chart is shown). Colours are the `--chart-1..8` tokens in `theme-colors.css` (a colour-blind-safe order; charts never use a 9th colour, the backend caps series accordingly).
 
 #### `app/components/chat/displays/Generic/TextDisplay.tsx`
 
@@ -583,10 +586,9 @@ type Message = {
 };
 
 type ResultPayload = {
-  type: "table" | "product" | "generic" | "text" | ...;
-  metadata: any;
+  type: "result";
   code: CodePayload;      // { language, title, text } - holds generated SQL
-  objects: ...[];         // The actual rows
+  result: ResultData;     // rows, columns (ColumnMeta[]), views, rowCount, truncated
 };
 
 type SuggestionPayload = {
@@ -595,14 +597,13 @@ type SuggestionPayload = {
 };
 ```
 
-### `app/types/displays.ts`
+### `app/types/results.ts`
 
-Rich payload types for specialized display components:
+The backend's description of a result (`backend/app/services/display.py`):
 
-- `ProductPayload` — name, price, image, brand, category, rating, etc.
-- `TicketPayload` — support ticket fields.
-- `ThreadPayload` / `SingleMessagePayload` — conversation message types.
-- `DocumentPayload` — document with title, author, content.
+- `ColumnMeta` — `{ name, type, role }`; type is number/date/datetime/boolean/text/json/other, role is image/url/id/null.
+- `View` — `table`, `stat { fields }`, `cards { image, title, fields }`, or a chart `{ type: bar|line|pie|scatter, x, y[], series }`.
+- `ResultData` — what `ResultView` renders.
 
 ---
 
@@ -612,27 +613,9 @@ Rich payload types for specialized display components:
 
 `fetch()` against `host + path`. Sends `Authorization: Bearer <token>` (the stored token unless `token` is given; `""` sends none) and JSON-encodes `body` with `Content-Type: application/json`.
 
-### `app/utils/detectProductdata.ts`
+### `app/utils/formatValue.ts`
 
-**`detectProductData(rows, columns)`** — Heuristic function that decides if query results look like a product catalog:
-
-1. Detects an image column (by name pattern like `image/photo/thumbnail` AND having actual HTTP image URLs in values).
-2. Builds a `fieldMapping` mapping ProductPayload fields to actual column names.
-3. Returns `isProduct: true` only if there's an image column AND at least a name or price column.
-
-**`mapRowsToProducts(rows, fieldMapping)`** — Converts raw row objects to `ProductPayload[]` using the detected field mapping.
-
-**Column name patterns matched:**
-- `name` → product_name, title, item_name
-- `price` → price, cost, amount, msrp, mrp
-- `image` → image, img, photo, thumbnail, picture
-- `brand` → brand, manufacturer, vendor
-- `category` → category, type, class, department
-- `rating` → rating, score, stars
-- `id` → id, product_id, sku, asin
-- etc.
-
-**To add a new product field pattern:** Edit `FIELD_PATTERNS` in `detectProductdata.ts`.
+`formatValue(value, type)` formats by column type (locale numbers and dates; "—" for null). `safeUrl()` lets only http(s) and inline image URLs into `src`/`href`. `toNumber`/`toTime` coerce values for charts.
 
 ### `lib/utils.ts`
 
@@ -649,7 +632,7 @@ Located in `components/ui/`. All are based on **Radix UI** primitives with Tailw
 | Component | File | Usage |
 |---|---|---|
 | Button | `button.tsx` | All clickable buttons |
-| Dialog | `dialog.tsx` | Modal dialogs (product details popup) |
+| Dialog | `dialog.tsx` | Modal dialogs (record details popup) |
 | Select | `select.tsx` | Dropdown selects |
 | Toast / Toaster | `toast.tsx`, `toaster.tsx` | Notifications |
 | Sidebar | `sidebar.tsx` | Full sidebar component with all sub-parts |
@@ -731,7 +714,7 @@ ChatPage.handleSendQuery(query)
               v
         ChatPage builds messages:
               |
-              +-- if rows exist + detectProductData() -> type="result", payload.type="product"
+              +-- if rows exist -> type="result" (rows, column_meta, views from the backend)
               +-- else if rows exist -> type="result", payload.type="table"
               +-- type="text", payload.type="response" (the response_text markdown)
               |
@@ -884,7 +867,7 @@ The token is read from `localStorage.auth_token`.
 | Change color theme | `app/globals.css` - CSS custom properties AND `tailwind.config.ts` |
 | Add a new message display type | Create component in `app/components/chat/displays/`, add case in `RenderChat.tsx` |
 | Change how NL results are rendered | `app/pages/ChatPage.tsx` - handleSendQuery() message building logic |
-| Add product field detection pattern | `app/utils/detectProductdata.ts` - FIELD_PATTERNS object |
+| Change how results are displayed | `backend/app/services/display.py` (views, limits); renderers in `app/components/chat/displays/Result/` |
 | Change query suggestions behavior | `app/components/contexts/CollectionContext.tsx` - fetchSuggestions() |
 | Change conversation follow-up suggestions | `app/components/contexts/ConversationContext.tsx` - addSuggestionToConversation() |
 | Change how conversations are loaded from backend | `app/components/contexts/ConversationContext.tsx` - fetchConversationsFromBackend() and rebuildConversation() |

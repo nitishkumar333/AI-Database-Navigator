@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Conversation, Query, Message, ResultPayload } from "@/app/types/chat";
+import { Conversation, Query, Message, UserPayload } from "@/app/types/chat";
+import { ResultSource } from "@/app/types/results";
 import { v4 as uuidv4 } from "uuid";
 import { RouterContext } from "./RouterContext";
 import { AuthContext } from "./AuthContext";
@@ -32,12 +33,9 @@ type StoredMessage = {
   metadata_json?: string | null;
 };
 
-type StoredMetadata = {
+type StoredMetadata = ResultSource & {
   success?: boolean;
   error?: string;
-  rows?: Record<string, unknown>[];
-  columns?: string[];
-  generated_sql?: string;
 };
 
 const FALLBACK_SUGGESTIONS = [
@@ -101,11 +99,7 @@ const userMessage = (
   id: uuidv4(),
   query_id: queryId,
   conversation_id: conversationId,
-  payload: {
-    type: "text",
-    code: { language: "", title: "", text: "" },
-    objects: [text],
-  } as ResultPayload,
+  payload: { type: "text", objects: [text] } satisfies UserPayload,
 });
 
 /**
@@ -136,22 +130,19 @@ const rebuildConversation = (detail: ConversationDetail): Conversation => {
           meta = JSON.parse(msg.metadata_json || "{}");
         } catch {}
 
-        // If there are rows, add a product or table result message
+        // If there are rows, add a result message
         if (
           msg.message_type === "result" &&
           meta.success &&
           meta.rows &&
           meta.rows.length > 0
         ) {
-          const columns = meta.columns || Object.keys(meta.rows[0] || {});
           frontendMessages.push({
             type: "result",
             id: uuidv4(),
             conversation_id: detail.id,
             query_id: queryId,
-            payload: buildResultPayload(meta.rows, columns, meta.generated_sql, {
-              table: 100,
-            }),
+            payload: buildResultPayload(meta),
           });
         }
 

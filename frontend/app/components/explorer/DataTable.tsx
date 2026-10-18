@@ -4,6 +4,9 @@ import React from "react";
 import { motion, Variants } from "framer-motion";
 
 import { PiDatabase, PiCheck, PiX } from "react-icons/pi";
+import { ColumnMeta } from "@/app/types/results";
+import { formatValue, safeUrl } from "@/app/utils/formatValue";
+import ResultImage from "@/app/components/chat/displays/Result/ResultImage";
 
 // Rows fade in one after another once the table is on screen. Later rows
 // share the last delay so long tables don't take ages to appear.
@@ -27,12 +30,21 @@ interface DataTableProps {
   data: { [key: string]: any }[] | null;
   stickyHeaders?: boolean;
   maxHeight?: string;
+  // Column order, types and roles; without them columns come from the first
+  // row and values are shown as they are.
+  columns?: ColumnMeta[];
+  // Rows in the full result when `data` holds only some of them.
+  totalRows?: number | null;
+  truncated?: boolean;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
   data,
   stickyHeaders = false,
   maxHeight,
+  columns: columnMeta,
+  totalRows,
+  truncated = false,
 }) => {
   if (!data) return null;
 
@@ -48,9 +60,16 @@ const DataTable: React.FC<DataTableProps> = ({
     ? "flex flex-col w-full"
     : "flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full";
 
-  const columns = Object.keys(data[0] || {});
+  const columns = columnMeta?.length
+    ? columnMeta.map((c) => c.name)
+    : Object.keys(data[0] || {});
+  const meta = Object.fromEntries((columnMeta || []).map((c) => [c.name, c]));
   const rowCount = data.length;
   const columnCount = columns.length;
+  const hiddenRows =
+    truncated || (totalRows !== undefined && totalRows !== null && totalRows > rowCount);
+  const totalLabel =
+    totalRows !== undefined && totalRows !== null ? totalRows.toLocaleString() : "more";
 
   return (
     <div
@@ -58,8 +77,10 @@ const DataTable: React.FC<DataTableProps> = ({
     >
       {/* Outside the scroll area so it stays visible */}
       <p className="px-3 pb-3 text-xs text-secondary">
-        {rowCount} {rowCount === 1 ? "row" : "rows"} · {columnCount}{" "}
-        {columnCount === 1 ? "column" : "columns"}
+        {hiddenRows
+          ? `Showing the first ${rowCount.toLocaleString()} of ${totalLabel} rows`
+          : `${rowCount.toLocaleString()} ${rowCount === 1 ? "row" : "rows"}`}{" "}
+        · {columnCount} {columnCount === 1 ? "column" : "columns"}
       </p>
       <div className={containerClassName} style={containerStyle}>
         {/* Scrollable wrapper */}
@@ -73,7 +94,7 @@ const DataTable: React.FC<DataTableProps> = ({
               }
             >
               <tr className="text-left text-sm text-secondary">
-                <th className="w-12 border-b border-r border-foreground_alt px-3 py-3 text-center font-medium">
+                <th className="w-12 border-b border-r border-foreground_alt px-3 py-3 text-left font-medium">
                   #
                 </th>
 
@@ -103,20 +124,51 @@ const DataTable: React.FC<DataTableProps> = ({
                   variants={rowVariants}
                   className={rowIndex % 2 === 1 ? "bg-background_alt/50" : ""}
                 >
-                  <td className="border-b border-r border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
+                  <td className="border-b border-r border-foreground_alt px-3 py-3 text-left text-xs tabular-nums text-secondary">
                     {rowIndex + 1}
                   </td>
 
                   {columns.map((key, colIndex) => {
                     const value = item[key];
                     const isBoolean = typeof value === "boolean";
+                    const column = meta[key];
+                    const href = column?.role === "url" || column?.role === "image"
+                      ? safeUrl(value)
+                      : null;
+                    const isNumber = column?.type === "number" && typeof value === "number";
 
                     return (
                       <td
                         key={`${rowIndex}-${colIndex}`}
-                        className="max-w-[250px] truncate border-b border-r border-foreground_alt px-3 py-3 text-sm"
+                        className={`max-w-[250px] truncate border-b border-r border-foreground_alt px-3 py-3 text-sm ${
+                          isNumber ? "tabular-nums" : ""
+                        }`}
                       >
-                        {value !== undefined && value !== null ? (
+                        {column?.role === "image" && href ? (
+                          <a href={href} target="_blank" rel="noopener noreferrer" title={href}>
+                            <ResultImage
+                              key={href}
+                              src={href}
+                              alt={key}
+                              className="h-10 w-10 rounded-md"
+                            />
+                          </a>
+                        ) : href ? (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-highlight underline-offset-2 hover:underline"
+                          >
+                            {href}
+                          </a>
+                        ) : column && value !== null && value !== undefined &&
+                          (column.type === "number" || column.type === "date" ||
+                            column.type === "datetime") ? (
+                          <span className="text-primary" title={String(value)}>
+                            {formatValue(value, column.type)}
+                          </span>
+                        ) : value !== undefined && value !== null ? (
                           typeof value === "object" ? (
                             <span className="rounded-md bg-foreground_alt px-1.5 py-0.5 font-mono text-xs text-primary">
                               {JSON.stringify(value, null, 0)}
