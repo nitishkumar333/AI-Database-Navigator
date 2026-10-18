@@ -308,7 +308,7 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            style={{ y: -80 }}
+            style={{ y: -50 }}
             className="absolute flex flex-col justify-center items-center w-full h-full gap-3 lg:mr-8"
           >
             <div className="flex items-center gap-4 w-full md:w-[85vw] lg:w-[70vw] px-7 md:px-4 pb-4">
