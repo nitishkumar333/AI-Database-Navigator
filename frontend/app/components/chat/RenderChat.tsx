@@ -27,20 +27,14 @@ interface RenderChatProps {
   isLastQuery: boolean;
 }
 
-const ResultItemDisplay: React.FC<{ payload: ResultPayload }> = ({ payload }) => {
-  const [showCode, setShowCode] = useState(true);
-
-  return (
-    <div className="w-full flex flex-col justify-start items-start gap-3">
-      {showCode && (
-        <div className="w-full mt-2">
-          <CodeView code={payload.code} onClose={() => setShowCode(false)} />
-        </div>
-      )}
-      <ResultView result={payload.result} />
+const ResultItemDisplay: React.FC<{ payload: ResultPayload }> = ({ payload }) => (
+  <div className="w-full flex flex-col justify-start items-start gap-3">
+    <div className="w-full mt-2">
+      <CodeView code={payload.code} />
     </div>
-  );
-};
+    <ResultView result={payload.result} />
+  </div>
+);
 
 const RenderChat: React.FC<RenderChatProps> = ({
   messages,

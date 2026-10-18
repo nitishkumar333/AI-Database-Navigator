@@ -17,11 +17,12 @@ import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import ResultCards from "./ResultCards";
 import ResultStat from "./ResultStat";
+import { VIEW_HEIGHT } from "./layout";
 
 // The charting library loads only when a chart is shown.
 const ResultChart = dynamic(() => import("./ResultChart"), {
   ssr: false,
-  loading: () => <Skeleton className="w-full h-[360px] rounded-xl" />,
+  loading: () => <Skeleton className="w-full rounded-xl" style={{ height: VIEW_HEIGHT }} />,
 });
 
 const VIEW_LABELS: Record<View["type"], [string, IconType]> = {
@@ -34,7 +35,11 @@ const VIEW_LABELS: Record<View["type"], [string, IconType]> = {
   scatter: ["Scatter", PiChartScatter],
 };
 
-const RenderView: React.FC<{ view: View; result: ResultData }> = ({ view, result }) => {
+const RenderView: React.FC<{ view: View; result: ResultData; fixedHeight: boolean }> = ({
+  view,
+  result,
+  fixedHeight,
+}) => {
   if (isChartView(view)) return <ResultChart view={view} result={result} />;
   switch (view.type) {
     case "stat":
@@ -42,15 +47,22 @@ const RenderView: React.FC<{ view: View; result: ResultData }> = ({ view, result
     case "cards":
       return <ResultCards view={view} result={result} />;
     default:
+      // Next to a chart tab the table has the chart's height, rows stretched
+      // to fill it; on its own it fits its rows, scrolling past VIEW_HEIGHT.
+      // Heights exclude the box's 1px border.
       return (
-        <DataTable
-          data={result.rows}
-          columns={result.columns}
-          totalRows={result.rowCount}
-          truncated={result.truncated}
-          stickyHeaders={true}
-          maxHeight="40vh"
-        />
+        <div
+          className="w-full overflow-hidden rounded-xl border border-foreground_alt"
+          style={fixedHeight ? { height: VIEW_HEIGHT } : undefined}
+        >
+          <DataTable
+            data={result.rows}
+            columns={result.columns}
+            stickyHeaders={true}
+            fillHeight={fixedHeight ? VIEW_HEIGHT - 2 : undefined}
+            maxHeight={`${VIEW_HEIGHT - 2}px`}
+          />
+        </div>
       );
   }
 };
@@ -60,11 +72,17 @@ const ResultView: React.FC<{ result: ResultData }> = ({ result }) => {
   const views = result.views.filter((v) => v.type in VIEW_LABELS);
   const [selected, setSelected] = useState(0);
   const view = views[selected] ?? views[0] ?? { type: "table" };
+  const total = result.rowCount;
+  const partial = result.truncated || (total !== null && total > result.rows.length);
 
   return (
     <div className="w-full flex flex-col gap-3">
       {views.length > 1 && (
-        <div role="tablist" aria-label="Result view" className="flex flex-wrap gap-1">
+        <div
+          role="tablist"
+          aria-label="Result view"
+          className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-foreground_alt bg-background_alt p-1 shadow-sm chat-animation"
+        >
           {views.map((v, i) => {
             const [label, Icon] = VIEW_LABELS[v.type];
             const active = i === selected;
@@ -75,20 +93,26 @@ const ResultView: React.FC<{ result: ResultData }> = ({ result }) => {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setSelected(i)}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors ${
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   active
-                    ? "bg-foreground_alt text-primary"
-                    : "text-secondary hover:bg-foreground_alt/60 hover:text-primary"
+                    ? "bg-accent/15 text-primary ring-1 ring-accent/50"
+                    : "text-secondary hover:bg-foreground_alt hover:text-primary"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" aria-hidden />
+                <Icon className={`h-4 w-4 ${active ? "text-accent" : ""}`} aria-hidden />
                 {label}
               </button>
             );
           })}
         </div>
       )}
-      <RenderView view={view} result={result} />
+      <RenderView view={view} result={result} fixedHeight={views.some(isChartView)} />
+      {partial && (
+        <p className="text-xs text-secondary">
+          Showing the first {result.rows.length.toLocaleString()} of{" "}
+          {total !== null ? total.toLocaleString() : "more"} rows.
+        </p>
+      )}
     </div>
   );
 };

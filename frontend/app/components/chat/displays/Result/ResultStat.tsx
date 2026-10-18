@@ -11,16 +11,13 @@ const ResultStat: React.FC<{ view: StatView; result: ResultData }> = ({ view, re
   const columns = columnMap(result.columns);
   const single = view.fields.length === 1;
 
+  // Each tile is as wide as its label and value; tiles wrap on narrow screens.
   return (
-    <div
-      className={`grid w-full gap-3 ${
-        single ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-      }`}
-    >
+    <div className="flex w-full flex-wrap items-start gap-3">
       {view.fields.map((field) => (
         <div
           key={field}
-          className="flex flex-col gap-1 rounded-xl border border-foreground_alt bg-background_alt p-4 min-w-0"
+          className="flex w-fit min-w-[8rem] max-w-full flex-col gap-1 rounded-xl border border-foreground_alt bg-background_alt px-4 py-3"
         >
           <span className="text-xs uppercase tracking-wide text-secondary truncate">
             {columnLabel(field)}

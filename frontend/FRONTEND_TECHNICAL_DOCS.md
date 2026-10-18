@@ -477,9 +477,9 @@ Handles pagination through a large result set split across multiple display page
 
 #### `app/components/chat/displays/QueryCode/CodeView.tsx`
 
-Shows the generated SQL with:
-- Syntax highlighting (react-syntax-highlighter's light Prism build with only SQL registered; register more languages there if needed).
-- Copy to clipboard button.
+Shows the generated SQL in a box whose header holds the language label and a copy button:
+- Syntax highlighting (react-syntax-highlighter's light Prism build with only SQL registered; register more languages there if needed). Only token colours are used: the theme's background and text shadow on the inline `<code>` are cleared, since behind wrapped text they look like a selection.
+- The query is shown on one unwrapped line (line breaks become spaces); a long query scrolls horizontally. The copy button copies it with its original formatting.
 
 #### `app/components/chat/displays/Result/ResultView.tsx`
 
@@ -846,6 +846,7 @@ The token is read from `localStorage.auth_token`.
 | `react-icons` | Icon library (MdChatBubbleOutline, GoDatabase, etc.) |
 | `react-markdown` | Markdown rendering for LLM responses |
 | `react-syntax-highlighter` | SQL / code syntax highlighting |
+| `recharts` | Result charts (bar, line, pie, scatter) |
 | `remark-gfm` | GitHub-flavored markdown support |
 | `uuid` | UUID generation for conversation/query IDs |
 | `lucide-react` | Additional icon set |

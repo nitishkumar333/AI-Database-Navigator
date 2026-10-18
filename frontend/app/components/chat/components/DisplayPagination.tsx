@@ -37,7 +37,7 @@ const itemVariants: Variants = {
     opacity: 1,
     scale: 1,
     transition: {
-      delay: index * 0.05,
+      delay: 0.1 + index * 0.1,
       duration: 0.3,
       ease: [0.4, 0, 0.2, 1],
     },

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, Variants } from "framer-motion";
 
 import { PiDatabase, PiCheck, PiX } from "react-icons/pi";
@@ -8,19 +8,18 @@ import { ColumnMeta } from "@/app/types/results";
 import { formatValue, safeUrl } from "@/app/utils/formatValue";
 import ResultImage from "@/app/components/chat/displays/Result/ResultImage";
 
-// Rows fade in one after another once the table is on screen. Later rows
-// share the last delay so long tables don't take ages to appear.
+// Rows fade in one after another, in place, once the table is on screen.
+// Later rows share the last delay so long tables don't take ages to appear.
 const MAX_STAGGERED_ROWS = 15;
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
+  hidden: { opacity: 0 },
   visible: (rowIndex: number) => ({
     opacity: 1,
-    y: 0,
     transition: {
       duration: 0.25,
       ease: "easeOut",
-      delay: 0.2 + Math.min(rowIndex, MAX_STAGGERED_ROWS) * 0.1,
+      delay: 0.02 + Math.min(rowIndex, MAX_STAGGERED_ROWS) * 0.05,
     },
   }),
 };
@@ -33,9 +32,9 @@ interface DataTableProps {
   // Column order, types and roles; without them columns come from the first
   // row and values are shown as they are.
   columns?: ColumnMeta[];
-  // Rows in the full result when `data` holds only some of them.
-  totalRows?: number | null;
-  truncated?: boolean;
+  // A fixed height (px) the rows stretch to fill. Rows never get shorter
+  // than their content; when they don't fit at that height, the table scrolls.
+  fillHeight?: number;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -43,17 +42,37 @@ const DataTable: React.FC<DataTableProps> = ({
   stickyHeaders = false,
   maxHeight,
   columns: columnMeta,
-  totalRows,
-  truncated = false,
+  fillHeight,
 }) => {
+  const headRef = useRef<HTMLTableSectionElement>(null);
+  const xScrollRef = useRef<HTMLDivElement>(null);
+  const [rowHeight, setRowHeight] = useState<number | null>(null);
+  const rowCount = data?.length ?? 0;
+
+  // Each row's share of the height left under the header (and under a
+  // horizontal scrollbar, if any). A row's height is a minimum, so rows
+  // taller than their share keep their content height and the table scrolls.
+  useEffect(() => {
+    if (!fillHeight || !rowCount) return;
+    const measure = () => {
+      const header = headRef.current?.offsetHeight ?? 0;
+      const x = xScrollRef.current;
+      const scrollbar = x ? x.offsetHeight - x.clientHeight : 0;
+      setRowHeight(Math.floor((fillHeight - header - scrollbar) / rowCount));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (headRef.current) observer.observe(headRef.current);
+    if (xScrollRef.current) observer.observe(xScrollRef.current);
+    return () => observer.disconnect();
+  }, [fillHeight, rowCount]);
+
   if (!data) return null;
 
-  const containerStyle =
-    stickyHeaders && maxHeight
-      ? {
-          maxHeight,
-          overflowY: "auto" as const,
-        }
+  const containerStyle = fillHeight
+    ? { height: fillHeight, overflowY: "auto" as const }
+    : stickyHeaders && maxHeight
+      ? { maxHeight, overflowY: "auto" as const }
       : {};
 
   const containerClassName = stickyHeaders
@@ -64,29 +83,17 @@ const DataTable: React.FC<DataTableProps> = ({
     ? columnMeta.map((c) => c.name)
     : Object.keys(data[0] || {});
   const meta = Object.fromEntries((columnMeta || []).map((c) => [c.name, c]));
-  const rowCount = data.length;
-  const columnCount = columns.length;
-  const hiddenRows =
-    truncated || (totalRows !== undefined && totalRows !== null && totalRows > rowCount);
-  const totalLabel =
-    totalRows !== undefined && totalRows !== null ? totalRows.toLocaleString() : "more";
 
   return (
     <div
-      className={`flex flex-col w-full ${stickyHeaders ? "" : "flex-1 min-w-0 min-h-0"} chat-animation-fast`}
+      className={`flex flex-col w-full ${stickyHeaders ? "" : "flex-1 min-w-0 min-h-0"}`}
     >
-      {/* Outside the scroll area so it stays visible */}
-      <p className="px-3 pb-3 text-xs text-secondary">
-        {hiddenRows
-          ? `Showing the first ${rowCount.toLocaleString()} of ${totalLabel} rows`
-          : `${rowCount.toLocaleString()} ${rowCount === 1 ? "row" : "rows"}`}{" "}
-        · {columnCount} {columnCount === 1 ? "column" : "columns"}
-      </p>
       <div className={containerClassName} style={containerStyle}>
         {/* Scrollable wrapper */}
-        <div className="w-full max-w-full overflow-x-auto">
+        <div ref={xScrollRef} className="w-full max-w-full overflow-x-auto">
           <table className="w-full table-auto whitespace-nowrap border-separate border-spacing-0 overflow-auto no-scrollbar">
             <thead
+              ref={headRef}
               className={
                 stickyHeaders
                   ? "sticky top-0 z-10 bg-background_alt backdrop-blur"
@@ -94,7 +101,7 @@ const DataTable: React.FC<DataTableProps> = ({
               }
             >
               <tr className="text-left text-sm text-secondary">
-                <th className="w-12 border-b border-r border-foreground_alt px-3 py-3 text-left font-medium">
+                <th className="w-12 border-b border-r border-foreground_alt px-3 py-3 text-center font-medium">
                   #
                 </th>
 
@@ -115,16 +122,17 @@ const DataTable: React.FC<DataTableProps> = ({
             <motion.tbody
               initial="hidden"
               whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
+              viewport={{ once: true, amount: 'some' }}
             >
               {data.map((item, rowIndex) => (
                 <motion.tr
                   key={rowIndex}
                   custom={rowIndex}
                   variants={rowVariants}
+                  style={fillHeight && rowHeight ? { height: rowHeight } : undefined}
                   className={rowIndex % 2 === 1 ? "bg-background_alt/50" : ""}
                 >
-                  <td className="border-b border-r border-foreground_alt px-3 py-3 text-left text-xs tabular-nums text-secondary">
+                  <td className="border-b border-r border-foreground_alt px-3 py-3 text-center text-xs tabular-nums text-secondary">
                     {rowIndex + 1}
                   </td>
 

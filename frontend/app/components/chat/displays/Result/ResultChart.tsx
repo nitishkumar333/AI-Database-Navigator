@@ -22,8 +22,8 @@ import { ChartView, ResultData } from "@/app/types/results";
 import { columnLabel, formatNumber } from "@/app/utils/formatValue";
 import { buildChartData, X_KEY } from "./chartData";
 import { useChartTheme } from "./useChartTheme";
+import { VIEW_HEIGHT } from "./layout";
 
-const HEIGHT = 320;
 const BAR_ROW = 28; // px per category in a horizontal bar chart
 const MAX_LABEL = 18;
 
@@ -82,12 +82,17 @@ const ResultChart: React.FC<{ view: ChartView; result: ResultData }> = ({ view, 
   ) : null;
 
   let chart: React.ReactElement;
-  let height = HEIGHT;
+  // The plot fills the view; a horizontal bar chart with many categories is
+  // taller and scrolls inside it.
+  let plotHeight: number | null = null;
 
   if (view.type === "bar") {
     const longLabels = points.some((p) => String(p[X_KEY] ?? "").length > 10);
     const horizontal = points.length > 8 || (longLabels && points.length > 4);
-    if (horizontal) height = Math.max(HEIGHT, points.length * BAR_ROW * Math.max(1, series.length / 2) + 60);
+    if (horizontal) {
+      const needed = points.length * BAR_ROW * Math.max(1, series.length / 2) + 60;
+      if (needed > VIEW_HEIGHT - 80) plotHeight = needed;
+    }
     chart = (
       <BarChart
         data={points}
@@ -170,6 +175,7 @@ const ResultChart: React.FC<{ view: ChartView; result: ResultData }> = ({ view, 
           stroke={theme.surface}
           strokeWidth={2}
           isAnimationActive
+          animationBegin={100}
         >
           {points.map((_, i) => (
             <Cell key={i} fill={color(i)} />
@@ -209,12 +215,38 @@ const ResultChart: React.FC<{ view: ChartView; result: ResultData }> = ({ view, 
   }
 
   return (
-    <figure className="w-full rounded-xl border border-foreground_alt bg-background_alt p-4">
-      <figcaption className="mb-3 text-sm font-medium text-primary">{title}</figcaption>
-      <div style={{ width: "100%", height }} role="img" aria-label={`${view.type} chart: ${title}`}>
-        <ResponsiveContainer width="100%" height="100%">
-          {chart}
-        </ResponsiveContainer>
+    <figure
+      className="relative flex w-full flex-col overflow-hidden rounded-xl border border-foreground_alt bg-background_alt p-4"
+      style={{ height: VIEW_HEIGHT }}
+    >
+      {view.type === "pie" && (
+        // A pie leaves most of the frame empty: a dot mesh fading out from
+        // the centre, with a faint wash of the first slice colour.
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `radial-gradient(circle, ${theme.muted} 1px, transparent 1.5px)`,
+              backgroundSize: "18px 18px",
+              backgroundPosition: "center",
+              opacity: 0.15,
+              maskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
+              WebkitMaskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
+            }}
+          />
+        </div>
+      )}
+      <figcaption className="relative mb-3 truncate text-sm font-medium text-primary">{title}</figcaption>
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
+        <div
+          style={{ width: "100%", height: plotHeight ?? "100%" }}
+          role="img"
+          aria-label={`${view.type} chart: ${title}`}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            {chart}
+          </ResponsiveContainer>
+        </div>
       </div>
     </figure>
   );
