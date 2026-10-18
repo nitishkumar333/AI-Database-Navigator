@@ -82,12 +82,15 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6">
+    <div
+      data-page="knowledge"
+      className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6"
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex flex-col gap-6 w-full max-w-4xl mx-auto"
+        className="flex flex-col gap-6 w-full w-[90vw] md:w-[85vw] lg:w-[70vw] mx-auto"
       >
         {/* Header */}
         <motion.div
@@ -100,7 +103,7 @@ export default function KnowledgeBasePage() {
             <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
             <div>
               <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
-                <HiOutlineBookOpen className="text-accent" size={28} />
+                <HiOutlineBookOpen className="hidden sm:block text-accent" size={28} />
                 Knowledge Bases
               </h1>
               <p className="text-sm text-muted-foreground mt-1">

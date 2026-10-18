@@ -1,12 +1,21 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const REMARK_PLUGINS = [remarkGfm];
 
+// Wide tables scroll inside their own wrapper instead of widening the page
+const MARKDOWN_COMPONENTS: Components = {
+  table: ({ node: _node, ...props }) => (
+    <div className="w-full overflow-x-auto">
+      <table {...props} />
+    </div>
+  ),
+};
+
 const BASE_CLASSES = [
-  "flex-grow justify-start items-start text-wrap prose max-w-none prose:w-full break-words",
+  "flex-grow min-w-0 justify-start items-start text-wrap prose max-w-none prose:w-full break-words",
   "prose-p:leading-relaxed prose-p:my-2",
   "prose-img:hidden",
   "prose-strong:text-primary prose-strong:font-bold",
@@ -43,7 +52,7 @@ const MarkdownFormat: React.FC<MarkdownFormatProps> = ({
 
   return (
     <div className={`${BASE_CLASSES} ${PARAGRAPH_CLASS[variant]} ${codeClass}`}>
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{text.trim()}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>{text.trim()}</ReactMarkdown>
     </div>
   );
 };

@@ -36,7 +36,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
         className="fixed bottom-0 left-0 w-full lg:left-64 lg:w-[calc(100%-16rem)] h-32 sm:h-40 z-20 pointer-events-none bg-gradient-to-t from-background via-background/80 to-transparent"
       />
       <div
-        className="fixed bottom-2 sm:bottom-4 md:bottom-8 w-full md:w-[85vw] lg:w-[70vw] px-3 md:px-0 flex flex-col items-center justify-center gap-1 transition-all duration-300 z-30 pointer-events-auto"
+        className="fixed bottom-5 sm:bottom-4 md:bottom-8 w-full md:w-[85vw] lg:w-[70vw] px-3 md:px-0 flex flex-col items-center justify-center gap-1 transition-all duration-300 z-30 pointer-events-auto"
       >
         {currentStatus !== "" && (
           <div className="w-full flex justify-between items-center gap-2 mb-1 px-1">

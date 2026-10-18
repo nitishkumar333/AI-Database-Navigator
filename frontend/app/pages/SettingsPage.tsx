@@ -29,6 +29,7 @@ import {
 } from "react-icons/go";
 import { FaSpinner } from "react-icons/fa";
 import ThemeToggle from "../components/shared/ThemeToggle";
+import { HiOutlineCog6Tooth } from "react-icons/hi2";
 
 export default function SettingsPage() {
   const { fetchConnections } = useContext(CollectionContext);
@@ -96,20 +97,26 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6">
+    <div
+      data-page="settings"
+      className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6"
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex flex-col gap-6 w-full max-w-3xl mx-auto"
+        className="flex flex-col gap-6 w-full w-[90vw] md:w-[85vw] lg:w-[70vw] mx-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />
             <div>
-              <h1 className="text-2xl font-bold text-primary">Settings</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
+                <HiOutlineCog6Tooth className="hidden sm:block text-accent" size={28} />
+                Settings
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 {isGuest
                   ? "The guest account uses the demo shop database"
                   : "Manage your database connections"}

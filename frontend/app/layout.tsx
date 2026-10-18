@@ -88,7 +88,7 @@ export default function RootLayout({
                       <ConversationProvider>
                         <SidebarProvider>
                           <SidebarComponent />
-                          <main className="flex flex-1 min-w-0 flex-col w-full h-full items-start justify-start p-2 pt-0 md:p-6 md:pt-1 overflow-hidden">
+                          <main className="flex flex-1 min-w-0 flex-col w-full h-full items-start justify-start p-2 pt-0 md:p-6 md:pt-1 md:has-[[data-page=knowledge]]:!p-0 md:has-[[data-page=settings]]:!p-0 overflow-hidden">
                             {children}
                           </main>
                         </SidebarProvider>

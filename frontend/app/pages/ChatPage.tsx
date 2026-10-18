@@ -309,9 +309,9 @@ export default function ChatPage() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             style={{ y: -80 }}
-            className="absolute flex flex-col justify-center items-center w-full h-full gap-3 pb-5 md:pb-0"
+            className="absolute flex flex-col justify-center items-center w-full h-full gap-3 lg:mr-8"
           >
-            <div className="flex items-center gap-4 w-full md:w-[60vw] lg:w-[45vw] px-4 pb-4">
+            <div className="flex items-center gap-4 w-full md:w-[85vw] lg:w-[70vw] px-7 md:px-4 pb-4">
               <p
                 className="text-left text-3xl font-semibold"
                 style={{
@@ -338,7 +338,7 @@ export default function ChatPage() {
               </Button>
             </div>
 
-            <div className="w-full md:w-[60vw] lg:w-[45vw] min-h-[240px]">
+            <div className="w-full md:w-[85vw] lg:w-[70vw] px-3 md:px-0">
               {showSkeleton ? (
                 <div className="flex flex-col w-full gap-1">
                   {[72, 85, 60, 78].map((width, index) => (
@@ -400,7 +400,7 @@ export default function ChatPage() {
                         </p>
                       </div>
                       <motion.div
-                        className="border-b border-foreground w-full pt-2 origin-left"
+                        className="border-b border-foreground w-full p-2 origin-left"
                         initial={{ scaleX: 0, opacity: 0.3 }}
                         whileHover={{
                           scaleX: 1,

@@ -11,7 +11,6 @@ import {
   GoKey,
   GoLink,
   GoArrowLeft,
-  GoDatabase,
   GoEye,
   GoSync,
 } from "react-icons/go";
@@ -218,11 +217,12 @@ export default function CollectionPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden p-2 pt-0">
+    <div className="flex flex-col w-full h-screen overflow-y-auto p-2 pt-6 lg:p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 w-full h-full"
+        transition={{ duration: 0.5 }}
+        className="flex flex-col gap-6 w-full w-[90vw] md:w-[85vw] lg:w-[70vw] max-h-[90vh] mx-auto"
       >
         {/* Header */}
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -233,7 +233,6 @@ export default function CollectionPage() {
           >
             <GoArrowLeft size={20} />
           </button>
-          <GoDatabase className="text-accent" size={20} />
           <div>
             <h1 className="text-xl font-bold text-primary">{connName}</h1>
             <p className="text-xs text-muted-foreground">
@@ -482,7 +481,7 @@ export default function CollectionPage() {
                                     {preview.columns.map((col) => (
                                       <td
                                         key={col}
-                                        className="px-4 py-2 text-primary text-xs font-mono whitespace-nowrap max-w-[200px] truncate"
+                                        className="px-4 py-4 text-primary text-xs font-mono whitespace-nowrap max-w-[200px] truncate"
                                       >
                                         {String(
                                           (row as Record<string, unknown>)[

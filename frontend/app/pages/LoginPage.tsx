@@ -11,7 +11,6 @@ import {
   IoLockClosedOutline,
   IoEyeOutline,
   IoEyeOffOutline,
-  IoSparklesOutline,
   IoArrowForward,
 } from "react-icons/io5";
 import ThemeToggle from "../components/shared/ThemeToggle";
@@ -151,7 +150,7 @@ export default function LoginPage() {
                 <>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-accent/20 border border-accent/30 flex items-center justify-center text-accent">
-                      <IoSparklesOutline size={18} />
+                      <IoPersonOutline className="text-primary" size={18} />
                     </div>
                     <div className="flex flex-col text-left">
                       <div className="flex items-center gap-2">
