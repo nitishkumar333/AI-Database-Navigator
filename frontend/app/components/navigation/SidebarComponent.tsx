@@ -1,15 +1,14 @@
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext } from "react";
 
-import { QueryContext } from "../contexts/SocketContext";
+import { QueryContext } from "../contexts/QueryContext";
 import { AuthContext } from "../contexts/AuthContext";
 
 import { MdChatBubbleOutline } from "react-icons/md";
 import { FaCircle } from "react-icons/fa6";
 import { MdOutlineSettingsInputComponent } from "react-icons/md";
 import { HiOutlineBookOpen } from "react-icons/hi2";
-import { IoIosWarning } from "react-icons/io";
 import { IoLogOutOutline } from "react-icons/io5";
 
 import HomeSubMenu from "@/app/components/navigation/HomeSubMenu";
@@ -33,18 +32,14 @@ import { Separator } from "@/components/ui/separator";
 
 import { RouterContext } from "../contexts/RouterContext";
 import { CollectionContext } from "../contexts/CollectionContext";
-import { SessionContext } from "../contexts/SessionContext";
 import { ConversationContext } from "../contexts/ConversationContext";
-import { ToastContext } from "../contexts/ToastContext";
 
 import ThemeToggle from "../shared/ThemeToggle";
 
 const SidebarComponent: React.FC = () => {
   const { backendOnline } = useContext(QueryContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { collections, connections, connectionsLoaded } =
-    useContext(CollectionContext);
-  const { unsavedChanges } = useContext(SessionContext);
+  const { connections, connectionsLoaded } = useContext(CollectionContext);
   const { startNewConversation, conversations, currentConversation } =
     useContext(ConversationContext);
   const openConversation = conversations.find(
@@ -55,79 +50,51 @@ const SidebarComponent: React.FC = () => {
     !!openConversation &&
     openConversation.loaded &&
     Object.keys(openConversation.queries).length === 0;
-  const { showConfirmModal } = useContext(ToastContext);
   const { isAuthenticated, user, logout, onboardingStatus } =
     useContext(AuthContext);
   const { setOpenMobile } = useSidebar();
 
-  const [items, setItems] = useState<
+  const items: {
+    title: string;
+    active: boolean;
+    icon: React.ReactNode;
+    onClick: () => void;
+  }[] = [
     {
-      title: string;
-      mode: string[];
-      active?: boolean;
-      icon: React.ReactNode;
-      warning?: boolean;
-      loading?: boolean;
-      onClick: () => void;
-    }[]
-  >([]);
-
-  useEffect(() => {
-    const _items = [
-      {
-        title: "New Chat",
-        mode: ["chat"],
-        // Only highlighted while the open conversation has no messages yet.
-        active: currentPage === "chat" && openConversationEmpty,
-        icon: <MdChatBubbleOutline />,
-        onClick: () => {
-          setOpenMobile(false);
-          // Without a database connection there is nothing to chat with,
-          // so just open the chat page.
-          if (connectionsLoaded && connections.length === 0) {
-            changePage("chat", {}, true, unsavedChanges);
-            return;
-          }
-          if (unsavedChanges) {
-            showConfirmModal(
-              "Unsaved Changes",
-              "You have unsaved changes. Are you sure you want to leave this page? You will lose your changes.",
-              () => startNewConversation(true)
-            );
-          } else {
-            startNewConversation(true);
-          }
-        },
+      title: "New Chat",
+      // Only highlighted while the open conversation has no messages yet.
+      active: currentPage === "chat" && openConversationEmpty,
+      icon: <MdChatBubbleOutline />,
+      onClick: () => {
+        setOpenMobile(false);
+        // Without a database connection there is nothing to chat with,
+        // so just open the chat page.
+        if (connectionsLoaded && connections.length === 0) {
+          changePage("chat", {}, true);
+          return;
+        }
+        startNewConversation(true);
       },
-      {
-        title: "Knowledge Base",
-        mode: ["knowledge"],
-        icon: <HiOutlineBookOpen />,
-        onClick: () => {
-          changePage("knowledge", {}, true, unsavedChanges);
-          setOpenMobile(false);
-        },
+    },
+    {
+      title: "Knowledge Base",
+      active: currentPage === "knowledge",
+      icon: <HiOutlineBookOpen />,
+      onClick: () => {
+        changePage("knowledge", {}, true);
+        setOpenMobile(false);
       },
-      {
-        title: "Database Connections",
-        mode: ["settings"],
-        icon: <MdOutlineSettingsInputComponent />,
-        onClick: () => {
-          changePage("settings", {}, true, unsavedChanges);
-          setOpenMobile(false);
-        },
+    },
+    {
+      title: "Database Connections",
+      active: currentPage === "settings",
+      icon: <MdOutlineSettingsInputComponent />,
+      onClick: () => {
+        changePage("settings", {}, true);
+        setOpenMobile(false);
       },
-    ];
-    setItems(_items);
-  }, [
-    collections,
-    unsavedChanges,
-    connections,
-    connectionsLoaded,
-    startNewConversation,
-    currentPage,
-    openConversationEmpty,
-  ]);
+    },
+  ];
 
   // Don't render sidebar if not authenticated or onboarding not complete
   if (
@@ -175,26 +142,11 @@ const SidebarComponent: React.FC = () => {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
-                    variant={
-                      (item.active ?? item.mode.includes(currentPage))
-                        ? "active"
-                        : item.warning
-                          ? "warning"
-                          : "default"
-                    }
+                    variant={item.active ? "active" : "default"}
                     onClick={item.onClick}
                   >
                     <p className="flex items-center gap-2">
-                      {item.loading ? (
-                        <FaCircle
-                          scale={0.2}
-                          className="text-lg pulsing_color"
-                        />
-                      ) : item.warning ? (
-                        <IoIosWarning className="text-warning" />
-                      ) : (
-                        item.icon
-                      )}
+                      {item.icon}
                       <span>{item.title}</span>
                     </p>
                   </SidebarMenuButton>

@@ -1,25 +1,14 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useState } from "react";
 import { FaCircle } from "react-icons/fa";
 import { IoArrowUpCircleSharp } from "react-icons/io5";
 import { Button } from "@/components/ui/button";
-import { QueryContext } from "../contexts/SocketContext";
-import { host } from "../host";
-
-interface KnowledgeBaseGroup {
-  id: number;
-  connection_id: number;
-  name: string;
-  tables: string[];
-  created_at: string;
-}
 
 interface QueryInputProps {
   handleSendQuery: (query: string) => void;
   query_length: number;
   currentStatus: string;
-  selectedConnectionId: number | null;
   selectedKnowledgeBaseId: number | null;
   noConnections?: boolean;
 }
@@ -28,52 +17,16 @@ const QueryInput: React.FC<QueryInputProps> = ({
   handleSendQuery,
   query_length,
   currentStatus,
-  selectedConnectionId,
   selectedKnowledgeBaseId,
   noConnections = false,
 }) => {
   const [query, setQuery] = useState("");
-  const { getToken, clearAuth } = useContext(QueryContext);
-  const [groupDetails, setGroupDetails] = useState<KnowledgeBaseGroup | null>(null);
-
   const triggerQuery = (_query: string) => {
     if (!selectedKnowledgeBaseId) return;
     if (_query.trim() === "" || currentStatus !== "") return;
     handleSendQuery(_query);
     setQuery("");
   };
-
-  useEffect(() => {
-    const fetchGroup = async () => {
-      if (!selectedKnowledgeBaseId) {
-        setGroupDetails(null);
-        return;
-      }
-      const token = getToken();
-      if (!token) return;
-      try {
-        const url = selectedConnectionId
-          ? `${host}/api/knowledge/${selectedConnectionId}/groups`
-          : `${host}/api/knowledge/user/groups/all`;
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (response.ok) {
-          const data: KnowledgeBaseGroup[] = await response.json();
-          const target = data.find(g => g.id === selectedKnowledgeBaseId);
-          setGroupDetails(target || null);
-        } else if (response.status === 401) {
-          clearAuth();
-        }
-      } catch (e) {
-        console.error("Failed to fetch knowledge base groups:", e);
-      }
-    };
-    fetchGroup();
-  }, [selectedKnowledgeBaseId, selectedConnectionId]);
 
   return (
     <>

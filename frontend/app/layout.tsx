@@ -3,11 +3,10 @@ import { Suspense } from "react";
 import "./globals.css";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "./components/contexts/AuthContext";
-import { SessionProvider } from "./components/contexts/SessionContext";
 import SidebarComponent from "./components/navigation/SidebarComponent";
 import { CollectionProvider } from "./components/contexts/CollectionContext";
 import { ConversationProvider } from "./components/contexts/ConversationContext";
-import { QueryProvider } from "./components/contexts/SocketContext";
+import { QueryProvider } from "./components/contexts/QueryContext";
 import { ToastProvider } from "./components/contexts/ToastContext";
 
 import { Toaster } from "@/components/ui/toaster";
@@ -85,19 +84,17 @@ export default function RootLayout({
               <AuthProvider>
                 <RouterProvider>
                   <QueryProvider>
-                    <SessionProvider>
-                      <CollectionProvider>
-                        <ConversationProvider>
-                          <SidebarProvider>
-                            <SidebarComponent />
-                            <main className="flex flex-1 min-w-0 flex-col w-full h-full items-start justify-start p-2 pt-0 md:p-6 md:pt-1 overflow-hidden">
-                              {children}
-                            </main>
-                          </SidebarProvider>
-                          <Toaster />
-                        </ConversationProvider>
-                      </CollectionProvider>
-                    </SessionProvider>
+                    <CollectionProvider>
+                      <ConversationProvider>
+                        <SidebarProvider>
+                          <SidebarComponent />
+                          <main className="flex flex-1 min-w-0 flex-col w-full h-full items-start justify-start p-2 pt-0 md:p-6 md:pt-1 overflow-hidden">
+                            {children}
+                          </main>
+                        </SidebarProvider>
+                        <Toaster />
+                      </ConversationProvider>
+                    </CollectionProvider>
                   </QueryProvider>
                 </RouterProvider>
               </AuthProvider>

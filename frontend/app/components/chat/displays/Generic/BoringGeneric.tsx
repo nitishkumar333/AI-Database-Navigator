@@ -3,7 +3,7 @@
 import DataTable from "@/app/components/explorer/DataTable";
 
 interface BoringGenericDisplayProps {
-  payload: { [key: string]: string }[];
+  payload: Record<string, unknown>[];
 }
 
 const BoringGenericDisplay: React.FC<BoringGenericDisplayProps> = ({
@@ -13,7 +13,6 @@ const BoringGenericDisplay: React.FC<BoringGenericDisplayProps> = ({
     <div className="w-full flex flex-col justify-start items-start">
       <DataTable
         data={payload}
-        header={payload[0]}
         stickyHeaders={true}
         maxHeight="30vh"
       />

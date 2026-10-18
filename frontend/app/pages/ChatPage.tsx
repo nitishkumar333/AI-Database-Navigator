@@ -3,18 +3,16 @@
 import React, { useEffect, useMemo, useState, useRef, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { Query, Message, ResultPayload, ResponsePayload } from "@/app/types/chat";
-import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
+import { Query, Message } from "@/app/types/chat";
+import { buildResultPayload, textMessage } from "@/app/utils/resultMessages";
 import { MdChatBubbleOutline } from "react-icons/md";
 
 import QueryInput from "../components/chat/QueryInput";
 import RenderChat from "../components/chat/RenderChat";
 import CollectionSelection from "../components/chat/components/CollectionSelection";
 import KnowledgeBaseSelection from "../components/chat/components/KnowledgeBaseSelection";
-import { QueryContext } from "../components/contexts/SocketContext";
-import { SessionContext } from "../components/contexts/SessionContext";
+import { QueryContext } from "../components/contexts/QueryContext";
 import { ConversationContext } from "../components/contexts/ConversationContext";
-import { ChatProvider } from "../components/contexts/ChatContext";
 import { v4 as uuidv4 } from "uuid";
 import { IoRefresh } from "react-icons/io5";
 
@@ -31,7 +29,6 @@ const EMPTY_QUERIES: { [key: string]: Query } = {};
 
 export default function ChatPage() {
   const { sendQuery } = useContext(QueryContext);
-  const { id } = useContext(SessionContext);
   const {
     addQueryToConversation,
     addMessageToConversation,
@@ -109,78 +106,28 @@ export default function ChatPage() {
     // Send via REST API — now passing connection_id, knowledge_base_id, conversation_id, and query_id
     const result = await sendQuery(trimmedQuery, selectedConnectionId, selectedKnowledgeBaseId, conversation.id, query_id);
 
-    if (!result) {
-      setConversationStatus("", conversation.id);
-      finishQuery(conversation.id, query_id);
-      return;
-    }
-
     // Build response messages
     const messages: Message[] = [];
 
-    // If there are rows to display, detect whether to render as products or table
+    // If there are rows to display, render them as products or a table
     if (result.success && result.rows && result.rows.length > 0) {
-      console.log("Raw query result rows:", result.rows);
-      const detection = detectProductData(result.rows, result.columns);
-      console.log("Detection result:", detection);
-      let resultPayload: ResultPayload;
-
-      if (detection.isProduct) {
-        // Map raw rows to ProductPayload objects for the product view
-        const products = mapRowsToProducts(
-          result.rows.slice(0, 50),
-          detection.fieldMapping
-        );
-        resultPayload = {
-          type: "product",
-          code: {
-            language: "sql",
-            title: "Generated SQL",
-            text: result.generated_sql || "",
-          },
-          objects: products,
-        } as ResultPayload;
-      } else {
-        resultPayload = {
-          type: "table",
-          code: {
-            language: "sql",
-            title: "Generated SQL",
-            text: result.generated_sql || "",
-          },
-          objects: result.rows.slice(0, 50) as { [key: string]: string }[],
-        } as ResultPayload;
-      }
-
-      const resultMessage: Message = {
+      messages.push({
         type: "result",
         id: uuidv4(),
         conversation_id: conversation.id,
-        user_id: id || "",
         query_id: query_id,
-        payload: resultPayload,
-      };
-      messages.push(resultMessage);
+        payload: buildResultPayload(result.rows, result.columns, result.generated_sql, {
+          product: 50,
+          table: 50,
+        }),
+      });
     }
 
     // Add text response (summary/status)
     const statusText = result.success
       ? result.response_text
       : `❌ ${result.error || result.response_text || "Query failed"}`;
-
-    const textMessage: Message = {
-      type: "text",
-      id: uuidv4(),
-      conversation_id: conversation.id,
-      user_id: id || "",
-      query_id: query_id,
-      payload: {
-        type: "response",
-        metadata: {},
-        objects: [{ text: statusText }],
-      } as ResponsePayload,
-    };
-    messages.push(textMessage);
+    messages.push(textMessage(conversation.id, query_id, statusText || ""));
 
     addMessageToConversation(messages, conversation.id, query_id);
 
@@ -230,6 +177,7 @@ export default function ChatPage() {
     if (selectedConnectionId && !isKbLoading) {
       loadSuggestions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectionId, selectedKnowledgeBaseId, isKbLoading]);
 
   // Persist selected connection & KB to localStorage
@@ -259,6 +207,8 @@ export default function ChatPage() {
     setSelectedKnowledgeBaseId(null);
     setRandomPrompts([]);
     setSuggestionsReady(false);
+    // Only re-checked when the connection list changes, not on every selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections, connectionsLoaded]);
 
   return (
@@ -310,18 +260,15 @@ export default function ChatPage() {
                 </div>
               )}
               {!noConnections && sortedQueries.map(([queryId, query], index, array) => (
-                <ChatProvider key={queryId}>
-                  <RenderChat
-                    key={queryId + index}
-                    messages={query.messages}
-                    finished={query.finished}
-                    _collapsed={index !== array.length - 1}
-                    messagesEndRef={messagesEndRef}
-                    NER={query.NER}
-                    handleSendQuery={handleSendQuery}
-                    isLastQuery={index === array.length - 1}
-                  />
-                </ChatProvider>
+                <RenderChat
+                  key={queryId}
+                  messages={query.messages}
+                  finished={query.finished}
+                  _collapsed={index !== array.length - 1}
+                  messagesEndRef={messagesEndRef}
+                  handleSendQuery={handleSendQuery}
+                  isLastQuery={index === array.length - 1}
+                />
               ))}
               {!isEmpty && (
                 <div>
@@ -483,7 +430,6 @@ export default function ChatPage() {
           query_length={Object.keys(currentQuery).length}
           currentStatus={currentStatus}
           handleSendQuery={handleSendQuery}
-          selectedConnectionId={selectedConnectionId}
           selectedKnowledgeBaseId={selectedKnowledgeBaseId}
           noConnections={noConnections}
         />

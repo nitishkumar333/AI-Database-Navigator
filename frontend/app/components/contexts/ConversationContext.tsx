@@ -1,19 +1,12 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Conversation, initialConversation } from "../types";
-import {
-  Query,
-  Message,
-  ResultPayload,
-  ResponsePayload,
-} from "@/app/types/chat";
+import { Conversation, Query, Message, ResultPayload } from "@/app/types/chat";
 import { v4 as uuidv4 } from "uuid";
-import { SessionContext } from "./SessionContext";
 import { RouterContext } from "./RouterContext";
 import { AuthContext } from "./AuthContext";
-import { host } from "../host";
-import { detectProductData, mapRowsToProducts } from "@/app/utils/detectProductdata";
+import { apiFetch } from "../../utils/api";
+import { buildResultPayload, textMessage } from "@/app/utils/resultMessages";
 
 // One entry of GET /api/conversations.
 type ConversationSummary = {
@@ -22,6 +15,36 @@ type ConversationSummary = {
   created_at?: string | null;
   message_count?: number;
 };
+
+// GET /api/conversations/{id}.
+type ConversationDetail = {
+  id: string;
+  name?: string;
+  created_at?: string | null;
+  messages?: StoredMessage[];
+};
+
+type StoredMessage = {
+  role: "user" | "assistant";
+  content: string;
+  query_id?: string | null;
+  message_type?: string;
+  metadata_json?: string | null;
+};
+
+type StoredMetadata = {
+  success?: boolean;
+  error?: string;
+  rows?: Record<string, unknown>[];
+  columns?: string[];
+  generated_sql?: string;
+};
+
+const FALLBACK_SUGGESTIONS = [
+  "Show me more details about the results",
+  "What are the top records by count?",
+  "Are there any related tables to explore?",
+];
 
 export const ConversationContext = createContext<{
   conversations: Conversation[];
@@ -64,17 +87,108 @@ export const ConversationContext = createContext<{
   addQueryToConversation: () => {},
   finishQuery: () => {},
   addSuggestionToConversation: () => {},
-
 });
+
+const newestFirst = (a: Conversation, b: Conversation) =>
+  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+
+const userMessage = (
+  conversationId: string,
+  queryId: string,
+  text: string
+): Message => ({
+  type: "User",
+  id: uuidv4(),
+  query_id: queryId,
+  conversation_id: conversationId,
+  payload: {
+    type: "text",
+    code: { language: "", title: "", text: "" },
+    objects: [text],
+  } as ResultPayload,
+});
+
+/**
+ * Rebuild a frontend Conversation from the backend detail response.
+ * Groups messages by query_id into Query objects.
+ */
+const rebuildConversation = (detail: ConversationDetail): Conversation => {
+  const queries: { [key: string]: Query } = {};
+
+  // Group messages by query_id
+  const messagesByQuery: { [key: string]: StoredMessage[] } = {};
+  for (const msg of detail.messages || []) {
+    const qid = msg.query_id || "unknown";
+    (messagesByQuery[qid] ||= []).push(msg);
+  }
+
+  Object.entries(messagesByQuery).forEach(([queryId, msgs], queryIndex) => {
+    const frontendMessages: Message[] = [];
+    let queryText = "";
+
+    for (const msg of msgs) {
+      if (msg.role === "user") {
+        queryText = msg.content;
+        frontendMessages.push(userMessage(detail.id, queryId, msg.content));
+      } else if (msg.role === "assistant") {
+        let meta: StoredMetadata = {};
+        try {
+          meta = JSON.parse(msg.metadata_json || "{}");
+        } catch {}
+
+        // If there are rows, add a product or table result message
+        if (
+          msg.message_type === "result" &&
+          meta.success &&
+          meta.rows &&
+          meta.rows.length > 0
+        ) {
+          const columns = meta.columns || Object.keys(meta.rows[0] || {});
+          frontendMessages.push({
+            type: "result",
+            id: uuidv4(),
+            conversation_id: detail.id,
+            query_id: queryId,
+            payload: buildResultPayload(meta.rows, columns, meta.generated_sql, {
+              table: 100,
+            }),
+          });
+        }
+
+        // Text response
+        const statusText = meta.success
+          ? msg.content
+          : `❌ ${meta.error || msg.content || "Query failed"}`;
+        frontendMessages.push(textMessage(detail.id, queryId, statusText));
+      }
+    }
+
+    queries[queryId] = {
+      id: queryId,
+      query: queryText,
+      messages: frontendMessages,
+      finished: true,
+      index: queryIndex,
+    };
+  });
+
+  return {
+    id: detail.id,
+    name: detail.name || "New Conversation",
+    queries,
+    current: "",
+    timestamp: new Date(detail.created_at || new Date()),
+    loaded: true,
+  };
+};
 
 export const ConversationProvider = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
-  const { id } = useContext(SessionContext);
   const { changePage, currentPage } = useContext(RouterContext);
-  const { getToken, isAuthenticated, user } = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(
@@ -94,206 +208,49 @@ export const ConversationProvider = ({
     }
   }, [isAuthenticated]);
 
-  // Fetch existing conversations from backend on mount or after login
+  // Fetch existing conversations from backend after login
   useEffect(() => {
-    if (initialized.current || !id || !isAuthenticated) return;
+    if (initialized.current || !isAuthenticated) return;
     initialized.current = true;
     fetchConversationsFromBackend();
-  }, [id, isAuthenticated, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const fetchConversationsFromBackend = async () => {
     try {
-      const token = getToken();
-      if (!token) return;
-
-      // 1. Get conversation list
-      const listRes = await fetch(`${host}/api/conversations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!listRes.ok) {
-        // No conversations yet â€” start a fresh one
-        createConversation();
-        return;
-      }
-
-      const convList = await listRes.json();
+      const listRes = await apiFetch("/api/conversations");
+      const convList: ConversationSummary[] = listRes.ok ? await listRes.json() : [];
       if (convList.length === 0) {
+        // No conversations yet — start a fresh empty one ("Ask Anything" screen)
         createConversation();
         return;
       }
 
-      // 2. The list only: each conversation's messages are fetched when it is
+      // The list only: each conversation's messages are fetched when it is
       // opened (loadConversation). One with no messages needs no fetch.
-      const fullConversations: Conversation[] = (convList as ConversationSummary[]).map((summary) => ({
+      const fullConversations: Conversation[] = convList.map((summary) => ({
         id: summary.id,
         name: summary.name || "New Conversation",
         queries: {},
         current: "",
         timestamp: new Date(summary.created_at || new Date()),
-        initialized: (summary.message_count ?? 0) > 0,
-        error: false,
         loaded: (summary.message_count ?? 0) === 0,
       }));
 
-      if (fullConversations.length > 0) {
-        setConversations(fullConversations);
-        // If a conversation was specified in URL, use it, otherwise select the first conversation
-        const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-        const urlConvId = params?.get("conversation");
-        const initialConv = (urlConvId && fullConversations.find(c => c.id === urlConvId)) || fullConversations[0];
-        setCurrentConversation(initialConv.id);
-        if (currentPage === "chat") {
-          changePage("chat", { conversation: initialConv.id }, true);
-        }
-      } else {
-        // No conversations yet â€” start a fresh empty conversation ("Ask Anything" screen)
-        createConversation();
+      setConversations(fullConversations);
+      // If a conversation was specified in URL, use it, otherwise select the first conversation
+      const urlConvId = new URLSearchParams(window.location.search).get("conversation");
+      const initialConv =
+        (urlConvId && fullConversations.find((c) => c.id === urlConvId)) ||
+        fullConversations[0];
+      setCurrentConversation(initialConv.id);
+      if (currentPage === "chat") {
+        changePage("chat", { conversation: initialConv.id }, true);
       }
     } catch (e) {
       console.error("Failed to fetch conversations:", e);
       createConversation();
     }
-  };
-
-  /**
-   * Rebuild a frontend Conversation from the backend detail response.
-   * Groups messages by query_id into Query objects.
-   */
-  const rebuildConversation = (detail: any): Conversation => {
-    const queries: { [key: string]: Query } = {};
-    let queryIndex = 0;
-
-    // Group messages by query_id
-    const messagesByQuery: { [key: string]: any[] } = {};
-    for (const msg of detail.messages || []) {
-      const qid = msg.query_id || "unknown";
-      if (!messagesByQuery[qid]) {
-        messagesByQuery[qid] = [];
-      }
-      messagesByQuery[qid].push(msg);
-    }
-
-    for (const [queryId, msgs] of Object.entries(messagesByQuery)) {
-      const frontendMessages: Message[] = [];
-      let queryText = "";
-
-      for (const msg of msgs as any[]) {
-        if (msg.role === "user") {
-          queryText = msg.content;
-          // User message
-          frontendMessages.push({
-            type: "User",
-            id: uuidv4(),
-            query_id: queryId,
-            conversation_id: detail.id,
-            user_id: id || "",
-            payload: {
-              type: "text",
-              metadata: {},
-              code: { language: "", title: "", text: "" },
-              objects: [msg.content],
-            } as ResultPayload,
-          });
-        } else if (msg.role === "assistant") {
-          let meta: any = {};
-          try {
-            meta = JSON.parse(msg.metadata_json || "{}");
-          } catch {}
-
-          // If there are rows, add a product or table result message
-          if (
-            msg.message_type === "result" &&
-            meta.success &&
-            meta.rows &&
-            meta.rows.length > 0
-          ) {
-            const columns = meta.columns || Object.keys(meta.rows[0] || {});
-            const { isProduct, fieldMapping } = detectProductData(meta.rows, columns);
-
-            if (isProduct) {
-              const products = mapRowsToProducts(meta.rows, fieldMapping);
-              frontendMessages.push({
-                type: "result",
-                id: uuidv4(),
-                conversation_id: detail.id,
-                user_id: id || "",
-                query_id: queryId,
-                payload: {
-                  type: "product",
-                  code: {
-                    language: "sql",
-                    title: "Generated SQL",
-                    text: meta.generated_sql || "",
-                  },
-                  objects: products,
-                } as ResultPayload,
-              });
-            } else {
-              frontendMessages.push({
-                type: "result",
-                id: uuidv4(),
-                conversation_id: detail.id,
-                user_id: id || "",
-                query_id: queryId,
-                payload: {
-                  type: "table",
-                  code: {
-                    language: "sql",
-                    title: "Generated SQL",
-                    text: meta.generated_sql || "",
-                  },
-                  objects: meta.rows.slice(0, 100),
-                } as ResultPayload,
-              });
-            }
-          }
-
-          // Text response
-          const statusText = meta.success
-            ? msg.content
-            : `âŒ ${meta.error || msg.content || "Query failed"}`;
-
-          frontendMessages.push({
-            type: "text",
-            id: uuidv4(),
-            conversation_id: detail.id,
-            user_id: id || "",
-            query_id: queryId,
-            payload: {
-              type: "response",
-              metadata: {},
-              objects: [{ text: statusText }],
-            } as ResponsePayload,
-          });
-        }
-      }
-
-      queries[queryId] = {
-        id: queryId,
-        query: queryText,
-        messages: frontendMessages,
-        finished: true,
-        query_start: new Date(
-          (msgs as any[])[0]?.created_at || new Date()
-        ),
-        query_end: new Date(
-          (msgs as any[])[(msgs as any[]).length - 1]?.created_at || new Date()
-        ),
-        NER: null,
-        index: queryIndex++,
-      };
-    }
-
-    return {
-      id: detail.id,
-      name: detail.name || "New Conversation",
-      queries,
-      current: "",
-      timestamp: new Date(detail.created_at || new Date()),
-      initialized: Object.keys(queries).length > 0,
-      error: false,
-      loaded: true,
-    };
   };
 
   /**
@@ -303,13 +260,9 @@ export const ConversationProvider = ({
    */
   const loadConversation = async (conversationId: string) => {
     if (loadingIds.current.has(conversationId)) return;
-    const token = getToken();
-    if (!token) return;
     loadingIds.current.add(conversationId);
     try {
-      const res = await fetch(`${host}/api/conversations/${conversationId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/conversations/${conversationId}`);
       if (!res.ok) return;
       const loaded = rebuildConversation(await res.json());
       setConversations((prev) =>
@@ -326,7 +279,6 @@ export const ConversationProvider = ({
             name: c.name,
             current: c.current,
             queries: { ...loaded.queries, ...sentMeanwhile },
-            initialized: loaded.initialized || Object.keys(sentMeanwhile).length > 0,
           };
         })
       );
@@ -348,13 +300,13 @@ export const ConversationProvider = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, openLoaded]);
 
-  // Used by the "New Chat" / "+" buttons: opens a conversation that has no
-  // messages yet if there is one, instead of adding another.
+  // Used by the "New Chat" / "+" buttons: opens the newest conversation that
+  // has no messages yet if there is one, instead of adding another.
   // openChat also switches to the chat page when on another page.
   const startNewConversation = (openChat: boolean = false) => {
-    const empty = conversations.find(
-      (c) => c.loaded && Object.keys(c.queries).length === 0
-    );
+    const empty = [...conversations]
+      .sort(newestFirst)
+      .find((c) => c.loaded && Object.keys(c.queries).length === 0);
     if (!empty) {
       createConversation(openChat);
       return;
@@ -370,11 +322,14 @@ export const ConversationProvider = ({
     setCreatingNewConversation(true);
     const conversation_id = uuidv4();
 
-    // Only create locally â€” backend creation is deferred until the first message is sent
+    // Only create locally — backend creation is deferred until the first message is sent
     const newConversation: Conversation = {
-      ...initialConversation,
       id: conversation_id,
+      name: "New Conversation",
+      queries: {},
+      current: "",
       timestamp: new Date(),
+      loaded: true,
     };
     setConversations((prev) => [...prev, newConversation]);
     setCurrentConversation(conversation_id);
@@ -390,10 +345,7 @@ export const ConversationProvider = ({
   const dropConversations = (ids: string[]) => {
     const gone = new Set(ids);
     if (!conversations.some((c) => gone.has(c.id))) return;
-    const ordered = [...conversations].sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
+    const ordered = [...conversations].sort(newestFirst);
     const index = ordered.findIndex((c) => c.id === currentConversation);
     const remaining = ordered.filter((c) => !gone.has(c.id));
 
@@ -411,16 +363,8 @@ export const ConversationProvider = ({
 
   const removeConversation = async (conversation_id: string) => {
     dropConversations([conversation_id]);
-
-    // Delete on backend
     try {
-      const token = getToken();
-      if (token) {
-        await fetch(`${host}/api/conversations/${conversation_id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
+      await apiFetch(`/api/conversations/${conversation_id}`, { method: "DELETE" });
     } catch (e) {
       console.error("Failed to delete conversation on backend:", e);
     }
@@ -431,37 +375,42 @@ export const ConversationProvider = ({
     changePage("chat", { conversation: id }, true);
   };
 
-  const setConversationStatus = (status: string, conversationId: string) => {
+  const updateConversation = (
+    conversationId: string,
+    update: (c: Conversation) => Conversation
+  ) => {
     setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId ? { ...c, current: status } : c
-      )
+      prev.map((c) => (c.id === conversationId ? update(c) : c))
     );
   };
 
+  // Applies `update` to a query of a conversation, if both exist.
+  const updateQuery = (
+    conversationId: string,
+    queryId: string,
+    update: (q: Query) => Query
+  ) => {
+    updateConversation(conversationId, (c) =>
+      c.queries[queryId]
+        ? { ...c, queries: { ...c.queries, [queryId]: update(c.queries[queryId]) } }
+        : c
+    );
+  };
+
+  const setConversationStatus = (status: string, conversationId: string) => {
+    updateConversation(conversationId, (c) => ({ ...c, current: status }));
+  };
+
   const setConversationTitle = async (title: string, conversationId: string) => {
-    // Update on backend
     try {
-      const token = getToken();
-      if (token) {
-        await fetch(`${host}/api/conversations/${conversationId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ name: title }),
-        });
-      }
+      await apiFetch(`/api/conversations/${conversationId}`, {
+        method: "PUT",
+        body: { name: title },
+      });
     } catch (e) {
       console.error("Failed to update conversation title:", e);
     }
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId ? { ...c, name: title } : c
-      )
-    );
+    updateConversation(conversationId, (c) => ({ ...c, name: title }));
   };
 
   const addMessageToConversation = (
@@ -469,24 +418,10 @@ export const ConversationProvider = ({
     conversationId: string,
     queryId: string
   ) => {
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id === conversationId && c.queries[queryId]) {
-          return {
-            ...c,
-            initialized: true,
-            queries: {
-              ...c.queries,
-              [queryId]: {
-                ...c.queries[queryId],
-                messages: [...c.queries[queryId].messages, ...messages],
-              },
-            },
-          };
-        }
-        return c;
-      })
-    );
+    updateQuery(conversationId, queryId, (q) => ({
+      ...q,
+      messages: [...q.messages, ...messages],
+    }));
   };
 
   const addQueryToConversation = async (
@@ -498,81 +433,33 @@ export const ConversationProvider = ({
     const conversation = conversations.find((c) => c.id === conversationId);
     if (conversation && Object.keys(conversation.queries).length === 0) {
       try {
-        const token = getToken();
-        if (token) {
-          await fetch(`${host}/api/conversations`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ id: conversationId, name: "New Conversation" }),
-          });
-        }
+        await apiFetch("/api/conversations", {
+          method: "POST",
+          body: { id: conversationId, name: "New Conversation" },
+        });
       } catch (e) {
         console.error("Failed to create conversation on backend:", e);
       }
     }
 
-    const userMessage: Message = {
-      type: "User",
-      id: uuidv4(),
-      query_id,
-      conversation_id: conversationId,
-      user_id: id || "",
-      payload: {
-        type: "text",
-        metadata: {},
-        code: { language: "", title: "", text: "" },
-        objects: [query],
-      },
-    };
-
-    const newQuery: Query = {
-      id: query_id,
-      query,
-      finished: false,
-      query_start: new Date(),
-      query_end: null,
-      NER: null,
-      index: 0,
-      messages: [userMessage],
-    };
-
     // Next index after the existing queries, so the new query sorts last
     // (loaded conversations already use indexes 0..n-1).
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id !== conversationId) return c;
-        const nextIndex =
-          Math.max(-1, ...Object.values(c.queries).map((q) => q.index)) + 1;
-        return {
-          ...c,
-          queries: { ...c.queries, [query_id]: { ...newQuery, index: nextIndex } },
-        };
-      })
-    );
+    updateConversation(conversationId, (c) => {
+      const nextIndex =
+        Math.max(-1, ...Object.values(c.queries).map((q) => q.index)) + 1;
+      const newQuery: Query = {
+        id: query_id,
+        query,
+        finished: false,
+        index: nextIndex,
+        messages: [userMessage(conversationId, query_id, query)],
+      };
+      return { ...c, queries: { ...c.queries, [query_id]: newQuery } };
+    });
   };
 
   const finishQuery = (conversationId: string, queryId: string) => {
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id === conversationId && c.queries[queryId]) {
-          return {
-            ...c,
-            queries: {
-              ...c.queries,
-              [queryId]: {
-                ...c.queries[queryId],
-                finished: true,
-                query_end: new Date(),
-              },
-            },
-          };
-        }
-        return c;
-      })
-    );
+    updateQuery(conversationId, queryId, (q) => ({ ...q, finished: true }));
   };
 
   const addSuggestionToConversation = async (
@@ -582,8 +469,7 @@ export const ConversationProvider = ({
     knowledgeBaseId?: number | null
   ) => {
     try {
-      const token = getToken();
-      if (!token || !connectionId) return;
+      if (!connectionId) return;
 
       // Build conversation history from the current conversation's queries
       const conversation = conversations.find((c) => c.id === conversationId);
@@ -598,44 +484,25 @@ export const ConversationProvider = ({
           }
           // Find assistant text responses in messages
           for (const msg of q.messages) {
-            if (
-              msg.type === "text" &&
-              msg.payload &&
-              "objects" in msg.payload &&
-              Array.isArray(msg.payload.objects) &&
-              msg.payload.objects.length > 0
-            ) {
-              const textObj = msg.payload.objects[0] as any;
-              if (textObj?.text) {
-                conversationHistory.push({
-                  role: "assistant",
-                  content: textObj.text,
-                });
-              }
+            if (msg.type !== "text" || !("objects" in msg.payload)) continue;
+            const text = (msg.payload.objects[0] as { text?: string } | undefined)?.text;
+            if (text) {
+              conversationHistory.push({ role: "assistant", content: text });
             }
           }
         }
       }
 
-      const response = await fetch(`${host}/api/suggestions/conversation`, {
+      const response = await apiFetch("/api/suggestions/conversation", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        body: {
           connection_id: connectionId,
           knowledge_base_id: knowledgeBaseId || null,
           conversation_history: conversationHistory,
-        }),
+        },
       });
 
-      let suggestions = [
-        "Show me more details about the results",
-        "What are the top records by count?",
-        "Are there any related tables to explore?",
-      ];
-
+      let suggestions = FALLBACK_SUGGESTIONS;
       if (response.ok) {
         const data = await response.json();
         if (data.suggestions && data.suggestions.length > 0) {
@@ -643,24 +510,23 @@ export const ConversationProvider = ({
         }
       }
 
-      const newMessage: Message = {
-        type: "suggestion",
-        id: uuidv4(),
-        conversation_id: conversationId,
-        query_id: queryId,
-        user_id: id || "",
-        payload: {
-          error: "",
-          suggestions,
-        },
-      };
-      addMessageToConversation([newMessage], conversationId, queryId);
+      addMessageToConversation(
+        [
+          {
+            type: "suggestion",
+            id: uuidv4(),
+            conversation_id: conversationId,
+            query_id: queryId,
+            payload: { error: "", suggestions },
+          },
+        ],
+        conversationId,
+        queryId
+      );
     } catch {
       // Silently fail for suggestions
     }
   };
-
-
 
   return (
     <ConversationContext.Provider

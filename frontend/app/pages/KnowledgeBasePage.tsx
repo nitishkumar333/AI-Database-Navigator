@@ -2,10 +2,11 @@
 
 import React, { useContext, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CollectionContext, Connection } from "../components/contexts/CollectionContext";
+import { CollectionContext } from "../components/contexts/CollectionContext";
 import { AuthContext } from "../components/contexts/AuthContext";
 import { ToastContext } from "../components/contexts/ToastContext";
-import { host } from "../components/host";
+import { apiFetch } from "../utils/api";
+import { Connection, KnowledgeBaseGroup } from "../types/objects";
 import KnowledgeBaseForm from "../components/shared/KnowledgeBaseForm";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -17,17 +18,9 @@ import {
 import { HiOutlineBookOpen } from "react-icons/hi2";
 import { FaSpinner } from "react-icons/fa";
 
-type KnowledgeBaseGroup = {
-  id: number;
-  connection_id: number;
-  name: string;
-  tables: string[];
-  created_at: string;
-};
-
 export default function KnowledgeBasePage() {
   const { connections } = useContext(CollectionContext);
-  const { getToken, clearAuth, user } = useContext(AuthContext);
+  const { logout, user } = useContext(AuthContext);
   const isGuest = !!user?.is_guest;
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
 
@@ -35,16 +28,12 @@ export default function KnowledgeBasePage() {
   const [kbGroups, setKbGroups] = useState<KnowledgeBaseGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  });
-
   // Auto-select first connection
   useEffect(() => {
     if (connections.length > 0 && !selectedConnection) {
       setSelectedConnection(connections[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections]);
 
   // Fetch existing groups when connection changes
@@ -52,19 +41,18 @@ export default function KnowledgeBasePage() {
     if (selectedConnection) {
       fetchKnowledgeGroups(selectedConnection.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnection]);
 
   const fetchKnowledgeGroups = async (connId: number) => {
     setLoadingGroups(true);
     try {
-      const response = await fetch(`${host}/api/knowledge/${connId}/groups`, {
-        headers: authHeaders(),
-      });
+      const response = await apiFetch(`/api/knowledge/${connId}/groups`);
       if (response.ok) {
         const data = await response.json();
         setKbGroups(data);
       } else if (response.status === 401) {
-        clearAuth();
+        logout();
       }
     } catch (e) {
       console.error("Failed to fetch knowledge base groups:", e);
@@ -75,13 +63,9 @@ export default function KnowledgeBasePage() {
   const deleteKnowledgeGroup = async (groupId: number) => {
     if (!selectedConnection) return;
     try {
-      const response = await fetch(
-        `${host}/api/knowledge/group/${groupId}`,
-        {
-          method: "DELETE",
-          headers: authHeaders(),
-        }
-      );
+      const response = await apiFetch(`/api/knowledge/group/${groupId}`, {
+        method: "DELETE",
+      });
       if (response.ok) {
         showSuccessToast("Knowledge Base Deleted");
         fetchKnowledgeGroups(selectedConnection.id);
@@ -90,8 +74,6 @@ export default function KnowledgeBasePage() {
       showErrorToast("Error", String(e));
     }
   };
-
-
 
   const handleKnowledgeBaseCreated = () => {
     if (selectedConnection) {

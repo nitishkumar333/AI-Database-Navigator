@@ -1,53 +1,11 @@
-import {
-  TicketPayload,
-  SingleMessagePayload,
-  ThreadPayload,
-  ProductPayload,
-  AggregationPayload,
-  DocumentPayload,
-  BarPayload,
-  ScatterOrLinePayload,
-  HistogramPayload,
-} from "@/app/types/displays";
+import { ProductPayload } from "@/app/types/displays";
 
 export type Message = {
-  type:
-    | "result"
-    | "ner"
-    | "title"
-    | "user_prompt"
-    | "error"
-    | "user_timeout_error"
-    | "rate_limit_error"
-    | "authentication_error"
-    | "text"
-    | "User"
-    | "status"
-    | "completed"
-    | "warning"
-    | "suggestion";
+  type: "result" | "text" | "User" | "suggestion";
   conversation_id: string;
   id: string;
-  user_id: string;
   query_id: string;
-  payload:
-    | ResultPayload
-    | TextPayload
-    | ErrorPayload
-    | RateLimitPayload
-    | ResponsePayload
-    | SuggestionPayload
-    | UserPromptPayload;
-};
-
-export type NERPayload = {
-  text: string;
-  entity_spans: [number, number][];
-  noun_spans: [number, number][];
-};
-
-export type UserPromptPayload = {
-  prompt: string;
+  payload: ResultPayload | ResponsePayload | SuggestionPayload;
 };
 
 export type SuggestionPayload = {
@@ -55,78 +13,22 @@ export type SuggestionPayload = {
   suggestions: string[];
 };
 
-export type RateLimitPayload = {
-  text: string;
-  reset_time: string;
-  time_left: { hours: number; minutes: number; seconds: number };
-};
-
 export type ResponsePayload = {
-  type:
-    | "response"
-    | "summary"
-    | "code";
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  metadata: any;
-  objects:
-    | TextPayload[]
-    | SummaryPayload[]
-    | CodePayload[]
-    | TextWithCitationsPayload[];
+  type: "response";
+  objects: TextPayload[];
 };
 
 export type ResultPayload = {
-  type:
-    | "text"
-    | "ticket"
-    | "message"
-    | "conversation"
-    | "product"
-    | "ecommerce"
-    | "generic"
-    | "table"
-    | "aggregation"
-    | "mapped"
-    | "document"
-    | "bar_chart"
-    | "histogram_chart"
-    | "scatter_or_line_chart";
-
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  metadata: any;
+  // "text" is the user's own question.
+  type: "text" | "product" | "table";
   code: CodePayload;
-  objects:
-    | string[]
-    | TicketPayload[]
-    | SingleMessagePayload[]
-    | ThreadPayload[]
-    | ProductPayload[]
-    | { [key: string]: string }[]
-    | AggregationPayload[]
-    | DocumentPayload[]
-    | BarPayload[]
-    | ScatterOrLinePayload[]
-    | HistogramPayload[];
-};
-
-export type TextWithCitationsPayload = {
-  text: string;
-  ref_ids: string[];
+  objects: string[] | ProductPayload[] | Record<string, unknown>[];
 };
 
 export type CodePayload = {
   language: string;
   title: string;
   text: string;
-};
-
-export type SummaryPayload = {
-  text: string;
-  title: string;
-};
-
-export type ErrorPayload = {
-  error: string;
 };
 
 export type TextPayload = {
@@ -138,8 +40,16 @@ export type Query = {
   query: string;
   messages: Message[];
   finished: boolean;
-  query_start: Date;
-  query_end: Date | null;
-  NER: NERPayload | null;
   index: number;
+};
+
+export type Conversation = {
+  id: string;
+  name: string;
+  queries: { [key: string]: Query };
+  current: string;
+  timestamp: Date;
+  // Messages are in `queries`. False for a conversation listed from the
+  // backend until it is opened and its messages are fetched.
+  loaded: boolean;
 };

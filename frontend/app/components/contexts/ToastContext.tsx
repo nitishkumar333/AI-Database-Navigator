@@ -43,39 +43,13 @@ const ErrorToastActions: React.FC<{ errorText: string }> = ({ errorText }) => {
 export const ToastContext = createContext<{
   showErrorToast: (title: string, description?: string) => void;
   showSuccessToast: (title: string, description?: string) => void;
-  // Confirmation Modal
-  isConfirmModalOpen: boolean;
-  confirmModalTitle: string;
-  confirmModalDescription: string;
-  showConfirmModal: (
-    title: string,
-    description: string,
-    onConfirm: () => void
-  ) => void;
-  handleConfirmModal: () => void;
-  handleCancelModal: () => void;
 }>({
   showErrorToast: () => {},
   showSuccessToast: () => {},
-  // Confirmation Modal
-  isConfirmModalOpen: false,
-  confirmModalTitle: "",
-  confirmModalDescription: "",
-  showConfirmModal: () => {},
-  handleConfirmModal: () => {},
-  handleCancelModal: () => {},
 });
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
-
-  // Confirmation Modal State
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [confirmModalTitle, setConfirmModalTitle] = useState("");
-  const [confirmModalDescription, setConfirmModalDescription] = useState("");
-  const [pendingCallback, setPendingCallback] = useState<(() => void) | null>(
-    null
-  );
 
   const showErrorToast = useCallback(
     (title: string, description?: string) => {
@@ -103,48 +77,8 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     [toast]
   );
 
-  // Confirmation Modal Methods
-  const showConfirmModal = useCallback(
-    (title: string, description: string, onConfirm: () => void) => {
-      setConfirmModalTitle(title);
-      setConfirmModalDescription(description);
-      setPendingCallback(() => onConfirm);
-      setIsConfirmModalOpen(true);
-    },
-    []
-  );
-
-  const handleConfirmModal = useCallback(() => {
-    if (pendingCallback) {
-      pendingCallback();
-    }
-    setIsConfirmModalOpen(false);
-    setConfirmModalTitle("");
-    setConfirmModalDescription("");
-    setPendingCallback(null);
-  }, [pendingCallback]);
-
-  const handleCancelModal = useCallback(() => {
-    setIsConfirmModalOpen(false);
-    setConfirmModalTitle("");
-    setConfirmModalDescription("");
-    setPendingCallback(null);
-  }, []);
-
   return (
-    <ToastContext.Provider
-      value={{
-        showErrorToast,
-        showSuccessToast,
-        // Confirmation Modal
-        isConfirmModalOpen,
-        confirmModalTitle,
-        confirmModalDescription,
-        showConfirmModal,
-        handleConfirmModal,
-        handleCancelModal,
-      }}
-    >
+    <ToastContext.Provider value={{ showErrorToast, showSuccessToast }}>
       {children}
     </ToastContext.Provider>
   );

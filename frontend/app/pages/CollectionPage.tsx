@@ -2,8 +2,10 @@
 
 import React, { useContext, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { host } from "../components/host";
+import { apiFetch } from "../utils/api";
+import { TableInfo } from "../types/objects";
 import { RouterContext } from "../components/contexts/RouterContext";
+import { CollectionContext } from "../components/contexts/CollectionContext";
 import {
   GoTable,
   GoKey,
@@ -18,11 +20,6 @@ import { useSearchParams } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import EditableDescription from "../components/explorer/EditableDescription";
-
-type TableInfo = {
-  name: string;
-  column_count: number;
-};
 
 type ColumnInfo = {
   name: string;
@@ -74,6 +71,7 @@ export default function CollectionPage() {
   const searchParams = useSearchParams();
   const collectionName = searchParams.get("collection") || "";
   const { changePage } = useContext(RouterContext);
+  const { connections } = useContext(CollectionContext);
 
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -86,24 +84,17 @@ export default function CollectionPage() {
   const [details, setDetails] = useState<TableDetails | null>(null);
   const [profile, setProfile] = useState<ProfileStatus | null>(null);
 
-  // Extract connection name — get auth token
   const connName = collectionName.split(" (")[0];
-  const getToken = () => localStorage.getItem("auth_token") || "";
-
-  // Find connection ID
   const [connId, setConnId] = useState<number | null>(null);
 
-  const authHeaders = () => ({
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  });
+  const tablePath = (cId: number, tableName: string) =>
+    `/api/schema/${cId}/tables/${tableName}`;
 
   // Descriptions + profile facts; 404 just means "not profiled yet".
   const loadDetails = async (cId: number, tableName: string) => {
     try {
-      const res = await fetch(
-        `${host}/api/schema/${cId}/tables/${encodeURIComponent(tableName)}/details`,
-        { headers: authHeaders() }
+      const res = await apiFetch(
+        `${tablePath(cId, encodeURIComponent(tableName))}/details`
       );
       setDetails(res.ok ? await res.json() : null);
     } catch (e) {
@@ -112,23 +103,16 @@ export default function CollectionPage() {
     }
   };
 
-  const loadProfile = async (cId: number) => {
-    try {
-      const res = await fetch(`${host}/api/schema/${cId}/profile`, {
-        headers: authHeaders(),
-      });
-      if (res.ok) setProfile(await res.json());
-    } catch (e) {
-      console.error("Failed to load profile status:", e);
-    }
+  const fetchProfile = async (cId: number): Promise<ProfileStatus | null> => {
+    const res = await apiFetch(`/api/schema/${cId}/profile`);
+    return res.ok ? res.json() : null;
   };
 
   const refreshProfile = async () => {
     if (!connId) return;
-    await fetch(`${host}/api/schema/${connId}/profile/refresh`, {
+    await apiFetch(`/api/schema/${connId}/profile/refresh`, {
       method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({}),
+      body: {},
     });
     setProfile((p) => ({ ...(p || { description_status: "idle" }), status: "running" }));
   };
@@ -139,15 +123,11 @@ export default function CollectionPage() {
     text: string
   ) => {
     if (!connId) return;
-    const base = `${host}/api/schema/${connId}/tables/${encodeURIComponent(tableName)}`;
+    const base = tablePath(connId, encodeURIComponent(tableName));
     const url = columnName
       ? `${base}/columns/${encodeURIComponent(columnName)}/description`
       : `${base}/description`;
-    const res = await fetch(url, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify({ description: text }),
-    });
+    const res = await apiFetch(url, { method: "PUT", body: { description: text } });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || "Could not save description");
@@ -160,100 +140,47 @@ export default function CollectionPage() {
   useEffect(() => {
     if (!connId || !isBusy(profile)) return;
     const timer = setTimeout(async () => {
-      const res = await fetch(`${host}/api/schema/${connId}/profile`, {
-        headers: authHeaders(),
-      }).catch(() => null);
-      if (!res || !res.ok) return;
-      const next: ProfileStatus = await res.json();
+      const next = await fetchProfile(connId).catch(() => null);
+      if (!next) return;
       setProfile(next);
       if (!isBusy(next) && selectedTable) loadDetails(connId, selectedTable);
     }, 4000);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, connId, selectedTable]);
 
+  // Find the connection by name, then load its tables and profile status.
   useEffect(() => {
-    findConnection();
-  }, [connName]);
+    const match = connections.find((c) => c.name === connName);
+    if (!match || match.id === connId) return;
+    setConnId(match.id);
+    loadTables(match.id);
+    fetchProfile(match.id)
+      .then((p) => p && setProfile(p))
+      .catch((e) => console.error("Failed to load profile status:", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connections, connName]);
 
-  // Auto-select first table and load preview when tables are loaded
+  // Auto-select the first table once the tables are loaded
   useEffect(() => {
     if (tables.length > 0 && !selectedTable && connId) {
-      const firstName = tables[0].name;
-      setSelectedTable(firstName);
-      // Load both columns and preview for the first table
-      (async () => {
-        setLoadingColumns(true);
-        setLoadingPreview(true);
-        try {
-          const [colRes, prevRes] = await Promise.all([
-            fetch(`${host}/api/schema/${connId}/tables/${firstName}/columns`, {
-              headers: {
-                Authorization: `Bearer ${getToken()}`,
-                "Content-Type": "application/json",
-              },
-            }),
-            fetch(`${host}/api/schema/${connId}/tables/${firstName}/preview`, {
-              headers: {
-                Authorization: `Bearer ${getToken()}`,
-                "Content-Type": "application/json",
-              },
-            }),
-          ]);
-          if (colRes.ok) setColumns(await colRes.json());
-          if (prevRes.ok) setPreview(await prevRes.json());
-          await loadDetails(connId, firstName);
-        } catch (e) {
-          console.error("Failed to auto-load first table:", e);
-        }
-        setLoadingColumns(false);
-        setLoadingPreview(false);
-      })();
+      loadColumns(tables[0].name);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables, connId]);
-
-  const findConnection = async () => {
-    try {
-      const response = await fetch(`${host}/api/connections`, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (response.ok) {
-        const conns = await response.json();
-        const match = conns.find(
-          (c: { name: string }) => c.name === connName
-        );
-        if (match) {
-          setConnId(match.id);
-          loadTables(match.id);
-          loadProfile(match.id);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to find connection:", e);
-    }
-  };
 
   const loadTables = async (cId: number) => {
     setLoading(true);
     try {
-      const response = await fetch(`${host}/api/schema/${cId}/tables`, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTables(data);
-      }
+      const response = await apiFetch(`/api/schema/${cId}/tables`);
+      if (response.ok) setTables(await response.json());
     } catch (e) {
       console.error("Failed to load tables:", e);
     }
     setLoading(false);
   };
 
+  // Selects a table and loads its columns, preview rows and descriptions.
   const loadColumns = async (tableName: string) => {
     if (!connId) return;
     setLoadingColumns(true);
@@ -264,18 +191,8 @@ export default function CollectionPage() {
     setDetails(null);
     try {
       const [colRes, prevRes] = await Promise.all([
-        fetch(`${host}/api/schema/${connId}/tables/${tableName}/columns`, {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            "Content-Type": "application/json",
-          },
-        }),
-        fetch(`${host}/api/schema/${connId}/tables/${tableName}/preview`, {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            "Content-Type": "application/json",
-          },
-        }),
+        apiFetch(`${tablePath(connId, tableName)}/columns`),
+        apiFetch(`${tablePath(connId, tableName)}/preview`),
       ]);
       if (colRes.ok) setColumns(await colRes.json());
       if (prevRes.ok) setPreview(await prevRes.json());
@@ -292,19 +209,8 @@ export default function CollectionPage() {
     setLoadingPreview(true);
     setActiveTab("preview");
     try {
-      const response = await fetch(
-        `${host}/api/schema/${connId}/tables/${tableName}/preview`,
-        {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setPreview(data);
-      }
+      const response = await apiFetch(`${tablePath(connId, tableName)}/preview`);
+      if (response.ok) setPreview(await response.json());
     } catch (e) {
       console.error("Failed to load preview:", e);
     }

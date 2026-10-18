@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AuthContext } from "../components/contexts/AuthContext";
 import { ToastContext } from "../components/contexts/ToastContext";
 import { CollectionContext } from "../components/contexts/CollectionContext";
-import { host } from "../components/host";
+import { Connection } from "../types/objects";
 import ConnectionForm from "../components/shared/ConnectionForm";
 import KnowledgeBaseForm from "../components/shared/KnowledgeBaseForm";
 import { GoCheck, GoDatabase } from "react-icons/go";
@@ -15,15 +15,6 @@ import { FaSpinner } from "react-icons/fa";
 import { IoCheckmarkCircle } from "react-icons/io5";
 
 import ThemeToggle from "../components/shared/ThemeToggle";
-
-type Connection = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  db_name: string;
-  username: string;
-};
 
 const steps = [
   {
@@ -51,48 +42,31 @@ export default function OnboardingPage() {
   const { user, onboardingStatus, refreshOnboardingStatus } =
     useContext(AuthContext);
   const { showSuccessToast } = useContext(ToastContext);
-  const { fetchCollections } = useContext(CollectionContext);
+  const { fetchConnections, connections } = useContext(CollectionContext);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [savedConnectionId, setSavedConnectionId] = useState<number | null>(
     null
   );
   const [completing, setCompleting] = useState(false);
+  // Resuming at step 2: the knowledge base is for the user's first connection.
+  const kbConnectionId = savedConnectionId ?? connections[0]?.id ?? null;
 
   // Determine starting step from onboarding status
   useEffect(() => {
     if (onboardingStatus) {
       if (onboardingStatus.has_connection && !onboardingStatus.has_knowledge_base) {
         setCurrentStep(2);
-        // Fetch the user's first connection
-        fetchFirstConnection();
       } else if (onboardingStatus.onboarding_complete) {
         setCurrentStep(3);
       }
     }
   }, [onboardingStatus]);
 
-  const fetchFirstConnection = async () => {
-    try {
-      const token = localStorage.getItem("auth_token") || "";
-      const response = await fetch(`${host}/api/connections`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const conns = await response.json();
-        if (conns.length > 0) {
-          setSavedConnectionId(conns[0].id);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-
   const handleConnectionSaved = async (connection: Connection) => {
     setSavedConnectionId(connection.id);
     await refreshOnboardingStatus();
-    fetchCollections();
+    fetchConnections();
     setCurrentStep(2);
   };
 
@@ -106,7 +80,7 @@ export default function OnboardingPage() {
     showSuccessToast("Setup Complete", "Welcome to SQLNav!");
     // Small delay for the toast to show, then the page.tsx will detect onboarding_complete
     await refreshOnboardingStatus();
-    fetchCollections();
+    fetchConnections();
     setCompleting(false);
   };
 
@@ -237,9 +211,9 @@ export default function OnboardingPage() {
             )}
 
             {/* Step 2: Create Knowledge Base */}
-            {currentStep === 2 && savedConnectionId && (
+            {currentStep === 2 && kbConnectionId && (
               <KnowledgeBaseForm
-                connectionId={savedConnectionId}
+                connectionId={kbConnectionId}
                 onKnowledgeBaseCreated={handleKnowledgeBaseCreated}
                 compact
               />

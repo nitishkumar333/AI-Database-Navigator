@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
@@ -11,24 +11,53 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.4,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -10,
+    transition: {
+      duration: 0.2,
+      ease: [0.4, 0, 1, 1],
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: (index: number) => ({
+    opacity: 1,
+    scale: 1,
+    transition: {
+      delay: index * 0.05,
+      duration: 0.3,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  }),
+};
+
 interface DisplayPaginationProps {
   children: React.ReactNode;
-  className?: string;
   itemsPerPage?: number;
-  layout?: "horizontal" | "vertical";
 }
 
+/** Pages its children as a responsive grid of at most 3 columns. */
 const DisplayPagination: React.FC<DisplayPaginationProps> = ({
   children,
-  className = "",
   itemsPerPage = 3,
-  layout = "vertical",
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [dynamicItemsPerPage, setDynamicItemsPerPage] = useState(itemsPerPage);
   const bubbleContainerRef = useRef<HTMLDivElement>(null);
 
-  // Convert children to array for easier manipulation
   const childrenArray = React.Children.toArray(children);
   const totalItems = childrenArray.length;
   const totalPages = Math.ceil(totalItems / dynamicItemsPerPage);
@@ -40,30 +69,16 @@ const DisplayPagination: React.FC<DisplayPaginationProps> = ({
     startIndex + dynamicItemsPerPage
   );
 
-  const goToPage = useCallback(
-    (pageIndex: number) => {
-      if (pageIndex >= 0 && pageIndex < totalPages) {
-        setCurrentPage(pageIndex);
-      }
-    },
-    [totalPages]
-  );
-
-  const goToPrevious = () => {
-    if (currentPage > 0) {
-      goToPage(currentPage - 1);
+  const goToPage = (pageIndex: number) => {
+    if (pageIndex >= 0 && pageIndex < totalPages) {
+      setCurrentPage(pageIndex);
     }
   };
-
-  const goToNext = () => {
-    if (currentPage < totalPages - 1) {
-      goToPage(currentPage + 1);
-    }
-  };
+  const goToPrevious = () => goToPage(currentPage - 1);
+  const goToNext = () => goToPage(currentPage + 1);
 
   const handleItemsPerPageChange = (value: string) => {
-    const newItemsPerPage = parseInt(value, 10);
-    setDynamicItemsPerPage(newItemsPerPage);
+    setDynamicItemsPerPage(parseInt(value, 10));
     setCurrentPage(0); // Reset to first page when items per page changes
   };
 
@@ -92,107 +107,27 @@ const DisplayPagination: React.FC<DisplayPaginationProps> = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        goToPrevious();
-      } else if (event.key === "ArrowRight") {
-        goToNext();
-      }
+      const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+      const next = currentPage + step;
+      if (step && next >= 0 && next < totalPages) setCurrentPage(next);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentPage, totalPages]);
 
-  // Only render if there are children - moved after all hooks
   if (totalItems === 0) return null;
 
-  // Determine layout classes based on layout prop and items per page
-  const isHorizontal = layout === "horizontal";
-
-  // Generate dynamic grid classes based on items per page for horizontal layout
-  const getGridClasses = () => {
-    if (!isHorizontal) {
-      return {
-        containerClass: "flex flex-col",
-        itemContainerClass: "w-full",
-        gapClass: "gap-2",
-      };
-    }
-
-    // For horizontal layout, create dynamic responsive grid
-    // Max 3 columns horizontally, max 9 items total (3x3 grid)
-    let gridCols = "";
-    let containerClass = "";
-    let itemContainerClass = "w-full h-full";
-
-    switch (dynamicItemsPerPage) {
-      case 1:
-        // Single item: center it and limit max width
-        containerClass = "flex justify-center";
-        itemContainerClass = "w-full max-w-sm h-full"; // max-w-sm = 384px
-        break;
-      case 2:
-        gridCols = "grid-cols-1 md:grid-cols-2";
-        containerClass = `grid ${gridCols}`;
-        break;
-      case 3:
-        gridCols = "grid-cols-1 md:grid-cols-3";
-        containerClass = `grid ${gridCols}`;
-        break;
-      case 6:
-        gridCols = "grid-cols-1 md:grid-cols-3";
-        containerClass = `grid ${gridCols}`;
-        break;
-      case 9:
-        gridCols = "grid-cols-1 md:grid-cols-3";
-        containerClass = `grid ${gridCols}`;
-        break;
-      default:
-        gridCols = "grid-cols-1 lg:grid-cols-3";
-        containerClass = `grid ${gridCols}`;
-    }
-
-    return {
-      containerClass,
-      itemContainerClass,
-      gapClass: "gap-4",
-    };
-  };
-
-  const { containerClass, itemContainerClass, gapClass } = getGridClasses();
-
-  const containerVariants: Variants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.4,
-        ease: [0.4, 0, 0.2, 1],
-      },
-    },
-    exit: {
-      opacity: 0,
-      y: -10,
-      transition: {
-        duration: 0.2,
-        ease: [0.4, 0, 1, 1],
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: (index: number) => ({
-      opacity: 1,
-      scale: 1,
-      transition: {
-        delay: index * 0.05,
-        duration: 0.3,
-        ease: [0.4, 0, 0.2, 1],
-      },
-    }),
-  };
+  // One item is centred with a limited width; more go in 2 or 3 columns.
+  const containerClass =
+    dynamicItemsPerPage === 1
+      ? "flex justify-center"
+      : dynamicItemsPerPage === 2
+        ? "grid grid-cols-1 md:grid-cols-2"
+        : "grid grid-cols-1 md:grid-cols-3";
+  const itemContainerClass =
+    dynamicItemsPerPage === 1 ? "w-full max-w-sm h-full" : "w-full h-full";
+  const gapClass = "gap-4";
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-4">
@@ -204,7 +139,7 @@ const DisplayPagination: React.FC<DisplayPaginationProps> = ({
       {/* Main carousel container */}
       <div className="w-full">
         <div
-          className={`flex flex-col w-full justify-start items-start gap-2 rounded-lg ${className}`}
+          className="flex flex-col w-full justify-start items-start gap-2 rounded-lg"
         >
           {/* Carousel content with dynamic layout */}
           <AnimatePresence mode="wait">

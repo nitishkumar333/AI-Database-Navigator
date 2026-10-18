@@ -68,7 +68,7 @@ const HomeSubMenu: React.FC = () => {
             Add a database connection to use conversations.
           </p>
         )}
-        {conversations
+        {[...conversations]
           .sort(
             (a, b) =>
               new Date(b.timestamp).getTime() -

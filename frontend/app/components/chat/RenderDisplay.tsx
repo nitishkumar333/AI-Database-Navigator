@@ -7,44 +7,25 @@ import BoringGenericDisplay from "./displays/Generic/BoringGeneric";
 
 interface RenderDisplayProps {
   payload: ResultPayload;
-  index: number;
-  messageId: string;
-  handleResultPayloadChange: (
-    type: string,
-    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any
-  ) => void;
+  onOpenProduct: (product: ProductPayload) => void;
 }
 
-const RenderDisplay: React.FC<RenderDisplayProps> = ({
-  payload,
-  index,
-  messageId,
-  handleResultPayloadChange,
-}) => {
-  const keyBase = `${index}-${messageId}`;
-  console.log(payload);
+const RenderDisplay: React.FC<RenderDisplayProps> = ({ payload, onOpenProduct }) => {
   switch (payload.type) {
     case "product":
-    case "ecommerce":
       return (
         <ProductDisplay
-          key={`${keyBase}-product`}
           products={payload.objects as ProductPayload[]}
-          handleResultPayloadChange={handleResultPayloadChange}
+          onOpenProduct={onOpenProduct}
         />
       );
     case "table":
-    case "mapped":
       return (
         <BoringGenericDisplay
-          key={`${keyBase}-boring-generic`}
-          payload={payload.objects as { [key: string]: string }[]}
+          payload={payload.objects as Record<string, unknown>[]}
         />
       );
     default:
-      if (process.env.NODE_ENV === "development") {
-        console.warn("Unhandled ResultPayload type:", payload.type);
-      }
       return null;
   }
 };

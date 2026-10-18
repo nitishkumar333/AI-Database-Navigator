@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatPrice } from "@/app/utils/formatPrice";
 
 // Internal keys that shouldn't be rendered as visible fields
 const HIDDEN_KEYS = new Set([
@@ -31,17 +32,6 @@ const formatLabel = (key: string): string =>
   key
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-
-/**
- * Try to format a number as currency if it looks like a price.
- */
-const formatPrice = (value: number): string =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
 
 const isPriceKey = (key: string): boolean =>
   /price|cost|amount|msrp/i.test(key);

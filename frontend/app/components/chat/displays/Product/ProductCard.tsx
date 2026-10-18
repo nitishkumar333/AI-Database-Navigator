@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, Variants } from "framer-motion";
 import { ProductPayload } from "@/app/types/displays";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatPrice } from "@/app/utils/formatPrice";
 
 // TODO: figure out start rating being more flexible, for example from 0-1
 
@@ -46,15 +47,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   const tapVariants = {
     scale: 0.98,
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(price);
   };
 
   const renderStars = (rating: number) => {

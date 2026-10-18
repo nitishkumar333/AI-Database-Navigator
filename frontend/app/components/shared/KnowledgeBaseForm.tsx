@@ -3,29 +3,16 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import { ToastContext } from "../contexts/ToastContext";
-import { host } from "../host";
+import { apiFetch } from "@/app/utils/api";
+import { TableInfo } from "@/app/types/objects";
 import { Button } from "@/components/ui/button";
-import { GoDatabase, GoPlus } from "react-icons/go";
+import { GoPlus } from "react-icons/go";
 import { FaSpinner } from "react-icons/fa";
 import { IoCheckmarkCircle, IoEllipseOutline } from "react-icons/io5";
 
-type TableInfo = {
-  name: string;
-  column_count: number;
-};
-
-type Connection = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  db_name: string;
-  username: string;
-};
-
 interface KnowledgeBaseFormProps {
-  /** If provided, restricts to this single connection (for onboarding) */
-  connectionId?: number;
+  /** The connection whose tables the knowledge base groups */
+  connectionId: number;
   /** Called after a knowledge base group is successfully created */
   onKnowledgeBaseCreated?: () => void;
   /** Whether to show a compact version */
@@ -37,78 +24,36 @@ export default function KnowledgeBaseForm({
   onKnowledgeBaseCreated,
   compact = false,
 }: KnowledgeBaseFormProps) {
-  const { getToken, clearAuth } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
 
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<
-    number | null
-  >(connectionId || null);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  });
-
-  // Fetch connections if not restricted to one
+  // Fetch tables when the connection changes
   useEffect(() => {
-    if (!connectionId) {
-      fetchConnections();
-    } else {
-      setSelectedConnectionId(connectionId);
-    }
-  }, [connectionId]);
-
-  // Fetch tables when connection changes
-  useEffect(() => {
-    if (selectedConnectionId) {
-      fetchTables(selectedConnectionId);
-      setGroupName("");
-      setSelectedTables(new Set());
-    }
-  }, [selectedConnectionId]);
-
-  const fetchConnections = async () => {
-    try {
-      const response = await fetch(`${host}/api/connections`, {
-        headers: authHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConnections(data);
-        if (data.length > 0 && !selectedConnectionId) {
-          setSelectedConnectionId(data[0].id);
+    const fetchTables = async () => {
+      setLoadingTables(true);
+      try {
+        const response = await apiFetch(`/api/schema/${connectionId}/tables`);
+        if (response.ok) {
+          setTables(await response.json());
+        } else if (response.status === 401) {
+          logout();
         }
-      } else if (response.status === 401) {
-        clearAuth();
+      } catch (e) {
+        console.error("Failed to fetch tables:", e);
       }
-    } catch (e) {
-      console.error("Failed to fetch connections:", e);
-    }
-  };
-
-  const fetchTables = async (connId: number) => {
-    setLoadingTables(true);
-    try {
-      const response = await fetch(`${host}/api/schema/${connId}/tables`, {
-        headers: authHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTables(data);
-      } else if (response.status === 401) {
-        clearAuth();
-      }
-    } catch (e) {
-      console.error("Failed to fetch tables:", e);
-    }
-    setLoadingTables(false);
-  };
+      setLoadingTables(false);
+    };
+    fetchTables();
+    setGroupName("");
+    setSelectedTables(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionId]);
 
   const toggleTable = (tableName: string) => {
     setSelectedTables((prev) => {
@@ -131,21 +76,16 @@ export default function KnowledgeBaseForm({
   };
 
   const saveKnowledgeGroup = async () => {
-    if (!selectedConnectionId || selectedTables.size === 0 || groupName.trim() === "")
-      return;
+    if (selectedTables.size === 0 || groupName.trim() === "") return;
     setSaving(true);
     try {
-      const response = await fetch(
-        `${host}/api/knowledge/${selectedConnectionId}/group`,
-        {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({
-            name: groupName.trim(),
-            table_names: Array.from(selectedTables),
-          }),
-        }
-      );
+      const response = await apiFetch(`/api/knowledge/${connectionId}/group`, {
+        method: "POST",
+        body: {
+          name: groupName.trim(),
+          table_names: Array.from(selectedTables),
+        },
+      });
       if (response.ok) {
         showSuccessToast(
           "Knowledge Base Created",
@@ -172,31 +112,6 @@ export default function KnowledgeBaseForm({
         <h2 className="text-lg font-semibold text-primary">
           Create New Knowledge Base
         </h2>
-      )}
-
-      {/* Connection selector (only when not locked to one) */}
-      {!connectionId && connections.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-muted-foreground font-medium">
-            Database Connection
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {connections.map((conn) => (
-              <button
-                key={conn.id}
-                onClick={() => setSelectedConnectionId(conn.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 text-sm ${
-                  selectedConnectionId === conn.id
-                    ? "border-accent bg-accent/10 text-accent shadow-sm shadow-accent/10"
-                    : "border-foreground hover:border-accent/40 text-primary hover:bg-foreground/30"
-                }`}
-              >
-                <GoDatabase size={16} />
-                <span className="font-medium">{conn.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* KB Name */}
@@ -244,9 +159,7 @@ export default function KnowledgeBaseForm({
         ) : tables.length === 0 ? (
           <div className="p-6 border border-dashed border-foreground rounded-xl text-center">
             <p className="text-muted-foreground text-sm">
-              {selectedConnectionId
-                ? "No tables found in this database"
-                : "Select a connection first"}
+              No tables found in this database
             </p>
           </div>
         ) : (

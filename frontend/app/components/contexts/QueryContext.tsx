@@ -1,8 +1,19 @@
 "use client";
 
-import { createContext, useEffect, useState, useContext } from "react";
-import { host } from "../host";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { apiFetch, getStoredToken } from "../../utils/api";
 import { AuthContext } from "./AuthContext";
+import { ToastContext } from "./ToastContext";
+
+// Response of POST /api/query/chat (or a failure shaped like one).
+export type QueryResult = {
+  success: boolean;
+  error?: string;
+  response_text?: string;
+  generated_sql?: string;
+  rows?: Record<string, unknown>[];
+  columns?: string[];
+};
 
 export const QueryContext = createContext<{
   backendOnline: boolean;
@@ -12,35 +23,38 @@ export const QueryContext = createContext<{
     knowledge_base_id?: number | null,
     conversation_id?: string | null,
     query_id?: string | null
-  ) => Promise<any | null>;
-  getToken: () => string;
-  clearAuth: () => void;
+  ) => Promise<QueryResult>;
 }>({
   backendOnline: false,
-  sendQuery: async () => null,
-  getToken: () => "",
-  clearAuth: () => {},
+  sendQuery: async () => ({ success: false }),
 });
 
 export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   const [backendOnline, setBackendOnline] = useState(false);
-  const { getToken, clearAuth } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
+  const { showSuccessToast } = useContext(ToastContext);
+  const announced = useRef(false);
 
   // Health check polling
   useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await apiFetch("/health", { token: "" });
+        setBackendOnline(response.ok);
+      } catch {
+        setBackendOnline(false);
+      }
+    };
     checkHealth();
     const interval = setInterval(checkHealth, 120000);
     return () => clearInterval(interval);
   }, []);
 
-  const checkHealth = async () => {
-    try {
-      const response = await fetch(`${host}/health`);
-      setBackendOnline(response.ok);
-    } catch {
-      setBackendOnline(false);
-    }
-  };
+  useEffect(() => {
+    if (announced.current || !backendOnline) return;
+    announced.current = true;
+    showSuccessToast("Connected to SQLNav");
+  }, [backendOnline, showSuccessToast]);
 
   const sendQuery = async (
     question: string,
@@ -48,9 +62,8 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
     knowledge_base_id?: number | null,
     conversation_id?: string | null,
     query_id?: string | null
-  ): Promise<any | null> => {
-    const currentToken = getToken();
-    if (!currentToken) {
+  ): Promise<QueryResult> => {
+    if (!getStoredToken()) {
       return {
         success: false,
         error: "Not authenticated",
@@ -59,24 +72,20 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      const response = await fetch(`${host}/api/query/chat`, {
+      const response = await apiFetch("/api/query/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${currentToken}`,
-        },
-        body: JSON.stringify({
+        body: {
           question,
           connection_id: connection_id || null,
           knowledge_base_id: knowledge_base_id || null,
           conversation_id: conversation_id || null,
           query_id: query_id || null,
-        }),
+        },
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          clearAuth();
+          logout();
           return {
             success: false,
             error: "Session expired. Please log in again.",
@@ -102,7 +111,7 @@ export const QueryProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <QueryContext.Provider value={{ backendOnline, sendQuery, getToken, clearAuth }}>
+    <QueryContext.Provider value={{ backendOnline, sendQuery }}>
       {children}
     </QueryContext.Provider>
   );

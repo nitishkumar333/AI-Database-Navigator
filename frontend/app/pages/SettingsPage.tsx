@@ -5,7 +5,8 @@ import { motion } from "framer-motion";
 import { CollectionContext } from "../components/contexts/CollectionContext";
 import { AuthContext } from "../components/contexts/AuthContext";
 import { ToastContext } from "../components/contexts/ToastContext";
-import { host } from "../components/host";
+import { apiFetch } from "../utils/api";
+import { Connection } from "../types/objects";
 import ConnectionForm from "../components/shared/ConnectionForm";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -29,19 +30,9 @@ import {
 import { FaSpinner } from "react-icons/fa";
 import ThemeToggle from "../components/shared/ThemeToggle";
 
-type Connection = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  db_name: string;
-  username: string;
-  created_at?: string;
-};
-
 export default function SettingsPage() {
-  const { fetchCollections } = useContext(CollectionContext);
-  const { getToken, user } = useContext(AuthContext);
+  const { fetchConnections } = useContext(CollectionContext);
+  const { user } = useContext(AuthContext);
   // The guest account is fixed to the demo shop database.
   const isGuest = !!user?.is_guest;
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
@@ -57,19 +48,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadConnections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  });
 
   const loadConnections = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${host}/api/connections`, {
-        headers: authHeaders(),
-      });
+      const response = await apiFetch("/api/connections");
       if (response.ok) {
         const data = await response.json();
         setConnections(data);
@@ -83,9 +68,8 @@ export default function SettingsPage() {
   const deleteConnection = async (connId: number) => {
     setDeleting(true);
     try {
-      const response = await fetch(`${host}/api/connections/${connId}`, {
+      const response = await apiFetch(`/api/connections/${connId}`, {
         method: "DELETE",
-        headers: authHeaders(),
       });
       if (response.ok) {
         // The backend also deleted every conversation that used this connection.
@@ -93,7 +77,7 @@ export default function SettingsPage() {
         dropConversations(data.deleted_conversations ?? []);
         showSuccessToast("Connection Removed");
         loadConnections();
-        fetchCollections();
+        fetchConnections();
       } else {
         const data = await response.json().catch(() => ({}));
         showErrorToast("Failed to Delete", data.detail ?? `Error ${response.status}`);
@@ -108,7 +92,7 @@ export default function SettingsPage() {
   const handleConnectionSaved = () => {
     setShowAddForm(false);
     loadConnections();
-    fetchCollections();
+    fetchConnections();
   };
 
   return (

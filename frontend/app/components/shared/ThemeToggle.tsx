@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "../contexts/ThemeContext";
 import { IoSunny, IoMoon, IoDesktopOutline } from "react-icons/io5";
@@ -9,23 +9,16 @@ interface ThemeToggleProps {
   variant?: "icon" | "pill" | "segmented";
   className?: string;
   size?: "sm" | "md" | "lg";
-  showLabel?: boolean;
 }
 
 const ThemeToggle: React.FC<ThemeToggleProps> = ({
   variant = "icon",
   className = "",
   size = "md",
-  showLabel = false,
 }) => {
+  // Before mount the context reports "dark", matching the server render.
   const { theme, resolvedTheme, toggleTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const isDark = mounted ? resolvedTheme === "dark" : true;
+  const isDark = resolvedTheme === "dark";
 
   // Segmented control (Light / Dark / System)
   if (variant === "segmented") {
@@ -42,7 +35,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
         aria-label="Theme selector"
       >
         {options.map((opt) => {
-          const active = mounted ? theme === opt.id : opt.id === "dark";
+          const active = theme === opt.id;
           return (
             <button
               key={opt.id}
@@ -147,11 +140,6 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
         )}
       </AnimatePresence>
 
-      {showLabel && (
-        <span className="ml-2 text-xs font-medium text-primary">
-          {isDark ? "Dark" : "Light"}
-        </span>
-      )}
     </motion.button>
   );
 };

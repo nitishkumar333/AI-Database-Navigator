@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useContext } from "react";
-import { host } from "../host";
-import { AuthContext } from "../contexts/AuthContext";
+import { apiFetch } from "@/app/utils/api";
+import { Connection } from "@/app/types/objects";
 import { ToastContext } from "../contexts/ToastContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,15 +12,31 @@ import {
 } from "react-icons/go";
 import { FaPlug, FaSpinner } from "react-icons/fa";
 
-type Connection = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  db_name: string;
-  username: string;
-  created_at?: string;
+const EMPTY_FORM = {
+  name: "",
+  host: "localhost",
+  port: 5432,
+  db_name: "",
+  username: "postgres",
+  password: "",
 };
+
+type FormData = typeof EMPTY_FORM;
+
+const FIELDS: {
+  key: keyof FormData;
+  id: string;
+  label: string;
+  type: string;
+  placeholder: string;
+}[] = [
+  { key: "name", id: "conn-name", label: "Connection Name", type: "text", placeholder: "My Database" },
+  { key: "host", id: "conn-host", label: "Host", type: "text", placeholder: "localhost" },
+  { key: "port", id: "conn-port", label: "Port", type: "number", placeholder: "5432" },
+  { key: "db_name", id: "conn-dbname", label: "Database Name", type: "text", placeholder: "my_database" },
+  { key: "username", id: "conn-username", label: "Username", type: "text", placeholder: "postgres" },
+  { key: "password", id: "conn-password", label: "Password", type: "password", placeholder: "••••••••" },
+];
 
 interface ConnectionFormProps {
   /** Called after a connection is successfully saved */
@@ -33,7 +49,6 @@ export default function ConnectionForm({
   onConnectionSaved,
   compact = false,
 }: ConnectionFormProps) {
-  const { getToken } = useContext(AuthContext);
   const { showErrorToast, showSuccessToast } = useContext(ToastContext);
 
   const [testing, setTesting] = useState(false);
@@ -44,14 +59,7 @@ export default function ConnectionForm({
   const [saving, setSaving] = useState(false);
 
   const [connectionString, setConnectionString] = useState("");
-  const [formData, setFormData] = useState({
-    name: "",
-    host: "localhost",
-    port: 5432,
-    db_name: "",
-    username: "postgres",
-    password: "",
-  });
+  const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
 
   const handleConnectionStringChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -75,25 +83,14 @@ export default function ConnectionForm({
     }
   };
 
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  });
-
   const testConnection = async () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch(`${host}/api/connections/test`, {
+      const { name: _name, ...target } = formData; // eslint-disable-line @typescript-eslint/no-unused-vars
+      const response = await apiFetch("/api/connections/test", {
         method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          host: formData.host,
-          port: formData.port,
-          db_name: formData.db_name,
-          username: formData.username,
-          password: formData.password,
-        }),
+        body: target,
       });
       const data = await response.json();
       setTestResult(data);
@@ -112,10 +109,9 @@ export default function ConnectionForm({
   const saveConnection = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`${host}/api/connections`, {
+      const response = await apiFetch("/api/connections", {
         method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify(formData),
+        body: formData,
       });
       if (response.ok) {
         const newConn: Connection = await response.json();
@@ -123,14 +119,7 @@ export default function ConnectionForm({
           "Connection Added",
           `Connected to ${formData.db_name}`
         );
-        setFormData({
-          name: "",
-          host: "localhost",
-          port: 5432,
-          db_name: "",
-          username: "postgres",
-          password: "",
-        });
+        setFormData(EMPTY_FORM);
         setConnectionString("");
         setTestResult(null);
         onConnectionSaved?.(newConn);
@@ -173,101 +162,27 @@ export default function ConnectionForm({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Connection Name
-          </label>
-          <input
-            id="conn-name"
-            type="text"
-            value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
-            placeholder="My Database"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Host
-          </label>
-          <input
-            id="conn-host"
-            type="text"
-            value={formData.host}
-            onChange={(e) =>
-              setFormData({ ...formData, host: e.target.value })
-            }
-            placeholder="localhost"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Port
-          </label>
-          <input
-            id="conn-port"
-            type="number"
-            value={formData.port}
-            onChange={(e) =>
-              setFormData({ ...formData, port: parseInt(e.target.value) })
-            }
-            placeholder="5432"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Database Name
-          </label>
-          <input
-            id="conn-dbname"
-            type="text"
-            value={formData.db_name}
-            onChange={(e) =>
-              setFormData({ ...formData, db_name: e.target.value })
-            }
-            placeholder="my_database"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Username
-          </label>
-          <input
-            id="conn-username"
-            type="text"
-            value={formData.username}
-            onChange={(e) =>
-              setFormData({ ...formData, username: e.target.value })
-            }
-            placeholder="postgres"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Password
-          </label>
-          <input
-            id="conn-password"
-            type="password"
-            value={formData.password}
-            onChange={(e) =>
-              setFormData({ ...formData, password: e.target.value })
-            }
-            placeholder="••••••••"
-            className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </div>
+        {FIELDS.map((field) => (
+          <div key={field.key} className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground font-medium">
+              {field.label}
+            </label>
+            <input
+              id={field.id}
+              type={field.type}
+              value={formData[field.key]}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  [field.key]:
+                    field.key === "port" ? parseInt(e.target.value) : e.target.value,
+                })
+              }
+              placeholder={field.placeholder}
+              className="bg-background border border-foreground rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+            />
+          </div>
+        ))}
       </div>
 
       {/* Test Result */}

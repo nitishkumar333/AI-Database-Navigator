@@ -31,54 +31,8 @@
   background-color: hsl(var(--background));
 }
 
-/* Firefox and other browsers that support scrollbar-color */
+/* Firefox and other browsers that support scrollbar-color (all elements) */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
-}
-
-/* More specific targeting for Firefox */
-html {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
-}
-
-/* Fallback for older browsers or unsupported cases */
-body {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
-}
-
-/* Force dark scrollbars on elements that might override */
-div,
-section,
-main,
-aside,
-article {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
-}
-
-/* Additional targeting for problematic elements */
-.overflow-auto,
-.overflow-x-auto,
-.overflow-y-auto,
-.overflow-scroll,
-.overflow-x-scroll,
-.overflow-y-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
-}
-
-/* Internet Explorer/Edge legacy support */
-@supports (-ms-overflow-style: auto) {
-  * {
-    -ms-overflow-style: -ms-autohiding-scrollbar;
-  }
-}
-
-/* Ensure iframe scrollbars match theme */
-iframe {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--secondary) / 0.35) hsl(var(--background));
 }
@@ -177,11 +131,6 @@ iframe {
 .fade-in {
   animation: fadeIn 0.5s ease-in-out forwards;
 }
-
-.markdown-container {
-  overflow-wrap: break-word;
-}
-
 
 @layer base {
   * {

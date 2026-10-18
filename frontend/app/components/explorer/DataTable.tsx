@@ -25,14 +25,12 @@ const rowVariants: Variants = {
 interface DataTableProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: { [key: string]: any }[] | null;
-  header: { [key: string]: string };
   stickyHeaders?: boolean;
   maxHeight?: string;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
   data,
-  header,
   stickyHeaders = false,
   maxHeight,
 }) => {
@@ -50,8 +48,9 @@ const DataTable: React.FC<DataTableProps> = ({
     ? "flex flex-col w-full"
     : "flex flex-col flex-1 min-w-0 min-h-0 overflow-auto w-full";
 
+  const columns = Object.keys(data[0] || {});
   const rowCount = data.length;
-  const columnCount = Object.keys(header).length;
+  const columnCount = columns.length;
 
   return (
     <div
@@ -78,7 +77,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   #
                 </th>
 
-                {Object.keys(header).map((key) => (
+                {columns.map((key) => (
                   <th
                     key={key}
                     className="min-w-[150px] select-none cursor-default border-b border-r border-foreground_alt px-3 py-3 font-medium"
@@ -108,7 +107,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     {rowIndex + 1}
                   </td>
 
-                  {Object.keys(header).map((key, colIndex) => {
+                  {columns.map((key, colIndex) => {
                     const value = item[key];
                     const isBoolean = typeof value === "boolean";
 

@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-} from "react";
-import { host } from "../host";
+import { createContext, useEffect, useState, useRef } from "react";
+import { apiFetch, TOKEN_KEY } from "../../utils/api";
 // Also installs the fetch wrapper that reports the API's rate limit.
 import {
   RATE_LIMIT_LOGOUT_EVENT,
@@ -27,6 +21,8 @@ export type OnboardingStatus = {
   onboarding_complete: boolean;
 };
 
+type AuthResult = { ok: boolean; error?: string };
+
 export const AuthContext = createContext<{
   user: AuthUser | null;
   isAuthenticated: boolean;
@@ -34,16 +30,14 @@ export const AuthContext = createContext<{
   onboardingStatus: OnboardingStatus | null;
   // Why the user was signed out (e.g. rate limit), shown on the login page.
   signedOutNotice: string;
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<AuthResult>;
   register: (
     email: string,
     username: string,
     password: string
-  ) => Promise<{ ok: boolean; error?: string }>;
-  guestLogin: () => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<AuthResult>;
+  guestLogin: () => Promise<AuthResult>;
   logout: () => void;
-  getToken: () => string;
-  clearAuth: () => void;
   refreshOnboardingStatus: () => Promise<OnboardingStatus | null>;
 }>({
   user: null,
@@ -55,10 +49,13 @@ export const AuthContext = createContext<{
   register: async () => ({ ok: false }),
   guestLogin: async () => ({ ok: false }),
   logout: () => {},
-  getToken: () => "",
-  clearAuth: () => {},
   refreshOnboardingStatus: async () => null,
 });
+
+const errorDetail = async (response: Response, fallback: string) => {
+  const data = await response.json().catch(() => ({}));
+  return data.detail || fallback;
+};
 
 export const AuthProvider = ({
   children,
@@ -89,53 +86,51 @@ export const AuthProvider = ({
     };
     window.addEventListener(RATE_LIMIT_LOGOUT_EVENT, onRateLimited);
     return () => window.removeEventListener(RATE_LIMIT_LOGOUT_EVENT, onRateLimited);
+    // logout only uses state setters, so the first one stays valid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // On mount — check for stored token and validate
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    const stored = localStorage.getItem("auth_token");
+    const stored = localStorage.getItem(TOKEN_KEY);
     if (stored) {
       validateToken(stored);
     } else {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const validateToken = async (t: string) => {
     try {
-      const response = await fetch(`${host}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${t}` },
-      });
+      const response = await apiFetch("/api/auth/me", { token: t });
       if (response.ok) {
-        const userData: AuthUser = await response.json();
         setToken(t);
-        setUser(userData);
-        localStorage.setItem("auth_token", t);
-        // Fetch onboarding status
+        setUser(await response.json());
         await fetchOnboardingStatus(t);
       } else {
         // Token expired or invalid
-        localStorage.removeItem("auth_token");
-        setToken("");
-        setUser(null);
+        clearToken();
       }
     } catch {
-      localStorage.removeItem("auth_token");
-      setToken("");
-      setUser(null);
+      clearToken();
     }
     setIsLoading(false);
   };
 
+  const clearToken = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken("");
+    setUser(null);
+  };
+
   const fetchOnboardingStatus = async (
-    t: string
+    t?: string
   ): Promise<OnboardingStatus | null> => {
     try {
-      const response = await fetch(`${host}/api/auth/onboarding-status`, {
-        headers: { Authorization: `Bearer ${t}` },
-      });
+      const response = await apiFetch("/api/auth/onboarding-status", { token: t });
       if (response.ok) {
         const data: OnboardingStatus = await response.json();
         setOnboardingStatus(data);
@@ -147,46 +142,30 @@ export const AuthProvider = ({
     return null;
   };
 
-  const refreshOnboardingStatus =
-    async (): Promise<OnboardingStatus | null> => {
-      const t = token || localStorage.getItem("auth_token") || "";
-      if (!t) return null;
-      return fetchOnboardingStatus(t);
-    };
+  const refreshOnboardingStatus = async () =>
+    localStorage.getItem(TOKEN_KEY) ? fetchOnboardingStatus() : null;
 
-  const login = async (
-    email: string,
-    password: string
-  ): Promise<{ ok: boolean; error?: string }> => {
+  // Signs in with a token from login or guest login.
+  const startSession = async (newToken: string) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setToken(newToken);
+    const meRes = await apiFetch("/api/auth/me", { token: newToken });
+    if (meRes.ok) setUser(await meRes.json());
+    await fetchOnboardingStatus(newToken);
+    setSignedOutNotice("");
+  };
+
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const response = await fetch(`${host}/api/auth/login`, {
+      const response = await apiFetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: { email, password },
       });
-      if (response.ok) {
-        const data = await response.json();
-        const newToken = data.access_token;
-        localStorage.setItem("auth_token", newToken);
-        setToken(newToken);
-        // Fetch user info
-        const meRes = await fetch(`${host}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${newToken}` },
-        });
-        if (meRes.ok) {
-          const userData: AuthUser = await meRes.json();
-          setUser(userData);
-        }
-        await fetchOnboardingStatus(newToken);
-        setSignedOutNotice("");
-        return { ok: true };
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        return {
-          ok: false,
-          error: errData.detail || "Invalid credentials",
-        };
+      if (!response.ok) {
+        return { ok: false, error: await errorDetail(response, "Invalid credentials") };
       }
+      await startSession((await response.json()).access_token);
+      return { ok: true };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
@@ -196,81 +175,44 @@ export const AuthProvider = ({
     email: string,
     username: string,
     password: string
-  ): Promise<{ ok: boolean; error?: string }> => {
+  ): Promise<AuthResult> => {
     try {
-      const response = await fetch(`${host}/api/auth/register`, {
+      const response = await apiFetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, username, password }),
+        body: { email, username, password },
       });
-      if (response.ok) {
-        // Auto-login after registration
-        return login(email, password);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        return {
-          ok: false,
-          error: errData.detail || "Registration failed",
-        };
+      if (!response.ok) {
+        return { ok: false, error: await errorDetail(response, "Registration failed") };
       }
+      // Auto-login after registration
+      return login(email, password);
     } catch (e) {
       return { ok: false, error: String(e) };
     }
   };
 
-  const guestLogin = async (): Promise<{ ok: boolean; error?: string }> => {
+  const guestLogin = async (): Promise<AuthResult> => {
     try {
       // Clear any previous connection/KB selections so fresh guest defaults are selected
       localStorage.removeItem("selected_connection_id");
       localStorage.removeItem("selected_knowledge_base_id");
 
-      const response = await fetch(`${host}/api/auth/guest-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const newToken = data.access_token;
-        localStorage.setItem("auth_token", newToken);
-        setToken(newToken);
-        // Fetch user info
-        const meRes = await fetch(`${host}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${newToken}` },
-        });
-        if (meRes.ok) {
-          const userData: AuthUser = await meRes.json();
-          setUser(userData);
-        }
-        await fetchOnboardingStatus(newToken);
-        setSignedOutNotice("");
-        return { ok: true };
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        return {
-          ok: false,
-          error: errData.detail || "Guest login failed",
-        };
+      const response = await apiFetch("/api/auth/guest-login", { method: "POST" });
+      if (!response.ok) {
+        return { ok: false, error: await errorDetail(response, "Guest login failed") };
       }
+      await startSession((await response.json()).access_token);
+      return { ok: true };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
   };
 
   const logout = () => {
-    localStorage.removeItem("auth_token");
+    clearToken();
     localStorage.removeItem("selected_connection_id");
     localStorage.removeItem("selected_knowledge_base_id");
-    setToken("");
-    setUser(null);
     setOnboardingStatus(null);
-  };
-
-  const getToken = useCallback(() => {
-    return token || localStorage.getItem("auth_token") || "";
-  }, [token]);
-
-  const clearAuth = () => {
-    logout();
   };
 
   return (
@@ -285,8 +227,6 @@ export const AuthProvider = ({
         register,
         guestLogin,
         logout,
-        getToken,
-        clearAuth,
         refreshOnboardingStatus,
       }}
     >

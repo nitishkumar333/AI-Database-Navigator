@@ -52,12 +52,7 @@ const config: Config = {
         alt_color_a: "hsl(var(--alt_color_a))",
         alt_color_b: "hsl(var(--alt_color_b))",
 
-        // Currently unused
-
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
+        // shadcn/ui component tokens
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -73,13 +68,6 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        chart: {
-          "1": "hsl(var(--chart-1))",
-          "2": "hsl(var(--chart-2))",
-          "3": "hsl(var(--chart-3))",
-          "4": "hsl(var(--chart-4))",
-          "5": "hsl(var(--chart-5))",
-        },
         sidebar: {
           DEFAULT: "hsl(var(--background_alt))",
           foreground: "hsl(var(--foreground))",

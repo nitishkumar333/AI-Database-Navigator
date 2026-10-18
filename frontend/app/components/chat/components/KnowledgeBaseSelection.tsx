@@ -11,16 +11,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import { QueryContext } from "../../contexts/SocketContext";
-import { host } from "../../host";
-
-interface KnowledgeBaseGroup {
-  id: number;
-  connection_id: number;
-  name: string;
-  tables: string[];
-  created_at: string;
-}
+import { AuthContext } from "../../contexts/AuthContext";
+import { apiFetch } from "@/app/utils/api";
+import { KnowledgeBaseGroup } from "@/app/types/objects";
 
 interface KnowledgeBaseSelectionProps {
   selectedConnectionId: number | null;
@@ -35,53 +28,44 @@ const KnowledgeBaseSelection: React.FC<KnowledgeBaseSelectionProps> = ({
   onKnowledgeBaseChange,
   onLoadingChange,
 }) => {
-  const { getToken, clearAuth } = useContext(QueryContext);
+  const { logout } = useContext(AuthContext);
   const [allGroups, setAllGroups] = useState<KnowledgeBaseGroup[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchKnowledgeBases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectionId]);
 
   const fetchKnowledgeBases = async () => {
-    const token = getToken();
-    if (!token) return;
     setLoading(true);
-    if (onLoadingChange) onLoadingChange(true);
+    onLoadingChange?.(true);
     try {
-      const url = selectedConnectionId
-        ? `${host}/api/knowledge/${selectedConnectionId}/groups`
-        : `${host}/api/knowledge/user/groups/all`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await apiFetch(
+        selectedConnectionId
+          ? `/api/knowledge/${selectedConnectionId}/groups`
+          : "/api/knowledge/user/groups/all"
+      );
       if (response.ok) {
-        const data = await response.json();
+        const data: KnowledgeBaseGroup[] = await response.json();
         setAllGroups(data);
         // Select the first group when none is selected or the selected one is
         // gone (its connection was deleted).
-        if (!data.some((g: KnowledgeBaseGroup) => g.id === selectedKnowledgeBaseId)) {
+        if (!data.some((g) => g.id === selectedKnowledgeBaseId)) {
           onKnowledgeBaseChange(data.length > 0 ? data[0].id : null);
         }
       } else if (response.status === 401) {
-        clearAuth();
+        logout();
       }
     } catch (e) {
       console.error("Failed to fetch knowledge base groups:", e);
     }
     setLoading(false);
-    if (onLoadingChange) onLoadingChange(false);
+    onLoadingChange?.(false);
   };
 
   const toggleGroup = (groupId: number) => {
-    if (selectedKnowledgeBaseId === groupId) {
-      onKnowledgeBaseChange(null);
-    } else {
-      onKnowledgeBaseChange(groupId);
-    }
+    onKnowledgeBaseChange(selectedKnowledgeBaseId === groupId ? null : groupId);
   };
 
   const selectedGroup = allGroups.find(g => g.id === selectedKnowledgeBaseId);

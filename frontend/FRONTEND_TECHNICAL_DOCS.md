@@ -34,7 +34,6 @@ app/layout.tsx  (Root - wraps all context providers)
       |     AuthProvider
       |     RouterProvider
       |     QueryProvider (backend health + sendQuery)
-      |     SessionProvider (device fingerprint)
       |     CollectionProvider (connections + KB suggestions)
       |     ConversationProvider (chat state)
       |     SidebarProvider (UI)
@@ -70,7 +69,6 @@ frontend/
 |   ├── layout.tsx               # Root layout: providers + sidebar + metadata
 |   ├── page.tsx                 # Root page: auth guard + page routing logic
 |   ├── globals.css              # Global CSS variables, Tailwind base, animations
-|   ├── getDeviceId.ts           # FingerprintJS hook for device-based session ID
 |   ├── icon.svg                 # App favicon
 |   |
 |   ├── pages/                   # Full-page view components
@@ -83,17 +81,15 @@ frontend/
 |   |
 |   ├── components/
 |   |   ├── host.ts              # API base URL (NEXT_PUBLIC_API_URL or localhost:8000)
-|   |   ├── types.ts             # Conversation + initialConversation types
 |   |   |
 |   |   ├── contexts/            # React Context providers (global state)
 |   |   |   ├── AuthContext.tsx       # Auth state, login/register/logout, onboarding status
 |   |   |   ├── RouterContext.tsx     # Client-side page routing via URL search params
-|   |   |   ├── SessionContext.tsx    # Device ID (FingerprintJS), session init
-|   |   |   ├── SocketContext.tsx     # sendQuery() REST call, backend health polling
-|   |   |   ├── CollectionContext.tsx # DB connections, KB groups, suggestions cache
+|   |   |   ├── QueryContext.tsx      # sendQuery() REST call, backend health polling
+|   |   |   ├── CollectionContext.tsx # DB connections, suggestions cache
 |   |   |   ├── ConversationContext.tsx # All chat conversation state + CRUD
-|   |   |   ├── ChatContext.tsx       # (Minimal) chat-specific shared state
-|   |   |   ├── ToastContext.tsx      # Toast notifications + confirm modals
+|   |   |   ├── ThemeContext.tsx      # Light / dark / system theme
+|   |   |   ├── ToastContext.tsx      # Toast notifications
 |   |   |
 |   |   ├── chat/                # Chat interface components
 |   |   |   ├── QueryInput.tsx        # Text area input + send button (bottom of chat)
@@ -101,12 +97,10 @@ frontend/
 |   |   |   ├── RenderDisplay.tsx     # Routes a display to its component
 |   |   |   |
 |   |   |   ├── components/           # Chat UI sub-components
-|   |   |   |   ├── CitationBubble.tsx     # Citation reference bubble
 |   |   |   |   ├── CollectionSelection.tsx # DB connection dropdown in chat
 |   |   |   |   ├── DisplayPagination.tsx   # Pagination through result pages
 |   |   |   |   ├── KnowledgeBaseSelection.tsx # KB group selector in chat
-|   |   |   |   ├── MarkdownFormat.tsx      # Renders markdown with syntax highlighting
-|   |   |   |   └── ViewCodeButton.tsx      # Show/hide generated SQL code
+|   |   |   |   └── MarkdownFormat.tsx      # Renders markdown (GitHub-flavored)
 |   |   |   |
 |   |   |   └── displays/             # Result display components by type
 |   |   |       ├── Generic/
@@ -117,17 +111,14 @@ frontend/
 |   |   |       |   ├── ProductDisplay.tsx  # Product grid container
 |   |   |       |   └── ProductView.tsx     # Full product detail view (opened in a modal)
 |   |   |       ├── QueryCode/
-|   |   |       |   └── CodeView.tsx        # SQL code viewer + copy + execute
+|   |   |       |   └── CodeView.tsx        # SQL code viewer + copy
 |   |   |       └── SystemMessages/
-|   |   |           ├── ErrorMessageDisplay.tsx        # Error message bubble
-|   |   |           ├── InfoMessageDisplay.tsx         # Info message bubble
-|   |   |           ├── RateLimitMessageDisplay.tsx    # Rate limit error with timer
 |   |   |           ├── SuggestionDisplay.tsx          # Clickable follow-up suggestions
-|   |   |           ├── UserMessageDisplay.tsx         # User's sent message bubble
-|   |   |           └── WarningDisplay.tsx             # Warning message bubble
+|   |   |           └── UserMessageDisplay.tsx         # User's sent message bubble
 |   |   |
 |   |   ├── explorer/            # Database schema explorer components
-|   |   |   └── DataTable.tsx         # Data grid with rich cell rendering
+|   |   |   ├── DataTable.tsx         # Data grid with rich cell rendering
+|   |   |   └── EditableDescription.tsx # Inline-editable table/column description
 |   |   |
 |   |   ├── navigation/          # Sidebar + navigation components
 |   |   |   ├── SidebarComponent.tsx  # Main sidebar (nav items, user info, logout)
@@ -136,21 +127,26 @@ frontend/
 |   |   |
 |   |   └── shared/              # Shared form components
 |   |       ├── ConnectionForm.tsx    # Form to create/test DB connections
-|   |       └── KnowledgeBaseForm.tsx # Form to create KB groups (table multi-select)
+|   |       ├── KnowledgeBaseForm.tsx # Form to create KB groups (table multi-select)
+|   |       └── ThemeToggle.tsx       # Theme switch (icon, pill, segmented)
 |   |
 |   ├── types/                   # TypeScript type definitions
-|   |   ├── chat.ts              # Message, Query, all Payload types
-|   |   ├── displays.ts          # ProductPayload, TicketPayload, ChartPayload types
-|   |   └── objects.ts           # Collection type
+|   |   ├── chat.ts              # Conversation, Query, Message, payload types
+|   |   ├── displays.ts          # ProductPayload
+|   |   └── objects.ts           # Connection, KnowledgeBaseGroup, TableInfo
 |   |
 |   └── utils/                   # Frontend utilities
-|       └── detectProductdata.ts  # Heuristic detection of product-like query results
+|       ├── api.ts                # apiFetch(): backend fetch with auth token + JSON body
+|       ├── detectProductdata.ts  # Heuristic detection of product-like query results
+|       ├── formatPrice.ts        # Shared USD price formatter
+|       ├── rateLimitLogout.ts    # Signs the user out when the API rate limit refuses a request
+|       └── resultMessages.ts     # Builds product/table result and text messages
 |
 ├── components/
 |   └── ui/                      # shadcn/ui component library (Radix UI based)
-|       ├── button.tsx, input.tsx, select.tsx, toast.tsx, toaster.tsx
+|       ├── button.tsx, select.tsx, toast.tsx, toaster.tsx
 |       ├── dialog.tsx, sidebar.tsx, sheet.tsx, separator.tsx, skeleton.tsx
-|       └── dropdown-menu.tsx, hover-card.tsx, tooltip.tsx
+|       └── dropdown-menu.tsx
 |
 ├── hooks/
 |   ├── useMobile.tsx            # Detects mobile viewport
@@ -169,9 +165,8 @@ The app uses a **custom client-side router** built on URL search params — NOT 
 ### `app/components/contexts/RouterContext.tsx`
 
 - `currentPage` — one of: `"chat"`, `"collection"`, `"settings"`, `"knowledge"`.
-- `changePage(page, params, replace, guarded)` — updates URL search params and `currentPage` state.
+- `changePage(page, params, replace)` — updates URL search params and `currentPage` state.
   - `replace=true` — replaces history entry instead of pushing.
-  - `guarded=true` — shows a confirm modal before navigating (uses `ToastContext.showConfirmModal`).
 
 ### URL Structure
 
@@ -196,7 +191,7 @@ if (page === "knowledge") --> KnowledgeBasePage
 
 **To add a new page:**
 1. Create `app/pages/NewPage.tsx`.
-2. Add `"newpage"` to `validPages` array in `RouterContext.tsx`.
+2. Add `"newpage"` to the `VALID_PAGES` array in `RouterContext.tsx`.
 3. Add `{currentPage === "newpage" && <NewPage />}` in `page.tsx`.
 4. Add a sidebar item in `SidebarComponent.tsx`.
 
@@ -210,7 +205,7 @@ Contexts are nested in `layout.tsx` in dependency order. Each is a React Context
 
 **State:**
 - `user: AuthUser | null` — `{ id, email, username, is_guest? }`
-- `isAuthenticated: boolean` — derived: `!!user && !!token` (the JWT is held internally, persisted in `localStorage.auth_token`, and read via `getToken()`)
+- `isAuthenticated: boolean` — derived: `!!user && !!token` (the JWT is held internally, persisted in `localStorage.auth_token`)
 - `isLoading: boolean` — true during initial token validation
 - `onboardingStatus: OnboardingStatus | null` — `{ has_connection, has_knowledge_base, onboarding_complete }`
 
@@ -218,8 +213,7 @@ Contexts are nested in `layout.tsx` in dependency order. Each is a React Context
 - `login(email, password)` — POST to `/api/auth/login`, saves token, fetches user + onboarding status.
 - `register(email, username, password)` — POST to `/api/auth/register`, then auto-login.
 - `guestLogin()` — POST to `/api/auth/guest-login`, resets stale connection/KB localStorage keys, saves token, fetches user info and preloaded onboarding status.
-- `logout()` — clears token + user from state and localStorage.
-- `getToken()` — returns current token (state or localStorage fallback).
+- `logout()` — clears token + user from state and localStorage, and the remembered connection/KB selection.
 - `refreshOnboardingStatus()` — re-fetches onboarding status from backend.
 
 **Persistence:** Token stored in `localStorage.auth_token`. On app load, stored token is validated via `GET /api/auth/me`.
@@ -230,13 +224,13 @@ Contexts are nested in `layout.tsx` in dependency order. Each is a React Context
 
 **State:** `currentPage: string`
 
-**Key function:** `changePage(page, params, replace, guarded)` — manages URL params + optional confirm modal for unsaved changes.
+**Key function:** `changePage(page, params, replace)` — manages URL params.
 
 Reads the `?page=` URL param via `useSearchParams()` on mount and whenever URL changes.
 
 ---
 
-### `QueryContext` — `app/components/contexts/SocketContext.tsx`
+### `QueryContext` — `app/components/contexts/QueryContext.tsx`
 
 **Exported as:** `QueryProvider` / `QueryContext`
 
@@ -244,35 +238,22 @@ Reads the `?page=` URL param via `useSearchParams()` on mount and whenever URL c
 
 **Key function:** `sendQuery(question, connection_id, knowledge_base_id, conversation_id, query_id)` — makes POST to `/api/query/chat`. Handles 401 (clears auth) and other error statuses.
 
-Health check polls `GET /health` every 120 seconds.
-
----
-
-### `SessionContext` — `app/components/contexts/SessionContext.tsx`
-
-**State:**
-- `id: string | null` — device fingerprint ID (FingerprintJS, cached in localStorage)
-- `fetchCollectionFlag: boolean` — toggled to trigger collection refetch
-- `unsavedChanges: boolean` — tracks if user has unsaved edits (used to guard navigation)
-
-**Key functions:**
-- `triggerFetchCollection()` — toggles `fetchCollectionFlag` to force CollectionContext to refetch.
-- `updateUnsavedChanges(bool)` — sets the unsaved changes guard flag.
+Health check polls `GET /health` every 120 seconds. Shows a "Connected to SQLNav" toast the first time the backend is reachable.
 
 ---
 
 ### `CollectionContext` — `app/components/contexts/CollectionContext.tsx`
 
 **State:**
-- `collections: Collection[]` — mapped from connections for compatibility.
 - `connections: Connection[]` — list of user's DB connections.
+- `connectionsLoaded: boolean` — true once the list has been fetched (it may be empty).
 
 **Key functions:**
-- `fetchCollections()` — GET `/api/connections`, maps to both `connections` and `collections`.
+- `fetchConnections()` — GET `/api/connections`.
 - `fetchSuggestions(connectionId, knowledgeBaseId, forceRefresh)` — POST `/api/suggestions/initial`. Results cached in `suggestionsCache` (a React `useRef` dictionary keyed by `connId_kbId`).
 - `clearSuggestionsCache()` — clears the in-memory suggestions cache.
 
-**Connection type:**
+**Connection type** (`app/types/objects.ts`):
 ```typescript
 type Connection = {
   id: number;
@@ -306,7 +287,7 @@ This is the **largest and most complex context**. It manages all chat state.
 | `setConversationTitle(title, id)` | PUT `/api/conversations/{id}` + updates state. |
 | `addQueryToConversation(convId, query, queryId)` | Lazily creates conversation on backend (first message trigger). Adds user message to state. |
 | `addMessageToConversation(messages, convId, queryId)` | Appends messages to a specific query within a conversation. |
-| `finishQuery(convId, queryId)` | Marks query as finished (sets `finished=true`, `query_end`). |
+| `finishQuery(convId, queryId)` | Marks query as finished (sets `finished=true`). |
 | `addSuggestionToConversation(convId, queryId, connId, kbId)` | POST `/api/suggestions/conversation`, appends suggestion message to conversation. |
 
 **Backend sync:** On mount, fetches all conversation list + full details for each. Calls `rebuildConversation()` to reconstruct frontend data structures from backend message format.
@@ -317,18 +298,11 @@ This is the **largest and most complex context**. It manages all chat state.
 
 ### `ToastContext` — `app/components/contexts/ToastContext.tsx`
 
-Provides toast notifications and modal dialogs.
+Provides toast notifications.
 
 **Key functions:**
 - `showSuccessToast(title, description?)` — green success notification.
-- `showErrorToast(title, description?)` — red error notification.
-- `showConfirmModal(title, description, onConfirm)` — confirmation dialog (used by guarded navigation).
-
----
-
-### `ChatContext` — `app/components/contexts/ChatContext.tsx`
-
-Minimal context scoped to the ChatPage for sharing local chat state between sub-components.
+- `showErrorToast(title, description?)` — red error notification, with a copy button.
 
 ---
 
@@ -473,7 +447,6 @@ interface QueryInputProps {
 - Textarea is **disabled** when no KB is selected.
 - Enter key submits (Shift+Enter for newline).
 - Shows selected KB name as a pill with close button.
-- Fetches KB group details to display name + table count.
 
 #### `app/components/chat/RenderChat.tsx`
 
@@ -481,13 +454,11 @@ Main message list renderer (~16KB). Iterates over all queries in the current con
 
 Routes messages by `message.type`:
 - `"User"` → `UserMessageDisplay`
-- `"error"` → `ErrorMessageDisplay`
-- `"rate_limit_error"` → `RateLimitMessageDisplay`
-- `"warning"` → `WarningDisplay`
-- `"suggestion"` → `SuggestionDisplay`
-- `"result"` → `RenderDisplay` (routes to specific result display)
-- `"text"` → `TextDisplay` (markdown)
-- `"status"` → status indicator
+- `"suggestion"` → `SuggestionDisplay` (last query only)
+- `"result"` → `CodeView` + `RenderDisplay` (product cards or table)
+- `"text"` → `TextDisplay` (markdown; consecutive text messages are merged)
+
+It also owns the product details dialog for its query.
 
 #### `app/components/chat/components/KnowledgeBaseSelection.tsx`
 
@@ -497,13 +468,9 @@ Dropdown to select a knowledge base group. Fetches from GET `/api/knowledge/user
 
 Dropdown to select a database connection. Reads from `CollectionContext.connections`.
 
-#### `app/components/chat/components/ViewCodeButton.tsx`
-
-Toggle button to show/hide the generated SQL. Renders `CodeView` component in a popover.
-
 #### `app/components/chat/components/MarkdownFormat.tsx`
 
-Renders markdown text with GitHub-flavored markdown and syntax highlighting (react-markdown + react-syntax-highlighter + remark-gfm).
+Renders markdown text with GitHub-flavored markdown (react-markdown + remark-gfm).
 
 #### `app/components/chat/components/DisplayPagination.tsx`
 
@@ -512,9 +479,8 @@ Handles pagination through a large result set split across multiple display page
 #### `app/components/chat/displays/QueryCode/CodeView.tsx`
 
 Shows the generated SQL with:
-- Syntax highlighting.
+- Syntax highlighting (react-syntax-highlighter's light Prism build with only SQL registered; register more languages there if needed).
 - Copy to clipboard button.
-- "Run" button to re-execute the SQL via POST `/api/query/{conn_id}/execute-sql`.
 
 #### `app/components/chat/displays/Product/ProductDisplay.tsx`
 
@@ -527,10 +493,6 @@ Renders the LLM's natural language response text using `MarkdownFormat`.
 #### `app/components/chat/displays/SystemMessages/SuggestionDisplay.tsx`
 
 Renders clickable suggestion chips. On click, calls `handleSendQuery` with the suggestion text.
-
-#### `app/components/chat/displays/SystemMessages/RateLimitMessageDisplay.tsx`
-
-Shows rate limit error with retry countdown timer and a "Rate Limit Info" button.
 
 ---
 
@@ -584,7 +546,7 @@ Rich data table for preview data.
 
 ## 7. Type System
 
-### `app/components/types.ts`
+### `app/types/chat.ts`
 
 ```typescript
 type Conversation = {
@@ -593,8 +555,7 @@ type Conversation = {
   queries: { [queryId: string]: Query };  // Map of query ID to Query
   current: string;       // Current status text (e.g., "Thinking...")
   timestamp: Date;
-  initialized: boolean;  // Has at least one query
-  error: boolean;
+  loaded: boolean;       // Messages fetched (false until a listed conversation is opened)
 };
 ```
 
@@ -642,20 +603,14 @@ Rich payload types for specialized display components:
 - `TicketPayload` — support ticket fields.
 - `ThreadPayload` / `SingleMessagePayload` — conversation message types.
 - `DocumentPayload` — document with title, author, content.
-- `BarPayload`, `HistogramPayload`, `ScatterOrLinePayload` — chart data.
 
 ---
 
 ## 8. Utilities
 
-### `app/getDeviceId.ts` — `useDeviceId()`
+### `app/utils/api.ts` — `apiFetch(path, { method, body, token })`
 
-React hook that:
-1. Checks `localStorage.device_id` first.
-2. Falls back to FingerprintJS to generate a stable visitor ID.
-3. Caches result in localStorage.
-
-Returns a stable string ID used as the session identifier.
+`fetch()` against `host + path`. Sends `Authorization: Bearer <token>` (the stored token unless `token` is given; `""` sends none) and JSON-encodes `body` with `Content-Type: application/json`.
 
 ### `app/utils/detectProductdata.ts`
 
@@ -694,7 +649,6 @@ Located in `components/ui/`. All are based on **Radix UI** primitives with Tailw
 | Component | File | Usage |
 |---|---|---|
 | Button | `button.tsx` | All clickable buttons |
-| Input | `input.tsx` | Text inputs in forms |
 | Dialog | `dialog.tsx` | Modal dialogs (product details popup) |
 | Select | `select.tsx` | Dropdown selects |
 | Toast / Toaster | `toast.tsx`, `toaster.tsx` | Notifications |
@@ -703,8 +657,6 @@ Located in `components/ui/`. All are based on **Radix UI** primitives with Tailw
 | Separator | `separator.tsx` | Visual dividers |
 | Skeleton | `skeleton.tsx` | Loading placeholders |
 | DropdownMenu | `dropdown-menu.tsx` | Dropdown menus |
-| HoverCard | `hover-card.tsx` | Hover preview cards |
-| Tooltip | `tooltip.tsx` | Tooltips |
 
 **To add a new shadcn component:** Run `npx shadcn-ui@latest add {component-name}` and it will be added to `components/ui/`.
 
@@ -847,18 +799,18 @@ export const host =
   (process.env.NEXT_PUBLIC_IS_STATIC !== "true" ? "http://localhost:8000" : "");
 ```
 
-All API calls use `fetch()` with:
+All API calls go through `apiFetch()` (`app/utils/api.ts`), which adds:
 ```
 Authorization: Bearer {token}
-Content-Type: application/json
+Content-Type: application/json   (when there is a body)
 ```
 
-Token is retrieved from `AuthContext.getToken()` which falls back to `localStorage.auth_token`.
+The token is read from `localStorage.auth_token`.
 
 ### Error Handling Patterns
 
-- **401** → `clearAuth()` (logs user out, redirects to login).
-- **429** → Rate limit — displayed as `RateLimitMessageDisplay` with retry timer.
+- **401** → `logout()` (redirects to login).
+- **429** from the API's own limiter → `rateLimitLogout.ts` signs the user out; the login page shows when to retry.
 - **Network errors** → Caught and converted to error message in conversation.
 
 ### API Endpoints Called by Frontend
@@ -913,7 +865,6 @@ Token is retrieved from `AuthContext.getToken()` which falls back to `localStora
 | `react-syntax-highlighter` | SQL / code syntax highlighting |
 | `remark-gfm` | GitHub-flavored markdown support |
 | `uuid` | UUID generation for conversation/query IDs |
-| `@fingerprintjs/fingerprintjs` | Device fingerprinting for session ID |
 | `lucide-react` | Additional icon set |
 | `class-variance-authority` | Component variant styling (shadcn) |
 | `tailwind-merge` | Safe Tailwind class merging |
@@ -939,12 +890,11 @@ Token is retrieved from `AuthContext.getToken()` which falls back to `localStora
 | Change how conversations are loaded from backend | `app/components/contexts/ConversationContext.tsx` - fetchConversationsFromBackend() and rebuildConversation() |
 | Add fields to ConnectionForm | `app/components/shared/ConnectionForm.tsx` - add form fields + update fetch body |
 | Add fields to KnowledgeBaseForm | `app/components/shared/KnowledgeBaseForm.tsx` - add form fields |
-| Change rate limit error display | `app/components/chat/displays/SystemMessages/RateLimitMessageDisplay.tsx` |
 | Change SQL code viewer | `app/components/chat/displays/QueryCode/CodeView.tsx` |
 | Change how markdown is rendered | `app/components/chat/components/MarkdownFormat.tsx` |
 | Change DataTable cell rendering | `app/components/explorer/DataTable.tsx` |
 | Add a new shadcn UI component | Run `npx shadcn-ui@latest add {name}`, it goes to `components/ui/` |
 | Change localStorage keys used | Search for `localStorage.getItem`/`localStorage.setItem` across context files |
-| Change backend health check interval | `app/components/contexts/SocketContext.tsx` - setInterval(checkHealth, 120000) |
+| Change backend health check interval | `app/components/contexts/QueryContext.tsx` - setInterval(checkHealth, 120000) |
 | Change auth token expiry handling | `app/components/contexts/AuthContext.tsx` - validateToken() |
 | Change the "Thinking..." status label | `app/pages/ChatPage.tsx` - setConversationStatus("Thinking...", ...) |

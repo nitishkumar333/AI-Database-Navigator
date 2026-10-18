@@ -1,36 +1,30 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Collection } from "@/app/types/objects";
-import { SessionContext } from "./SessionContext";
+import { Connection } from "@/app/types/objects";
+import { apiFetch } from "../../utils/api";
 import { ToastContext } from "./ToastContext";
 import { AuthContext } from "./AuthContext";
-import { QueryContext } from "./SocketContext";
-import { host } from "../host";
+import { QueryContext } from "./QueryContext";
 
-export type Connection = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  db_name: string;
-  username: string;
-  created_at?: string;
-};
+const FALLBACK_SUGGESTIONS = [
+  "Show all tables in the database",
+  "How many records are in each table?",
+  "Show me the first 10 rows",
+  "What columns are available?",
+];
 
 export const CollectionContext = createContext<{
-  collections: Collection[];
   connections: Connection[];
   /** True once the connection list has been fetched (connections may be empty). */
   connectionsLoaded: boolean;
-  fetchCollections: () => void;
+  fetchConnections: () => void;
   fetchSuggestions: (connectionId: number, knowledgeBaseId?: number | null, forceRefresh?: boolean) => Promise<string[]>;
   clearSuggestionsCache: () => void;
 }>({
-  collections: [],
   connections: [],
   connectionsLoaded: false,
-  fetchCollections: () => {},
+  fetchConnections: () => {},
   fetchSuggestions: async () => [],
   clearSuggestionsCache: () => {},
 });
@@ -40,11 +34,9 @@ export const CollectionProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { id, fetchCollectionFlag } = useContext(SessionContext);
   const { showSuccessToast } = useContext(ToastContext);
-  const { getToken, clearAuth, isAuthenticated, user } = useContext(AuthContext);
+  const { logout, isAuthenticated } = useContext(AuthContext);
   const { backendOnline } = useContext(QueryContext);
-  const [collections, setCollections] = useState<Collection[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
 
@@ -53,10 +45,9 @@ export const CollectionProvider = ({
 
   const initialFetch = useRef(false);
 
-  // Reset all collection state when user logs out
+  // Reset all connection state when user logs out
   useEffect(() => {
     if (!isAuthenticated) {
-      setCollections([]);
       setConnections([]);
       setConnectionsLoaded(false);
       suggestionsCache.current = {};
@@ -65,49 +56,27 @@ export const CollectionProvider = ({
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (initialFetch.current || !id || !backendOnline || !isAuthenticated) return;
+    if (initialFetch.current || !backendOnline || !isAuthenticated) return;
     initialFetch.current = true;
-    fetchCollections();
-  }, [id, backendOnline, isAuthenticated, user]);
+    fetchConnections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendOnline, isAuthenticated]);
 
-  useEffect(() => {
-    if (initialFetch.current) {
-      fetchCollections();
-    }
-  }, [fetchCollectionFlag]);
-
-  const fetchCollections = async () => {
-    const token = getToken();
-    if (!token) return;
+  const fetchConnections = async () => {
     try {
-      const response = await fetch(`${host}/api/connections`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await apiFetch("/api/connections");
       if (response.ok) {
-        const rawConnections: Connection[] = await response.json();
-        setConnections(rawConnections);
+        const data: Connection[] = await response.json();
+        setConnections(data);
         setConnectionsLoaded(true);
-        // Map connections to Collection type for compatibility
-        const mapped: Collection[] = rawConnections.map(
-          (conn) => ({
-            name: `${conn.name} (${conn.db_name}@${conn.host})`,
-            total: 0,
-            processed: true,
-            prompts: [],
-          })
-        );
-        setCollections(mapped);
-        if (mapped.length > 0) {
-          showSuccessToast(`${mapped.length} connections loaded`);
+        if (data.length > 0) {
+          showSuccessToast(`${data.length} connections loaded`);
         }
       } else if (response.status === 401) {
-        clearAuth();
+        logout();
       }
     } catch (e) {
-      console.error("Failed to fetch collections:", e);
+      console.error("Failed to fetch connections:", e);
     }
   };
 
@@ -122,20 +91,13 @@ export const CollectionProvider = ({
     }
 
     try {
-      const token = getToken();
-      if (!token) return [];
-
-      const response = await fetch(`${host}/api/suggestions/initial`, {
+      const response = await apiFetch("/api/suggestions/initial", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        body: {
           connection_id: connectionId,
           knowledge_base_id: knowledgeBaseId || null,
           force_refresh: forceRefresh || false,
-        }),
+        },
       });
 
       if (response.ok) {
@@ -148,13 +110,7 @@ export const CollectionProvider = ({
       console.error("Failed to fetch suggestions:", e);
     }
 
-    // Fallback
-    return [
-      "Show all tables in the database",
-      "How many records are in each table?",
-      "Show me the first 10 rows",
-      "What columns are available?",
-    ];
+    return FALLBACK_SUGGESTIONS;
   };
 
   const clearSuggestionsCache = () => {
@@ -164,10 +120,9 @@ export const CollectionProvider = ({
   return (
     <CollectionContext.Provider
       value={{
-        collections,
         connections,
         connectionsLoaded,
-        fetchCollections,
+        fetchConnections,
         fetchSuggestions,
         clearSuggestionsCache,
       }}

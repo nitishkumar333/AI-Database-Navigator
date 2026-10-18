@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IoCheckmarkOutline } from "react-icons/io5";
 import { MdContentCopy } from "react-icons/md";
@@ -10,19 +10,14 @@ interface CopyToClipboardProps {
 const CopyToClipboardButton: React.FC<CopyToClipboardProps> = ({
   copyText,
 }) => {
+  const [copied, setCopied] = useState(false);
+
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(copyText);
     setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (copied) {
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [copied]);
 
   return (
     <Button

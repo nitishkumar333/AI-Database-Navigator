@@ -8,15 +8,12 @@ import DisplayPagination from "../../components/DisplayPagination";
 
 interface ProductDisplayProps {
   products: ProductPayload[];
-  handleResultPayloadChange: (
-    type: string,
-    payload: /* eslint-disable @typescript-eslint/no-explicit-any */ any
-  ) => void;
+  onOpenProduct: (product: ProductPayload) => void;
 }
 
 const ProductDisplay: React.FC<ProductDisplayProps> = ({
   products,
-  handleResultPayloadChange,
+  onOpenProduct,
 }) => {
   if (products.length === 0) return null;
 
@@ -38,12 +35,12 @@ const ProductDisplay: React.FC<ProductDisplayProps> = ({
       animate="visible"
       className="w-full"
     >
-      <DisplayPagination layout="horizontal" itemsPerPage={3}>
+      <DisplayPagination itemsPerPage={3}>
         {products.map((product, idx) => (
           <ProductCard
             key={`${product.id}-${product.name}-${idx}`}
             product={product}
-            handleOpen={() => handleResultPayloadChange("product", product)}
+            handleOpen={onOpenProduct}
             index={idx}
           />
         ))}
