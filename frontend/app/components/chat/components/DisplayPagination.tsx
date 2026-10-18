@@ -73,11 +73,17 @@ const DisplayPagination: React.FC<DisplayPaginationProps> = ({
       const container = bubbleContainerRef.current;
       const activeBubble = container.children[currentPage] as HTMLElement;
 
+      // Scroll only the bubble strip: scrollIntoView would also scroll every
+      // ancestor (even overflow-hidden ones), shifting the whole page sideways.
       if (activeBubble) {
-        activeBubble.scrollIntoView({
+        const bubbleRect = activeBubble.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        container.scrollBy({
+          left:
+            bubbleRect.left +
+            bubbleRect.width / 2 -
+            (containerRect.left + containerRect.width / 2),
           behavior: "smooth",
-          block: "nearest",
-          inline: "center",
         });
       }
     }
