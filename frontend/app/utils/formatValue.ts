@@ -68,11 +68,9 @@ export function columnMap(columns: ColumnMeta[]): Record<string, ColumnMeta> {
   return Object.fromEntries(columns.map((c) => [c.name, c]));
 }
 
-/** Only http(s) and inline image URLs are ever put in src/href. */
+/** Only http(s) URLs are ever put in src/href. */
 export function safeUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const url = value.trim();
-  if (/^https?:\/\//i.test(url) || /^data:image\/[a-z0-9.+-]+;base64,/i.test(url))
-    return url;
-  return null;
+  return /^https?:\/\//i.test(url) ? url : null;
 }

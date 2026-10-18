@@ -409,7 +409,7 @@ agent (LLM with schema in system prompt + 5 tools) <--------------------+
      |                    describe_tables  full detail + FK join paths
      |                    find_values      how a mentioned value is stored
      |                    run_sql          exploratory, <=20 rows + row count
-     |                    submit_answer    final query, up to 200 rows -> ends the search
+     |                    submit_answer    final query, up to 200 rows (model sees 50) -> ends the search
      |
      +-- answer submitted --> production: agent writes the reply --> END
      |                        evaluation: END (the SQL is what gets scored)
@@ -840,5 +840,6 @@ main.py
 | Change schema display format for LLM | `utils/db_manager.py` - get_schema_context() function |
 | Modify markdown SQL cleanup logic | `utils/db_manager.py` - refine_sql_from_markdown() function |
 | Change number of preview rows | `routers/schema.py` - LIMIT clause in preview_table() |
-| Change max rows returned/stored per answer | `routers/query.py` - `_STORED_ROWS` (keep it >= `AgentContext.answer_rows`: views are checked against those rows) |
+| Change max rows per answer | `services/agent/state.py` - `AgentContext.answer_rows` (rows returned, stored and displayed) and `answer_rows_shown` (the first rows the agent sees) |
+| Change how long cell values are cut | `services/display.py` - `TEXT_LIMIT`, `LINK_LIMIT`, `TOKEN_LIMIT`, `PASSWORD_LIMIT` (applied by `trim_rows` to every SQL tool result, before the agent, the API response and the stored conversation see it) |
 | Change how results are displayed | `services/display.py` - view rules and limits; the agent's guidance is the DISPLAY section of `agent/prompts.py` |

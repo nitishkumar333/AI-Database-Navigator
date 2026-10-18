@@ -25,7 +25,10 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.agent.state import AgentContext
-from app.services.display import DisplayHint, describe_result
+from app.services.display import (
+    LINK_LIMIT, PASSWORD_LIMIT, TEXT_LIMIT, TOKEN_LIMIT, TRIM_MARK, DisplayHint, describe_result,
+    trim_rows,
+)
 from app.services.schema_index.join_graph import JoinGraph
 from app.services.schema_index.profiler import quote_ident, type_family
 from app.services.schema_index.render import render_table, sql_ident
@@ -114,11 +117,16 @@ TOOL_SCHEMAS = [
             "that isn't listed in the schema.", FindValuesArgs),
     _schema(RUN_SQL,
             "Run an exploratory read-only SELECT (distinct values, counts, checking a join or "
-            "a filter) and see up to 20 rows plus the total row count. Not the final answer. "
-            "Independent checks can be requested together in one turn.", RunSqlArgs),
+            f"a filter) and see at most {AgentContext.explore_rows} rows plus the total row "
+            "count. To read more rows, page with ORDER BY ... LIMIT/OFFSET in further calls. "
+            "Not the final answer. Independent checks can be requested together in one turn.",
+            RunSqlArgs),
     _schema(SUBMIT_ANSWER,
             "Submit the final SELECT that answers the question. It is executed and its result "
-            "is the answer. Call it exactly once, when you are confident; this ends the search.",
+            f"is the answer: at most {AgentContext.answer_rows} rows are shown to the user, of "
+            f"which you see the first {AgentContext.answer_rows_shown}, with the total row "
+            "count. Call it exactly once, when you are "
+            "confident; this ends the search.",
             SubmitAnswerArgs),
 ]
 SUBMIT_SCHEMA = TOOL_SCHEMAS[-1]
@@ -378,6 +386,24 @@ def _ilike(engine: Engine, table: str, column: str, needle: str) -> list[str]:
 # run_sql / submit_answer
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _llm_content(result, max_rows: int | None = None) -> str:
+    """The result for the model (its first `max_rows` rows), after cutting
+    long values in place: the artifact's rows, stored and sent to the client,
+    are the same cut rows."""
+    result.rows, trimmed = trim_rows(result.rows)
+    content = result.to_llm_string(max_rows=max_rows)
+    if trimmed:
+        cols = ", ".join(sql_ident(c) for c in trimmed)
+        content += (
+            f"\nValues ending in '{TRIM_MARK}' in {cols} were cut (text after {TEXT_LIMIT} "
+            f"characters, links after {LINK_LIMIT}, other values without spaces after "
+            f"{TOKEN_LIMIT}, password hashes after {PASSWORD_LIMIT}). If you need a full "
+            "value, read it in pieces with run_sql, "
+            f"e.g. SELECT SUBSTRING(col FROM 1 FOR {TOKEN_LIMIT}), "
+            f"SUBSTRING(col FROM {TOKEN_LIMIT + 1} FOR {TOKEN_LIMIT}) ... for one row.")
+    return content
+
+
 def run_sql(ctx: AgentContext, sql: str, purpose: str = "") -> tuple[str, dict]:
     executor = SafeSqlExecutor(ctx.engine, max_rows=ctx.explore_rows,
                                count_limit=_EXPLORE_COUNT_LIMIT, timeout_ms=ctx.sql_timeout_ms)
@@ -385,7 +411,7 @@ def run_sql(ctx: AgentContext, sql: str, purpose: str = "") -> tuple[str, dict]:
         result = executor.run(sql)
     if not result.success:
         return f"Error: {result.error}", {"kind": RUN_SQL, "success": False, "sql": result.sql}
-    return result.to_llm_string(), {
+    return _llm_content(result), {
         "kind": RUN_SQL, "success": True, "sql": result.sql, "purpose": purpose,
         "columns": result.columns, "rows": result.rows, "row_count": result.total_rows,
     }
@@ -401,7 +427,7 @@ def submit_answer(ctx: AgentContext, sql: str, assumptions: str = "", display: s
     if not result.success:
         return (f"Error: {result.error}\nFix the query and call submit_answer again.",
                 {"kind": SUBMIT_ANSWER, "success": False, "sql": result.sql})
-    content = result.to_llm_string(max_rows=ctx.answer_rows_shown)
+    content = _llm_content(result, max_rows=ctx.answer_rows_shown)
     shown = describe_result(result.columns, result.rows, truncated=result.truncated,
                             hint=DisplayHint.parse(display, x, y, series))
     if shown["display_note"]:

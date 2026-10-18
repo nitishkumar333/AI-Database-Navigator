@@ -56,7 +56,7 @@ class AgentContext:
     budget: Budget = field(default_factory=Budget)
     history: HistoryLimits = field(default_factory=HistoryLimits)
     explore_rows: int = 20     # rows run_sql shows the model
-    answer_rows: int = 200     # rows submit_answer returns to the caller
+    answer_rows: int = 200     # rows submit_answer returns to the caller (stored and shown)
     answer_rows_shown: int = 50  # ... of which the model sees this many
     sql_timeout_ms: int = 10_000
     catalog_prompt: bool = False  # schema_context is the table catalog; columns via describe_tables

@@ -19,10 +19,6 @@ from app.services.schema_index.service import build_schema_context, build_schema
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
-# Rows returned and stored per answer: the views (charts especially) were
-# checked against these rows, so the client gets all of them.
-_STORED_ROWS = 200
-
 
 class NLQueryRequest(BaseModel):
     question: str
@@ -133,8 +129,10 @@ def chat_query(
         raise
 
     # One JSON form for the response and the stored turn, so a reloaded answer
-    # renders exactly like the live one (numbers stay numbers).
-    result = {**result, "rows": json_rows(result.get("rows") or [])[:_STORED_ROWS]}
+    # renders exactly like the live one (numbers stay numbers). The rows are
+    # already trimmed by the SQL tools: AgentContext.answer_rows of them, the
+    # agent having seen the first answer_rows_shown.
+    result = {**result, "rows": json_rows(result.get("rows") or [])}
     _save_turn(db, current_user, conn, req, result)
     return {
         **result,
@@ -194,7 +192,7 @@ def _save_turn(db: Session, user: User, conn: DBConnection, req: ChatRequest, re
             assistant_metadata = {
                 "generated_sql": result.get("generated_sql", ""),
                 "columns": result.get("columns", []),
-                "rows": result.get("rows", [])[:_STORED_ROWS],
+                "rows": result.get("rows", []),
                 "row_count": result.get("row_count"),
                 "truncated": result.get("truncated", False),
                 "column_meta": result.get("column_meta", []),

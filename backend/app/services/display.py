@@ -28,6 +28,7 @@ for the stored conversation, so a reloaded answer renders like the live one.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import re
 import uuid
@@ -63,7 +64,6 @@ _LABELS = {TABLE: "table", STAT: "summary", CARDS: "cards", BAR: "bar chart",
            LINE: "line chart", PIE: "pie chart", SCATTER: "scatter plot"}
 
 _URL = re.compile(r"^https?://[^\s]+$", re.IGNORECASE)
-_DATA_IMAGE = re.compile(r"^data:image/[a-z0-9.+-]+;base64,", re.IGNORECASE)
 _IMAGE_EXTENSION = re.compile(r"\.(jpe?g|png|gif|webp|avif|svg|bmp|ico)([?#]|$)", re.IGNORECASE)
 _IMAGE_NAME = re.compile(
     r"image|img|photo|picture|thumb|avatar|logo|icon|poster|banner|cover", re.IGNORECASE)
@@ -108,6 +108,61 @@ def json_rows(rows: Iterable[dict]) -> list[dict]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Trimmed cells (what the agent sees and what the client gets)
+# ──────────────────────────────────────────────────────────────────────────────
+
+TRIM_MARK = "..."
+TEXT_LIMIT = 300        # any other value
+LINK_LIMIT = 1000       # a link without whitespace (signed URLs run long)
+TOKEN_LIMIT = 100       # a value without whitespace that isn't a link (hashes, base64, keys)
+PASSWORD_LIMIT = 20     # password hashes
+
+_PASSWORD_NAME = re.compile(r"pass(word|wd)?|pwd", re.IGNORECASE)
+_PASSWORD_VALUE = re.compile(r"^\$(2[abxy]?|argon2(id|i|d)?|pbkdf2[\w-]*|scrypt|[156])\$")
+_LINK = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def _trim_value(column: str, value: Any) -> tuple[Any, bool]:
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        value = "\\x" + bytes(value).hex()
+    elif isinstance(value, (dict, list, tuple)):
+        text = json.dumps(value, default=str, ensure_ascii=False)
+        if len(text) <= TEXT_LIMIT:
+            return value, False
+        value = text
+    if not isinstance(value, str):
+        return value, False
+    unbroken = not any(ch.isspace() for ch in value)
+    if _PASSWORD_NAME.search(column) or _PASSWORD_VALUE.match(value):
+        limit = PASSWORD_LIMIT
+    elif unbroken and _LINK.match(value):
+        limit = LINK_LIMIT
+    elif unbroken:
+        limit = TOKEN_LIMIT
+    else:
+        limit = TEXT_LIMIT
+    if len(value) <= limit:
+        return value, False
+    return value[:limit] + TRIM_MARK, True
+
+
+def trim_rows(rows: list[dict]) -> tuple[list[dict], list[str]]:
+    """(rows with long values cut, the columns where something was cut).
+    Applied once to every SQL tool result, so the agent and the client see
+    the same values."""
+    trimmed: list[str] = []
+    out = []
+    for row in rows:
+        new = {}
+        for column, value in row.items():
+            new[column], cut = _trim_value(column, value)
+            if cut and column not in trimmed:
+                trimmed.append(column)
+        out.append(new)
+    return out, trimmed
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Column types
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -144,9 +199,9 @@ def _column_type(values: list) -> str:
 
 def _column_role(name: str, kind: str, values: list) -> str | None:
     if kind == TEXT and values:
-        urls = [v for v in values if _URL.match(v.strip()) or _DATA_IMAGE.match(v)]
+        urls = [v for v in values if _URL.match(v.strip())]
         if len(urls) >= URL_SHARE * len(values):
-            pictures = [v for v in urls if _DATA_IMAGE.match(v) or _IMAGE_EXTENSION.search(v)]
+            pictures = [v for v in urls if _IMAGE_EXTENSION.search(v)]
             if _IMAGE_NAME.search(name) or len(pictures) >= URL_SHARE * len(urls):
                 return IMAGE
             return URL

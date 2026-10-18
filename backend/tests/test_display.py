@@ -5,7 +5,8 @@ from decimal import Decimal
 import pytest
 
 from app.services.display import (
-    DisplayHint, build_views, describe_columns, describe_result, json_rows, upgrade_stored,
+    DisplayHint, build_views, describe_columns, describe_result, json_rows, trim_rows,
+    upgrade_stored,
 )
 
 PRODUCTS = [
@@ -182,3 +183,35 @@ def test_full_legacy_answer_offers_no_chart():
     rows = rows[:10]
     upgraded = upgrade_stored({"columns": ["name", "v"], "rows": rows})
     assert [v["type"] for v in upgraded["views"]] == ["table", "bar"]
+
+
+# ── Trimmed cells ────────────────────────────────────────────────────────────
+
+def test_trim_rules():
+    words = "word " * 100                        # 500 chars with spaces
+    token = "a" * 150                            # no whitespace, not a link
+    link = "https://cdn.example.com/" + "p" * 900                # 924 chars: kept
+    long_link = "https://cdn.example.com/" + "q" * 1200
+    bcrypt = "$2b$12$" + "x" * 53
+    rows, cut = trim_rows([{
+        "notes": words, "sha": token, "image_url": link, "signed": long_link,
+        "password_hash": "y" * 60, "secret_col": bcrypt, "short": "ok", "n": 5,
+        "blob": b"\x00" * 80, "doc": {"k": "v" * 400},
+    }])
+    row = rows[0]
+    assert row["notes"] == words[:300] + "..."
+    assert row["sha"] == "a" * 100 + "..."
+    assert row["image_url"] == link
+    assert row["signed"] == long_link[:1000] + "..."
+    assert row["password_hash"] == "y" * 20 + "..."
+    assert row["secret_col"] == bcrypt[:20] + "..."        # hash format, any column name
+    assert row["short"] == "ok" and row["n"] == 5
+    assert row["blob"].endswith("...") and len(row["blob"]) == 103
+    assert row["doc"].endswith("...") and len(row["doc"]) == 303
+    assert cut == ["notes", "sha", "signed", "password_hash", "secret_col", "blob", "doc"]
+
+
+def test_trim_keeps_values_at_the_limit():
+    rows, cut = trim_rows([{"t": "a b" * 100, "h": "a" * 100, "j": {"k": 1}}])
+    assert rows[0] == {"t": "a b" * 100, "h": "a" * 100, "j": {"k": 1}}
+    assert cut == []

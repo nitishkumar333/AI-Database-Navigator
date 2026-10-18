@@ -615,7 +615,7 @@ The backend's description of a result (`backend/app/services/display.py`):
 
 ### `app/utils/formatValue.ts`
 
-`formatValue(value, type)` formats by column type (locale numbers and dates; "—" for null). `safeUrl()` lets only http(s) and inline image URLs into `src`/`href`. `toNumber`/`toTime` coerce values for charts.
+`formatValue(value, type)` formats by column type (locale numbers and dates; "—" for null). `safeUrl()` lets only http(s) URLs into `src`/`href`. `toNumber`/`toTime` coerce values for charts.
 
 ### `lib/utils.ts`
 

@@ -94,7 +94,14 @@ class QueryResult:
         payload: Dict[str, Any] = {"columns": self.columns, "row_count": row_count, "rows": rows}
         if hidden:
             total = row_count if isinstance(row_count, int) else "more than " + row_count[1:]
-            payload["note"] = f"Only the first {len(rows)} of {total} rows are shown."
+            if len(rows) < len(self.rows):
+                shown = (f"You see only the first {len(rows)} of {total} rows; the result "
+                         f"returned to the user holds the first {len(self.rows)}.")
+            else:
+                shown = f"Only the first {len(rows)} of {total} rows are returned (the tool's limit)."
+            payload["note"] = (shown + " To read more, page with ORDER BY and LIMIT/OFFSET "
+                               "in further run_sql calls; do counts and totals in SQL "
+                               "instead of reading rows.")
         return json.dumps(payload, default=str, ensure_ascii=False)
  
  
