@@ -61,6 +61,7 @@ export type ResultSource = {
   row_count?: number | null;
   truncated?: boolean;
   generated_sql?: string;
+  assumptions?: string;
 };
 
 export const isChartView = (view: View): view is ChartView =>

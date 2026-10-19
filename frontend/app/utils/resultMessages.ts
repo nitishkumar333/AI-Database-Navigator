@@ -24,6 +24,7 @@ export function buildResultPayload(source: ResultSource): ResultPayload {
       rowCount: source.row_count ?? null,
       truncated: !!source.truncated,
     },
+    assumptions: source.assumptions?.trim() || "",
   };
 }
 

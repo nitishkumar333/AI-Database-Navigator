@@ -54,6 +54,22 @@ def _get_default_llm() -> BaseChatModel:
         return _default_llm
 
 
+_reply_llm: BaseChatModel | None = None
+
+
+def _get_reply_llm() -> BaseChatModel | None:
+    """The model that writes the reply when settings name one (REPLY_LLM_*),
+    created once per process; None = the agent's own model."""
+    global _reply_llm
+    if not (settings.REPLY_LLM_PROVIDER or settings.REPLY_LLM_MODEL):
+        return None
+    with _default_llm_lock:
+        if _reply_llm is None:
+            _reply_llm = create_chat_model(settings.REPLY_LLM_PROVIDER or None,
+                                           settings.REPLY_LLM_MODEL or None)
+        return _reply_llm
+
+
 def _normalize_content(content) -> str:
     """Normalize LLM response content to a plain string.
 
@@ -161,6 +177,7 @@ class SQLAgent:
             link_max_chars=settings.SCHEMA_LINK_MAX_CHARS,
             schema=schema_view,
             llm=llm or _get_default_llm(),
+            reply_llm=None if self.is_evaluation else _get_reply_llm(),  # evaluation writes no reply
             budget=budget or Budget(),
             history=HistoryLimits(full_turns=settings.AGENT_HISTORY_FULL_TURNS,
                                   max_chars=settings.AGENT_HISTORY_MAX_CHARS),

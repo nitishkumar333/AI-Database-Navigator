@@ -53,6 +53,7 @@ class AgentContext:
     schema_context: str        # schema text in the system prompt (full schema or table catalog)
     schema: SchemaView         # what the schema tools look at
     llm: BaseChatModel
+    reply_llm: BaseChatModel | None = None  # writes the reply after submit_answer; None = llm
     budget: Budget = field(default_factory=Budget)
     history: HistoryLimits = field(default_factory=HistoryLimits)
     explore_rows: int = 20     # rows run_sql shows the model

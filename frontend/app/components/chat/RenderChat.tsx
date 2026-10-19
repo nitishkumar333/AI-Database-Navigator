@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useContext, useEffect, useMemo, useState } from "react";
+import { Info } from "lucide-react";
 
 import {
   Message,
@@ -32,6 +33,15 @@ const ResultItemDisplay: React.FC<{ payload: ResultPayload }> = ({ payload }) =>
     <div className="w-full mt-2">
       <CodeView code={payload.code} />
     </div>
+    {payload.assumptions && (
+      <div className="w-full flex items-start gap-2 rounded-lg border border-foreground_alt px-3 py-2 text-sm text-secondary chat-animation">
+        <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+        <p>
+          <span className="font-medium text-primary">Assumption: </span>
+          {payload.assumptions}
+        </p>
+      </div>
+    )}
     <ResultView result={payload.result} />
   </div>
 );

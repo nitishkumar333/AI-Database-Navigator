@@ -28,6 +28,8 @@ export type ResultPayload = {
   type: "result";
   code: CodePayload;
   result: ResultData;
+  // How the agent interpreted the question; empty if it made no assumption.
+  assumptions: string;
 };
 
 export type CodePayload = {

@@ -4,7 +4,8 @@ The SQL agent graph, compiled once per process and mode.
     link ──► agent ──tool calls──► tools ──► agent ... ──► END
                │                     │
                └─ no tool calls ─► END   └─ answer submitted ─► END (evaluation)
-                                                             └─► agent writes the reply (production)
+                                                             └─► agent writes the reply (production:
+                                                                 short prompt, no tools, reply_llm)
 
 `link` (schema linking) only does work when the prompt holds the table list
 instead of the full schema: it retrieves the tables the question most likely
@@ -150,9 +151,11 @@ def _budget_used_up(state: AgentState, budget: Budget) -> bool:
 
 
 def _invoke(ctx: AgentContext, number: int, purpose: str, bound, tools: list[str],
-            tool_choice: str | None, messages: list) -> AIMessage:
+            tool_choice: str | None, messages: list,
+            llm: BaseChatModel | None = None) -> AIMessage:
     """One LLM call, logged with its parameters, timing and result."""
-    trace_log.llm_request(ctx.turn_id, number, purpose, ctx.llm, tools, tool_choice, messages)
+    trace_log.llm_request(ctx.turn_id, number, purpose, llm or ctx.llm, tools, tool_choice,
+                          messages)
     start = time.perf_counter()
     try:
         response = bound.invoke(messages)
@@ -216,6 +219,8 @@ def _link(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
 
 def _agent(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     ctx = runtime.context
+    if state.get("answer") is not None:
+        return _write_reply(ctx, state)
     models = _models(ctx.llm)
     shaped = build_history(state["messages"], ctx.history)
     history = shaped.messages
@@ -223,26 +228,49 @@ def _agent(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
                                    linked=state.get("linked_schema"),
                                    history_shortened=shaped.shortened,
                                    previous_sql=_previous_sql(state, shaped))
-    answered = state.get("answer") is not None
     number = _llm_calls_so_far(history) + 1
     if number == 1 and (shaped.forms or shaped.dropped):
         trace_log.history_shaped(ctx.turn_id, shaped.forms, shaped.dropped, shaped.chars,
                                  ctx.history.max_chars)
 
-    if not answered and _budget_used_up(state, ctx.budget):
+    if _budget_used_up(state, ctx.budget):
         trace_log.llm_note(ctx.turn_id, "budget used up: only submit_answer is allowed now")
         return _force_submit(ctx, state, models, system, history, prompts.BUDGET_REASON, number)
 
-    purpose = "write reply" if answered else "agent step"
-    response = _invoke(ctx, number, purpose, models.tools, models.tool_names, None,
+    response = _invoke(ctx, number, "agent step", models.tools, models.tool_names, None,
                        [SystemMessage(content=system)] + history)
-    if (not answered and not response.tool_calls and state.get("sql_runs_used", 0)
+    if (not response.tool_calls and state.get("sql_runs_used", 0)
             and not state.get("forced_submits", 0)):
         # Explored, then replied without submitting: ask for the final query.
         trace_log.llm_note(ctx.turn_id, "replied without submitting after exploring: "
                                         "discarding the reply and asking for submit_answer")
         return _force_submit(ctx, state, models, system, history, prompts.UNSUBMITTED_REASON,
                              number + 1, discarded=response)
+    return {"messages": [response]}
+
+
+def _write_reply(ctx: AgentContext, state: AgentState) -> dict:
+    """The reply to the user (response_text), written from the question and the
+    submitted result only: no schema, no tools, no history, by ctx.reply_llm."""
+    turn = state["messages"][turn_start(state["messages"]):]
+    result = next((m for m in reversed(turn) if isinstance(m, ToolMessage)
+                   and (m.artifact or {}).get("kind") == SUBMIT_ANSWER
+                   and (m.artifact or {}).get("success")), None)
+    answer = state["answer"]
+    llm = ctx.reply_llm or ctx.llm
+    # The UI shows assumptions in their own block next to the rows; with no rows
+    # there is no such block, so the reply mentions them instead.
+    assumptions = "" if answer.get("rows") else answer.get("assumptions") or ""
+    messages = [SystemMessage(content=prompts.REPLY_PROMPT),
+                HumanMessage(content=prompts.reply_input(
+                    state.get("last_user_input") or "", answer.get("sql") or "",
+                    assumptions, result.content if result else ""))]
+    try:
+        response = _invoke(ctx, _llm_calls_so_far(turn) + 1, "write reply", llm, [], None,
+                           messages, llm=llm)
+    except Exception:
+        # The answer is already computed; a failed reply must not fail the turn.
+        response = AIMessage(content=prompts.REPLY_FALLBACK)
     return {"messages": [response]}
 
 

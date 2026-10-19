@@ -83,6 +83,8 @@ services:
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
       DEEPSEEK_THINKING: ${DEEPSEEK_THINKING:-false}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      REPLY_LLM_PROVIDER: ${REPLY_LLM_PROVIDER:-}
+      REPLY_LLM_MODEL: ${REPLY_LLM_MODEL:-}
       AGENT_MODE: production
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REDIS_HOST: redis

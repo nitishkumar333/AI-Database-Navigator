@@ -209,7 +209,7 @@ export default function ChatPage() {
   }, [connections, connectionsLoaded]);
 
   return (
-    <div className="flex flex-col w-full h-full items-center justify-start gap-3">
+    <div className="flex flex-col w-full h-full items-center justify-start gap-2">
       <div className="flex w-full justify-between items-center lg:sticky z-20 p-4 gap-3 md:gap-5 bg-background border-b border-foreground">
         <div className="flex gap-2 items-center justify-start fade-in min-w-0">
           <SidebarTrigger className="lg:hidden flex text-secondary hover:text-primary hover:bg-foreground_alt shrink-0 -ml-1" />

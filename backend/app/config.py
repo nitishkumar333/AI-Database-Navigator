@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = "deepseek-flash"  # or "deepseek-v4-pro"
     DEEPSEEK_THINKING: bool = False  # thinking mode: slower, ignores temperature
     LLM_PROVIDER: str = "gemini"  # "gemini" | "groq" | "deepseek"
+    # Model that writes the short reply after the agent's answer (response_text).
+    # Empty = the agent's own provider / model; set either to use a cheaper one.
+    REPLY_LLM_PROVIDER: str = ""
+    REPLY_LLM_MODEL: str = ""
     # "production": full agent loop (SQL tool -> natural-language answer).
     # "evaluation": stop as soon as an answer is submitted (submit_answer),
     #               skipping the final answer-writing LLM call (saves tokens in evals).
