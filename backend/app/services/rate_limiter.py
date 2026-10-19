@@ -28,7 +28,8 @@ a reverse proxy, run uvicorn with --proxy-headers and --forwarded-allow-ips
 set to the proxy, or every user shares its IP.
 
 If Redis can't be reached, requests are let through (and an error is logged):
-an outage of the limiter must not take the API down.
+an outage of the limiter must not take the API down. Redis is then left alone
+for _REDIS_RETRY_AFTER_S, so requests don't each wait for its timeout.
 """
 from __future__ import annotations
 
@@ -41,6 +42,8 @@ from dataclasses import dataclass
 
 import anyio
 import redis
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 from jose import JWTError, jwt
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -52,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 _IP, _USER = "ip", "user"
 _REDIS_ERROR_LOG_INTERVAL_S = 60
+_REDIS_RETRY_AFTER_S = 30
 
 # Checks every key's window, then records the request in all of them only if
 # all have room. KEYS: one per window. ARGV: member, then limit and window
@@ -156,6 +160,7 @@ class RateLimitMiddleware:
         self._redis = None
         self._script = None
         self._last_redis_error = 0.0
+        self._redis_down_until = 0.0
 
     def _get_script(self):
         # The sync client is thread-safe and not tied to an event loop (an
@@ -164,7 +169,8 @@ class RateLimitMiddleware:
         if self._script is None:
             self._redis = redis.Redis(host=os.getenv("REDIS_HOST", "localhost"),
                                       port=int(os.getenv("REDIS_PORT", "6379")), db=0,
-                                      socket_timeout=1, socket_connect_timeout=1)
+                                      socket_timeout=1, socket_connect_timeout=1,
+                                      retry=Retry(NoBackoff(), 0))
             self._script = self._redis.register_script(_SLIDING_WINDOWS)
         return self._script
 
@@ -200,11 +206,14 @@ class RateLimitMiddleware:
             for w in rule.windows:
                 keys.append(f"rl:{rule.name}:{w.limit}/{w.seconds}:{who}")
                 args += [w.limit, w.seconds * 1000]
+        if time.monotonic() < self._redis_down_until:
+            return 0
         try:
             script = self._get_script()
             return int(await anyio.to_thread.run_sync(lambda: script(keys=keys, args=args)))
         except Exception as exc:
             now = time.monotonic()
+            self._redis_down_until = now + _REDIS_RETRY_AFTER_S
             if now - self._last_redis_error > _REDIS_ERROR_LOG_INTERVAL_S:
                 self._last_redis_error = now
                 logger.error("Rate limiting skipped, Redis unavailable: %s", exc)

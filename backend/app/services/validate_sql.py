@@ -116,9 +116,10 @@ class SafeSqlExecutor:
     Layers of defence:
       1. AST check (sqlglot): exactly one statement, SELECT-like root, no
          forbidden nodes, no forbidden functions.
-      2. EXPLAIN against the real database to catch bad tables/columns.
-      3. Every database call runs in a READ ONLY transaction with a statement
+      2. Every database call runs in a READ ONLY transaction with a statement
          timeout, so a parser mistake in (1) still can't write anything.
+      (`validate` also runs EXPLAIN to check tables/columns without executing;
+      `run` skips it, as the execution itself reports those errors.)
  
     For production, also connect with a database role that only has SELECT.
     """
@@ -147,11 +148,14 @@ class SafeSqlExecutor:
         return ValidationResult(sql, True, "Query is safe to execute", validation_query)
 
     def run(self, sql_query: str) -> QueryResult:
-        """Validate, then execute. Never raises for bad SQL; check `.success`."""
-        validation = self.validate(sql_query)
-        if not validation.is_valid:
-            return QueryResult(sql=validation.sql, success=False, error=validation.reason)
-        return self._execute(validation.sql)
+        """Check the structure, then execute. Never raises for bad SQL; check
+        `.success`. No EXPLAIN first: executing reports a bad table or column
+        just the same, without a second transaction."""
+        sql = refine_sql_from_markdown(sql_query).strip().rstrip(";").strip()
+        error = self._check_structure(sql)
+        if error:
+            return QueryResult(sql=sql, success=False, error=error)
+        return self._execute(sql)
 
     @staticmethod
     def _check_structure(sql: str) -> Optional[str]:
@@ -218,8 +222,9 @@ class SafeSqlExecutor:
     def _read_only_connection(self) -> Iterator[Connection]:
         """One transaction, read-only, with a statement timeout."""
         with self.engine.begin() as conn:
-            conn.execute(text("SET TRANSACTION READ ONLY"))
-            conn.execute(text(f"SET LOCAL statement_timeout = {int(self.timeout_ms)}"))
+            # One round trip for both settings.
+            conn.execute(text("SET TRANSACTION READ ONLY; "
+                              f"SET LOCAL statement_timeout = {int(self.timeout_ms)}"))
             yield conn
 
     @staticmethod

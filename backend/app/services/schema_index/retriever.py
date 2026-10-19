@@ -19,6 +19,7 @@ import logging
 import re
 import threading
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
@@ -44,12 +45,14 @@ _CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 _WORD = re.compile(r"[a-z0-9]+")
 
 
-def tokens(text: str | None) -> set[str]:
-    """Lower-case word stems of an identifier or a sentence."""
+@lru_cache(maxsize=65_536)
+def tokens(text: str | None) -> frozenset[str]:
+    """Lower-case word stems of an identifier or a sentence. Cached: keyword
+    search tokenizes every table and column name and description per query."""
     if not text:
-        return set()
+        return frozenset()
     words = _WORD.findall(_CAMEL.sub(" ", text).lower())
-    return {_stem(w) for w in words if w not in _STOPWORDS and len(w) > 1}
+    return frozenset(_stem(w) for w in words if w not in _STOPWORDS and len(w) > 1)
 
 
 def _stem(word: str) -> str:

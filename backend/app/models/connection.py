@@ -7,7 +7,7 @@ class DBConnection(Base):
     __tablename__ = "db_connections"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     host = Column(String, nullable=False)
     port = Column(Integer, nullable=False, default=5432)

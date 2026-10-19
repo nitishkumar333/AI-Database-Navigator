@@ -347,8 +347,8 @@ ORDER BY score DESC
             "qvec": _vector_literal(query_vector) if use_vector else None, "depth": depth,
         }
         with self.engine.begin() as conn:
-            conn.execute(text(f"SET LOCAL pg_trgm.word_similarity_threshold = {_TERM_THRESHOLD}"))
             conn.execute(text(
+                f"SET LOCAL pg_trgm.word_similarity_threshold = {_TERM_THRESHOLD}; "
                 f"SET LOCAL pg_trgm.strict_word_similarity_threshold = {_VALUE_THRESHOLD}"))
             rows = conn.execute(sql, params).all()
         return [DocHit(r.table_name, r.column_name, float(r.score), list(r.sources or []),

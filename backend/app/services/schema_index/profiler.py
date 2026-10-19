@@ -183,8 +183,7 @@ ORDER BY tablename, attname, inherited DESC
 
 def _query(engine: Engine, sql: str, timeout_ms: int) -> list:
     with engine.begin() as conn:
-        conn.execute(text("SET TRANSACTION READ ONLY"))
-        conn.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
+        conn.execute(text(f"SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = {int(timeout_ms)}"))
         # Escape colons so identifiers like "a:b" aren't read as bind params.
         return conn.execute(text(sql.replace(":", r"\:"))).mappings().all()
 

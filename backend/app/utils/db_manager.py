@@ -5,7 +5,7 @@ import socket
 import hashlib
 import threading
 
-from cachetools import TTLCache
+from cachetools import Cache, TTLCache
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import URL as _SAURL
 from sqlalchemy.pool import QueuePool
@@ -20,37 +20,40 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────────────────────
 # Engine cache with proper disposal and thread safety
 #
-# Plain TTLCache evicts engines without calling .dispose(), leaking pooled
-# connections.  This subclass overrides popitem (called on maxsize eviction)
-# and __delitem__ (called on explicit removal) to dispose the engine.
+# Plain TTLCache drops engines without calling .dispose(), leaving their pooled
+# connections open. TTLCache removes items in two ways: expire() for expired
+# ones (it bypasses __delitem__) and __delitem__ for everything else (explicit
+# removal, and maxsize eviction through popitem -> pop). This subclass disposes
+# in both, once per engine. An engine's TTL restarts on every use (see
+# get_user_engine), so only idle engines expire.
 # All access is guarded by _engine_lock since TTLCache is not thread-safe.
 # ──────────────────────────────────────────────────────────────────────────────
-class _DisposingEngineCache(TTLCache):
-    """TTLCache that disposes SQLAlchemy engines on eviction / removal."""
+def _dispose(key, engine) -> None:
+    try:
+        engine.dispose()
+        logger.debug("Disposed engine for %s", key)
+    except Exception:
+        logger.warning("Failed to dispose engine for %s", key, exc_info=True)
 
-    def popitem(self):
-        key, engine = super().popitem()
-        try:
-            engine.dispose()
-            logger.debug("Disposed evicted engine for %s", key)
-        except Exception:
-            logger.warning("Failed to dispose evicted engine for %s", key, exc_info=True)
-        return key, engine
+
+class _DisposingEngineCache(TTLCache):
+    """TTLCache that disposes SQLAlchemy engines on expiry, eviction and removal."""
+
+    def expire(self, time=None):
+        expired = super().expire(time)
+        for key, engine in expired:
+            _dispose(key, engine)
+        return expired
 
     def __delitem__(self, key):
+        engine = Cache.__getitem__(self, key)    # also when expired; KeyError if absent
         try:
-            engine = self[key]          # grab before it's gone
-        except KeyError:
-            engine = None
-        super().__delitem__(key)
-        if engine is not None:
-            try:
-                engine.dispose()
-            except Exception:
-                logger.warning("Failed to dispose engine for %s", key, exc_info=True)
+            super().__delitem__(key)             # raises KeyError for an expired item
+        finally:
+            _dispose(key, engine)
 
 
-_engine_cache = _DisposingEngineCache(maxsize=100, ttl=3600)
+_engine_cache = _DisposingEngineCache(maxsize=100, ttl=3600)    # 1 hour unused
 _engine_lock = threading.Lock()
 
 
@@ -103,8 +106,13 @@ def get_user_engine(connection):
     cache_key = (connection.user_id, connection.id)
 
     with _engine_lock:
-        if cache_key in _engine_cache:
-            return _engine_cache[cache_key]
+        try:
+            engine = _engine_cache[cache_key]
+        except KeyError:                         # absent or just expired
+            pass
+        else:
+            _engine_cache[cache_key] = engine    # restarts its TTL: in use
+            return engine
 
     try:
         password = decrypt_value(connection.encrypted_password)

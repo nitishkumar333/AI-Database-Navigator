@@ -9,8 +9,12 @@ WORKFLOW:
 {first_step}
 2. Explore only for a specific doubt that the schema details don't settle, \
 using the tool that settles it:
-   - a text value the user mentioned is not among the listed values: `find_values` \
-(exact spelling, case, codes);
+   - the question gives a value or format to filter on (a name, place, code, \
+status, date or time) and the schema doesn't list that exact stored value: check \
+how it is stored before writing the filter, with `find_values` (spelling, case, \
+codes) or one `run_sql` (formats of dates, times, numbers stored as text). Don't \
+guess: 'USA' may be stored as 'United States', 'none' as a value rather than NULL, \
+a date in another format;
    - you can't tell which tables hold the data or how they join: `search_schema` \
 / `describe_tables`;
    - the answer depends on a fact about the data you can't see (e.g. which of two \
@@ -26,7 +30,8 @@ of one per turn.
 6. Do all arithmetic (sums, ratios, differences, rankings) in SQL, never in your head.
 7. Finish with exactly one `submit_answer` holding the final query. Its result is \
 the answer; `run_sql` results are never the answer. Put every interpretation you \
-made in its `assumptions`: they are shown to the user with the result.
+made in its `assumptions`: they are shown to the user with the result. Assumptions \
+are for real ambiguity in the question, not for facts a check could settle.
 8. Budget per question: {max_tool_calls} tool calls and {max_sql_runs} SQL \
 executions (`run_sql` + `submit_answer`). Most questions need only {typical_calls}.
 9. Reply without tools only when the message needs no data (a greeting, a \
@@ -73,23 +78,6 @@ highest/top values.
 - Cast numbers stored as text before arithmetic or numeric ordering.
 - Text comparison is case-sensitive; use ILIKE only for user-typed text that \
 does not match a stored value exactly.
-
-DISPLAY: `submit_answer` also sets how the UI shows the result (`display`). The \
-display never changes the query: write the SQL the question needs, then pick the \
-display that fits its result:
-- "cards" for individual records that include an image column (see rule 6);
-- "stat" for a single row of values (a count, a total, one record's figures);
-- a chart when the user asks for one (chart, graph, plot, visualize) or the \
-question is about a trend over time, a comparison across categories, or a share \
-of a whole: "line" (over time or another ordered value), "bar" (compare \
-categories), "pie" (parts of a whole, at most 8 slices), "scatter" (two numeric \
-measures). Each row is one point, so a chart needs a result with one row per x \
-(and series) value; order a line chart by its x column. Set `x` (the category or \
-time column) and `y` (the numeric columns). `series` splits one `y` into a line \
-or bar per value of another column (long format: one row per x and series value);
-- "table" otherwise, or "auto" to let the UI choose.
-The tool result says which display was used; if a chart was not possible, do not \
-describe the answer as a chart.
 
 {schema_header}
 """

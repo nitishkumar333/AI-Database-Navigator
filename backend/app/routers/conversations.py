@@ -164,8 +164,14 @@ def get_conversation(
         .order_by(ConversationMessage.created_at.asc())
         .all()
     )
+    # Answers stored before results had views get them once, saved for next time.
+    upgraded = False
+    for m in messages:
+        metadata_json = _with_views(m.metadata_json)
+        if metadata_json != (m.metadata_json or "{}"):
+            m.metadata_json, upgraded = metadata_json, True
 
-    return ConversationDetailResponse(
+    response = ConversationDetailResponse(
         id=conv.id,
         name=conv.name,
         created_at=str(conv.created_at) if conv.created_at else None,
@@ -178,13 +184,20 @@ def get_conversation(
                 role=m.role,
                 content=m.content,
                 message_type=m.message_type,
-                metadata_json=_with_views(m.metadata_json),
+                metadata_json=m.metadata_json or "{}",
                 query_id=m.query_id,
                 created_at=str(m.created_at) if m.created_at else None,
             )
             for m in messages
         ],
     )
+    if upgraded:        # after building the response: committing expires the loaded rows
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Could not save upgraded answers of conversation %s", conversation_id)
+    return response
 
 
 @router.put("/{conversation_id}")

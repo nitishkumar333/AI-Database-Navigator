@@ -11,7 +11,10 @@ from app.utils.db_manager import get_user_engine
 from app.services.redis_client import redis_client
 from app.services.schema_index import service as schema_service
 import json
+import logging
 from fastapi.encoders import jsonable_encoder
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/schema", tags=["Schema Explorer"])
 
@@ -33,16 +36,24 @@ def list_tables(
 ):
     conn = _get_connection(conn_id, current_user, db)
     engine = get_user_engine(conn)
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    result = []
-    for table in tables:
-        columns = inspector.get_columns(table)
-        result.append({
-            "name": table,
-            "column_count": len(columns),
-        })
-    return result
+    with engine.connect() as connection:
+        rows = connection.execute(text(_TABLES_WITH_COLUMN_COUNTS)).all()
+    return [{"name": name, "column_count": count} for name, count in rows]
+
+
+# The tables inspector.get_table_names() lists (visible on the search path, no
+# temporary or system tables), in its order (pg_class's physical order, which
+# a scan returns), with their column counts: one query instead of one per table.
+_TABLES_WITH_COLUMN_COUNTS = """
+SELECT c.relname, count(a.attnum)
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+WHERE c.relkind IN ('r', 'p') AND c.relpersistence <> 't'
+  AND pg_table_is_visible(c.oid) AND n.nspname <> 'pg_catalog'
+GROUP BY c.oid, c.relname, c.ctid
+ORDER BY c.ctid
+"""
 
 
 @router.get("/{conn_id}/tables/{table_name}/columns")
@@ -55,7 +66,7 @@ def get_columns(
     cache_key = f"table_schema:user:{current_user.id}:connection:{conn_id}:table:{table_name}"
     cached_data = redis_client.get(cache_key)
     if cached_data:
-        print("Cache hit for", cache_key)
+        logger.debug("Cache hit for %s", cache_key)
         return cached_data
 
     conn = _get_connection(conn_id, current_user, db)
@@ -101,7 +112,7 @@ def preview_table(
     cache_key = f"preview:user:{current_user.id}:connection:{conn_id}:table:{table_name}"
     cached_data = redis_client.get(cache_key)
     if cached_data:
-        print("Cache hit for", cache_key)
+        logger.debug("Cache hit for %s", cache_key)
         return cached_data
 
     conn = _get_connection(conn_id, current_user, db)

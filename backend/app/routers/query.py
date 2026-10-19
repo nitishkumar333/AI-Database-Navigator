@@ -15,7 +15,7 @@ from app.utils.db_manager import get_user_engine
 from app.services.display import json_rows
 from app.services.sql_agent import SQLAgent
 from app.utils.db_manager import get_all_table_names
-from app.services.schema_index.service import build_schema_context, build_schema_view
+from app.services.schema_index.service import build_agent_schema
 
 router = APIRouter(prefix="/api/query", tags=["Query"])
 
@@ -104,22 +104,25 @@ def chat_query(
     else:
         context_tables = all_tables
     
-    # SQLAgent puts this in the prompt when it is small enough (see
-    # AGENT_FULL_SCHEMA_MAX_CHARS), else only the table list.
-    schema_context = build_schema_context(db, conn, engine, context_tables)
+    # SQLAgent puts the schema text in the prompt when it is small enough (see
+    # AGENT_FULL_SCHEMA_MAX_CHARS), else only the table list; the view is what
+    # its schema tools search and describe.
+    schema_context, schema_view = build_agent_schema(db, conn, engine, context_tables)
 
     # The graph is compiled once per process; SQLAgent only bundles this
     # connection's engine, schema and scope for one turn.
-    sql_agent = SQLAgent(
-        engine,
-        schema_context,
-        schema_view=build_schema_view(db, conn, engine, context_tables),
-    )
+    sql_agent = SQLAgent(engine, schema_context, schema_view=schema_view)
+    # The agent runs for many seconds without the app database: end the
+    # transaction so its connection goes back to the pool meanwhile. Committing
+    # expires the loaded rows, so read the ids first: reading them afterwards
+    # would query (and hold) a connection again.
+    user_id, conn_id = current_user.id, conn.id
+    db.commit()
     try:
         result = sql_agent.run_query(
             req.question,
-            user_id=current_user.id,
-            conn_id=conn.id,
+            user_id=user_id,
+            conn_id=conn_id,
             conversation_id=req.conversation_id,
         )
     except HTTPException as exc:

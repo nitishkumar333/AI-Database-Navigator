@@ -1,0 +1,289 @@
+{
+  "run": {
+    "run_name": "quick50-all-noev-hybrid-deepseek-flash-20261019-1756",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "thinking": false,
+    "dataset": "bird_minidev_postgresql.csv",
+    "split": "quick50",
+    "use_evidence": false,
+    "full_schema": true,
+    "schema_format": "enriched",
+    "describe": true,
+    "schema_prompt": "auto",
+    "full_schema_max_chars": 32000,
+    "float_precision": 4,
+    "started_at": "2026-10-19T17:56:00",
+    "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
+  },
+  "questions": 50,
+  "accuracy_by_difficulty": {
+    "simple": {
+      "count": 14,
+      "ex_column_tolerant": 42.86,
+      "ex": 42.86,
+      "soft_f1": 40.26,
+      "accuracy": 42.86,
+      "accuracy_ci95": [
+        21.38,
+        67.41
+      ]
+    },
+    "moderate": {
+      "count": 27,
+      "ex_column_tolerant": 59.26,
+      "ex": 44.44,
+      "soft_f1": 48.33,
+      "accuracy": 59.26,
+      "accuracy_ci95": [
+        40.73,
+        75.49
+      ]
+    },
+    "challenging": {
+      "count": 9,
+      "ex_column_tolerant": 44.44,
+      "ex": 11.11,
+      "soft_f1": 31.85,
+      "accuracy": 44.44,
+      "accuracy_ci95": [
+        18.88,
+        73.34
+      ]
+    },
+    "total": {
+      "count": 50,
+      "ex_column_tolerant": 52.0,
+      "ex": 38.0,
+      "soft_f1": 43.1,
+      "accuracy": 52.0,
+      "accuracy_ci95": [
+        38.51,
+        65.2
+      ]
+    }
+  },
+  "accuracy_by_db": {
+    "california_schools": {
+      "count": 3,
+      "ex_column_tolerant": 0.0,
+      "ex": 0.0,
+      "soft_f1": 13.33,
+      "accuracy": 0.0,
+      "accuracy_ci95": [
+        0.0,
+        56.15
+      ]
+    },
+    "card_games": {
+      "count": 5,
+      "ex_column_tolerant": 20.0,
+      "ex": 20.0,
+      "soft_f1": 22.56,
+      "accuracy": 20.0,
+      "accuracy_ci95": [
+        3.62,
+        62.45
+      ]
+    },
+    "codebase_community": {
+      "count": 5,
+      "ex_column_tolerant": 100.0,
+      "ex": 100.0,
+      "soft_f1": 100.0,
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        56.55,
+        100.0
+      ]
+    },
+    "debit_card_specializing": {
+      "count": 2,
+      "ex_column_tolerant": 100.0,
+      "ex": 50.0,
+      "soft_f1": 83.33,
+      "accuracy": 100.0,
+      "accuracy_ci95": [
+        34.24,
+        100.0
+      ]
+    },
+    "european_football_2": {
+      "count": 5,
+      "ex_column_tolerant": 40.0,
+      "ex": 40.0,
+      "soft_f1": 20.0,
+      "accuracy": 40.0,
+      "accuracy_ci95": [
+        11.76,
+        76.93
+      ]
+    },
+    "financial": {
+      "count": 3,
+      "ex_column_tolerant": 66.67,
+      "ex": 33.33,
+      "soft_f1": 46.67,
+      "accuracy": 66.67,
+      "accuracy_ci95": [
+        20.77,
+        93.85
+      ]
+    },
+    "formula_1": {
+      "count": 7,
+      "ex_column_tolerant": 28.57,
+      "ex": 14.29,
+      "soft_f1": 25.71,
+      "accuracy": 28.57,
+      "accuracy_ci95": [
+        8.22,
+        64.11
+      ]
+    },
+    "student_club": {
+      "count": 4,
+      "ex_column_tolerant": 75.0,
+      "ex": 25.0,
+      "soft_f1": 45.83,
+      "accuracy": 75.0,
+      "accuracy_ci95": [
+        30.06,
+        95.44
+      ]
+    },
+    "superhero": {
+      "count": 5,
+      "ex_column_tolerant": 80.0,
+      "ex": 80.0,
+      "soft_f1": 80.0,
+      "accuracy": 80.0,
+      "accuracy_ci95": [
+        37.55,
+        96.38
+      ]
+    },
+    "thrombosis_prediction": {
+      "count": 6,
+      "ex_column_tolerant": 16.67,
+      "ex": 16.67,
+      "soft_f1": 4.29,
+      "accuracy": 16.67,
+      "accuracy_ci95": [
+        3.01,
+        56.35
+      ]
+    },
+    "toxicology": {
+      "count": 5,
+      "ex_column_tolerant": 80.0,
+      "ex": 40.0,
+      "soft_f1": 61.33,
+      "accuracy": 80.0,
+      "accuracy_ci95": [
+        37.55,
+        96.38
+      ]
+    }
+  },
+  "status_counts": {
+    "correct": 26,
+    "wrong_result": 24
+  },
+  "correct_with_extra_columns": 7,
+  "failure_categories": {
+    "wrong_columns": 8,
+    "wrong_tables": 6,
+    "wrong_values": 5,
+    "wrong_row_count": 3,
+    "wrong_projection": 2
+  },
+  "schema_linking": {
+    "context_recall": 99.33,
+    "linked_recall": 99.33,
+    "table_recall": 93.33,
+    "table_precision": 97.33,
+    "tables_exact": 86.0,
+    "column_recall": 85.21,
+    "column_precision": 88.27,
+    "questions_with_pred_sql": 50,
+    "accuracy_when_tables_exact": {
+      "count": 43,
+      "accuracy": 58.14
+    },
+    "accuracy_when_tables_wrong": {
+      "count": 7,
+      "accuracy": 14.29
+    }
+  },
+  "cost": {
+    "input_tokens": 580184,
+    "output_tokens": 11721,
+    "avg_tokens_per_question": 11838.1,
+    "avg_llm_calls_per_question": 1.44
+  },
+  "behaviour_by_difficulty": {
+    "simple": {
+      "count": 14,
+      "avg_tokens": 11380.6,
+      "avg_llm_calls": 1.43,
+      "avg_tool_calls": 1.43,
+      "latency_p50": 2.362,
+      "latency_p95": 4.018
+    },
+    "moderate": {
+      "count": 27,
+      "avg_tokens": 12017.6,
+      "avg_llm_calls": 1.44,
+      "avg_tool_calls": 1.67,
+      "latency_p50": 2.383,
+      "latency_p95": 5.813
+    },
+    "challenging": {
+      "count": 9,
+      "avg_tokens": 12011.2,
+      "avg_llm_calls": 1.44,
+      "avg_tool_calls": 1.78,
+      "latency_p50": 2.733,
+      "latency_p95": 5.298
+    },
+    "total": {
+      "count": 50,
+      "avg_tokens": 11838.1,
+      "avg_llm_calls": 1.44,
+      "avg_tool_calls": 1.62,
+      "latency_p50": 2.383,
+      "latency_p95": 5.298
+    }
+  },
+  "tool_usage": {
+    "submit_answer": 50,
+    "run_sql": 30,
+    "search_schema": 1
+  },
+  "latency_s": {
+    "mean": 2.899,
+    "p50": 2.383,
+    "p95": 5.298
+  },
+  "self_correction": {
+    "questions_with_retries": 0,
+    "correct_after_retry": 0
+  },
+  "agent_steps": {
+    "answer_source": {
+      "submit": 50
+    },
+    "questions_explored": 20,
+    "avg_sql_runs": 1.6,
+    "questions_forced_to_submit": 0,
+    "accuracy_when_explored": {
+      "count": 20,
+      "accuracy": 35.0
+    },
+    "accuracy_when_direct": {
+      "count": 30,
+      "accuracy": 63.33
+    }
+  }
+}

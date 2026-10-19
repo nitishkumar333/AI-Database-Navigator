@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
@@ -18,7 +19,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 _encryption_key = settings.ENCRYPTION_KEY
 if not _encryption_key:
     _encryption_key = Fernet.generate_key().decode()
-    print(f"⚠️  Generated encryption key (set ENCRYPTION_KEY in .env): {_encryption_key}")
+    logging.getLogger(__name__).warning(
+        "Generated encryption key (set ENCRYPTION_KEY in .env): %s", _encryption_key)
 
 fernet = Fernet(_encryption_key.encode() if isinstance(_encryption_key, str) else _encryption_key)
 

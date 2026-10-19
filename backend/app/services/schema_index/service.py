@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from cachetools import TTLCache
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.config import get_settings
 from app.database import SessionLocal
@@ -588,9 +588,21 @@ def _profile_meta(db: Session, conn: DBConnection, engine):
     return meta
 
 
+def build_agent_schema(db: Session, conn: DBConnection, engine,
+                       tables: list[str]) -> tuple[str, SchemaView]:
+    """The agent's schema text and schema view for `tables` (see
+    build_schema_context and build_schema_view), from one profile lookup."""
+    meta = _profile_meta(db, conn, engine)
+    return (_schema_context(db, conn, engine, tables, meta),
+            _schema_view(db, conn, engine, tables, meta))
+
+
 def build_schema_context(db: Session, conn: DBConnection, engine, tables: list[str]) -> str:
     """Schema text for `tables`: enriched once a profile exists, basic until then."""
-    meta = _profile_meta(db, conn, engine)
+    return _schema_context(db, conn, engine, tables, _profile_meta(db, conn, engine))
+
+
+def _schema_context(db: Session, conn: DBConnection, engine, tables: list[str], meta) -> str:
     if meta is None:
         return basic_schema_context(engine, tables)
 
@@ -626,8 +638,11 @@ def build_schema_view(db: Session, conn: DBConnection, engine, tables: list[str]
     """What the agent's schema tools (search_schema, describe_tables,
     find_values) see: `tables` with their profile and descriptions, or names,
     types and keys only until the connection has been profiled."""
+    return _schema_view(db, conn, engine, tables, _profile_meta(db, conn, engine))
+
+
+def _schema_view(db: Session, conn: DBConnection, engine, tables: list[str], meta) -> SchemaView:
     profile = descriptions = index = None
-    meta = _profile_meta(db, conn, engine)
     if meta is not None:
         profile, descriptions = _profile_and_descriptions(db, conn.id, meta.version)
         index = HybridIndex.for_key(index_key(conn.id))
@@ -641,15 +656,30 @@ def build_schema_view(db: Session, conn: DBConnection, engine, tables: list[str]
 # Status and description editing (API)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _record_row(db: Session, conn_id: int) -> SchemaProfileRecord | None:
+    """The connection's profile record without its profile JSON (often
+    hundreds of KB): the parsed profile comes from _cached_profile."""
+    return (db.query(SchemaProfileRecord).options(defer(SchemaProfileRecord.profile))
+            .filter_by(connection_id=conn_id).first())
+
+
+def _cached_profile(db: Session, record: SchemaProfileRecord):
+    """(SchemaProfile, Descriptions) of `record`, or (None, {}) before the
+    first profile. A profile is stored together with its schema hash."""
+    if record.schema_hash is None:
+        return None, {}
+    return _profile_and_descriptions(db, record.connection_id, record.version)
+
+
 def profile_status(db: Session, conn_id: int) -> dict:
-    record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
+    record = _record_row(db, conn_id)
     if record is None:
         return {"status": "none", "description_status": "idle", "tables": []}
-    profile = SchemaProfile.from_dict(record.profile) if record.profile else None
-    docs = load_descriptions(db, conn_id)
+    profile, docs = _cached_profile(db, record)
     sources = {
-        (a.table_name, a.column_name): a.source
-        for a in db.query(SchemaAnnotation).filter_by(connection_id=conn_id)
+        (table, column): source for table, column, source in db.query(
+            SchemaAnnotation.table_name, SchemaAnnotation.column_name, SchemaAnnotation.source
+        ).filter_by(connection_id=conn_id)
     }
     tables = []
     if profile:
@@ -690,10 +720,10 @@ def _index_status(conn_id: int) -> dict:
 
 def table_details(db: Session, conn_id: int, table_name: str) -> dict | None:
     """Description and profile facts for one table; None if it isn't profiled."""
-    record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
-    if record is None or not record.profile:
+    record = _record_row(db, conn_id)
+    profile = _cached_profile(db, record)[0] if record is not None else None
+    if profile is None:
         return None
-    profile = SchemaProfile.from_dict(record.profile)
     table = profile.tables.get(table_name)
     if table is None:
         return None
@@ -741,10 +771,11 @@ def set_description(db: Session, conn_id: int, table_name: str, column_name: str
                     description: str) -> None:
     """Save a user description ("" for the table itself). Empty text removes
     the override; a generated description returns on the next refresh."""
-    record = db.query(SchemaProfileRecord).filter_by(connection_id=conn_id).first()
-    if record is None or not record.profile:
+    record = _record_row(db, conn_id)
+    profile = _cached_profile(db, record)[0] if record is not None else None
+    if profile is None:
         raise LookupError("This connection has not been profiled yet")
-    table = SchemaProfile.from_dict(record.profile).tables.get(table_name)
+    table = profile.tables.get(table_name)
     if table is None or (column_name and table.column(column_name) is None):
         raise LookupError("Unknown table or column")
 

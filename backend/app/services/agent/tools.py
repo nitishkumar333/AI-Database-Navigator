@@ -84,14 +84,24 @@ class SubmitAnswerArgs(BaseModel):
     # Flat, null-free fields: every supported provider accepts them in a tool schema.
     display: Literal["auto", "table", "stat", "cards", "bar", "line", "pie", "scatter"] = Field(
         default="auto",
-        description="How the UI shows the result: table, stat (one row of values), cards "
-                    "(records with an image column), bar / line / pie / scatter chart, or auto")
-    x: str = Field(default="", description="Charts: the result column for the x axis, "
-                                           "categories or pie slices; empty to let the UI pick")
+        description=(
+            "How the UI shows the result. It never changes the query: write the SQL the "
+            "question needs, then pick what fits its result. 'cards': individual records "
+            "that include an image column. 'stat': a single row of values (a count, a total, "
+            "one record's figures). A chart when the user asks for one (chart, graph, plot, "
+            "visualize) or the question is about a trend over time, a comparison across "
+            "categories or a share of a whole: 'line' (over time or another ordered value, "
+            "ordered by x), 'bar' (compare categories), 'pie' (parts of a whole, at most 8 "
+            "slices), 'scatter' (two numeric measures); each row is one point, so a chart "
+            "needs one row per x (and series) value. 'table' otherwise, or 'auto' to let the "
+            "UI choose. The tool result says which display was used."))
+    x: str = Field(default="", description="Charts: the result column for the x axis (the category "
+                                           "or time column) or pie slices; empty to let the UI pick")
     y: list[str] = Field(default_factory=list,
                          description="Charts: the numeric result columns to plot; empty for all")
     series: str = Field(default="", description="Bar/line/scatter charts: optional result column "
-                                                "whose values become separate series (one y only)")
+                                                "whose values become separate series (one y only; "
+                                                "long format: one row per x and series value)")
 
 
 def _schema(name: str, description: str, args: type[BaseModel]) -> StructuredTool:
@@ -374,8 +384,8 @@ def _ilike(engine: Engine, table: str, column: str, needle: str) -> list[str]:
     )
     try:
         with sql_slot(engine), engine.begin() as conn:
-            conn.execute(text("SET TRANSACTION READ ONLY"))
-            conn.execute(text(f"SET LOCAL statement_timeout = {_FIND_VALUES_TIMEOUT_MS}"))
+            conn.execute(text("SET TRANSACTION READ ONLY; "
+                              f"SET LOCAL statement_timeout = {_FIND_VALUES_TIMEOUT_MS}"))
             return [r[0] for r in conn.execute(sql, {"pattern": pattern}) if r[0] is not None]
     except Exception as exc:
         logger.info("find_values on %s.%s failed: %s", table, column, exc)

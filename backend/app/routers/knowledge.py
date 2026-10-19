@@ -12,6 +12,9 @@ from app.services.redis_client import redis_client
 from app.services.schema_index.service import schedule_describe
 from fastapi.encoders import jsonable_encoder
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge Base"])
 
@@ -89,7 +92,7 @@ def list_knowledge_groups(
     cache_key = f"kb:user:{current_user.id}:connection:{conn_id}:groups"
     cached = redis_client.get(cache_key)
     if cached is not None:
-        print("Cache hit", cache_key)
+        logger.debug("Cache hit for %s", cache_key)
         return cached
 
     _get_connection(conn_id, current_user, db)

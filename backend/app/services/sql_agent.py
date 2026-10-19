@@ -243,7 +243,12 @@ class SQLAgent:
                                f"{self.schema_prompt} ({len(context.schema_context):,} chars)")
         started = time.perf_counter()
         try:
-            state = get_graph(self.is_evaluation).invoke(initial_state, config, context=context)
+            # durability="exit": the thread is saved once, when the turn ends,
+            # not after every step (each save rewrites the whole message list).
+            # Evaluation has no checkpointer, so nothing to save.
+            durability = {} if self.is_evaluation else {"durability": "exit"}
+            state = get_graph(self.is_evaluation).invoke(initial_state, config, context=context,
+                                                         **durability)
         except GraphRecursionError:
             logger.warning("Agent hit recursion limit (%d steps) for thread %s",
                            RECURSION_LIMIT, thread_id)

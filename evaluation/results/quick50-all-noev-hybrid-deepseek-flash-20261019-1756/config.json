@@ -1,0 +1,17 @@
+{
+  "run_name": "quick50-all-noev-hybrid-deepseek-flash-20261019-1756",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "dataset": "bird_minidev_postgresql.csv",
+  "split": "quick50",
+  "use_evidence": false,
+  "full_schema": true,
+  "schema_format": "enriched",
+  "describe": true,
+  "schema_prompt": "auto",
+  "full_schema_max_chars": 32000,
+  "float_precision": 4,
+  "started_at": "2026-10-19T17:56:00",
+  "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
+}

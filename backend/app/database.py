@@ -4,11 +4,15 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# Per worker process: up to 10 connections here plus 5 for the agent's
+# checkpointer (agent/graph.py). With 4 workers (Dockerfile) that is 60 of
+# Postgres' default 100. Requests hold one only briefly: a chat releases its
+# connection while the agent runs.
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
     pool_size=5,
-    max_overflow=10,
+    max_overflow=5,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -37,10 +41,26 @@ _CASCADE_FKS = [
 ]
 
 
+# Indexes on foreign-key columns (index=True in the models) that create_all
+# doesn't add to existing tables: (table, column).
+_FK_INDEXES = [
+    ("conversation_messages", "conversation_id"),
+    ("conversations", "user_id"),
+    ("query_history", "user_id"),
+    ("query_history", "connection_id"),
+    ("db_connections", "user_id"),
+    ("knowledge_base", "connection_id"),
+]
+
+
 def _migrate() -> None:
     """Idempotent schema fixes for databases created by older versions."""
     with engine.begin() as conn:
+        # Every worker process migrates at startup: one at a time.
+        conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('sqlnav_migrate'))"))
         conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS suggestions JSON"))
+        for table, column in _FK_INDEXES:
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} ON {table} ({column})"))
         for table, name in _CASCADE_FKS:
             rule = conn.execute(text(
                 "SELECT confdeltype FROM pg_constraint WHERE conname = :n"), {"n": name}).scalar()

@@ -9,13 +9,16 @@ from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
 from app.models.conversation import Conversation, ConversationMessage
 import json
+import logging
 from app.utils.security import get_current_user
-from app.utils.db_manager import get_user_engine, get_schema_context as basic_schema_context
+from app.utils.db_manager import get_user_engine
+from app.services.schema_index.service import build_schema_context
 from app.services.redis_client import redis_client
 from app.utils.prompts import initial_suggestions_prompt, conversation_suggestions_prompt
 from app.config import get_settings
 from app.services.llm_factory import create_chat_model
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/api/suggestions", tags=["Suggestions"])
 
@@ -63,9 +66,9 @@ def _get_schema_for_request(
     current_user: User,
     db: Session,
 ) -> Optional[str]:
-    """Basic schema context (columns only, no profile) for the knowledge base's
-    tables; None when the KB is not found or lists no tables (the caller then
-    returns the defaults)."""
+    """Schema context for the knowledge base's tables (the agent's, from the
+    cached profile once there is one); None when the KB is not found or lists
+    no tables (the caller then returns the defaults)."""
     conn = db.query(DBConnection).filter(
         DBConnection.id == connection_id,
         DBConnection.user_id == current_user.id,
@@ -78,7 +81,7 @@ def _get_schema_for_request(
     ).first()
     if not kb or not kb.tables:
         return None
-    return basic_schema_context(get_user_engine(conn), list(kb.tables))
+    return build_schema_context(db, conn, get_user_engine(conn), list(kb.tables))
 
 @router.post("/initial", response_model=SuggestionsResponse)
 def get_initial_suggestions(
@@ -103,6 +106,7 @@ def get_initial_suggestions(
         if schema_context is None:
             return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
         prompt = initial_suggestions_prompt(schema_context)
+        db.commit()     # release the app database connection during the LLM call
         result: SuggestionList = _suggestions_llm().invoke(prompt)
         suggestions = result.suggestions if result.suggestions else _DEFAULT_SUGGESTIONS
         
@@ -112,7 +116,7 @@ def get_initial_suggestions(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating initial suggestions: {e}")
+        logger.warning("Error generating initial suggestions: %s", e)
         return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
 
 def _save_suggestions(db: Session, user: User, req: ConversationSuggestionsRequest,
@@ -127,7 +131,7 @@ def _save_suggestions(db: Session, user: User, req: ConversationSuggestionsReque
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Error saving conversation suggestions: {e}")
+        logger.warning("Error saving conversation suggestions: %s", e)
 
 
 _HISTORY_TURNS = 3       # last turns sent to the suggestions model
@@ -179,6 +183,7 @@ def get_conversation_suggestions(
         if not history_text:
             return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
         prompt = conversation_suggestions_prompt(history_text)
+        db.commit()     # release the app database connection during the LLM call
         result: SuggestionList = _suggestions_llm().invoke(prompt)
         suggestions = result.suggestions if result.suggestions else _DEFAULT_SUGGESTIONS
         if result.suggestions:
@@ -187,5 +192,5 @@ def get_conversation_suggestions(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating conversation suggestions: {e}")
+        logger.warning("Error generating conversation suggestions: %s", e)
         return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
