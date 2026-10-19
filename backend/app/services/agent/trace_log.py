@@ -123,6 +123,10 @@ def llm_note(turn_id: str, message: str) -> None:
     _log().info("[%s] NOTE: %s", turn_id, message)
 
 
+def guardrail(turn_id: str, stage: str, detail: str) -> None:
+    _log().warning("[%s] GUARDRAIL (%s): %s", turn_id, stage, _one_line(detail))
+
+
 # ── Schema linking ───────────────────────────────────────────────────────────
 
 def schema_linked(turn_id: str, method: str, tables: list[str], bridges: list[str],

@@ -33,6 +33,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.services.agent.guardrails import is_credential_column
+
 logger = logging.getLogger(__name__)
 
 CATALOG_TIMEOUT_MS = 15_000
@@ -85,6 +87,14 @@ class TableProfile:
     def column(self, name: str) -> ColumnProfile | None:
         return next((c for c in self.columns if c.name == name), None)
 
+    def hide_credential_values(self) -> None:
+        """Drops stored values of credential columns (passwords, tokens, keys):
+        they would otherwise reach the prompt and the search index as examples."""
+        for col in self.columns:
+            if is_credential_column(col.name):
+                col.sample_values, col.sample_coverage = [], None
+                col.min_value = col.max_value = col.text_format = None
+
 
 @dataclass
 class RelationProfile:
@@ -113,6 +123,8 @@ class SchemaProfile:
             name: _build(TableProfile, {**t, "columns": [_build(ColumnProfile, c) for c in t["columns"]]})
             for name, t in data.get("tables", {}).items()
         }
+        for table in tables.values():       # profiles stored before credentials were hidden
+            table.hide_credential_values()
         return cls(
             tables=tables,
             relations=[_build(RelationProfile, r) for r in data.get("relations", [])],
@@ -538,6 +550,7 @@ def profile_database(engine: Engine, *, infer_relations: bool = True) -> SchemaP
             table.stats_source = "pg_stats"
         else:
             _apply_sample(engine, table)
+        table.hide_credential_values()
         if table.row_count is None:
             table.row_count = _exact_count(engine, table.name)
 

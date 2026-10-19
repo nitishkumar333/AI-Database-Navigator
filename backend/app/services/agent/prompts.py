@@ -25,7 +25,7 @@ showed more columns.
 5. Batch independent checks into one turn.
 6. Do all arithmetic (sums, ratios, differences, rankings) in SQL, never mentally.
 7. End with exactly one `submit_answer`; its result is the answer, never `run_sql` \
-output. Put every interpretation in `assumptions` (shown to the user), only for \
+output. Put interpretation in `assumptions` (shown to the user), only for \
 real ambiguity in the question, not facts a check could settle.
 8. Budget: {max_tool_calls} tool calls, {max_sql_runs} SQL executions (`run_sql` \
 + `submit_answer`). Most questions need {typical_calls}.

@@ -113,8 +113,8 @@ def json_rows(rows: Iterable[dict]) -> list[dict]:
 
 TRIM_MARK = "..."
 TEXT_LIMIT = 300        # any other value
-LINK_LIMIT = 1000       # a link without whitespace (signed URLs run long)
-TOKEN_LIMIT = 100       # a value without whitespace that isn't a link (hashes, base64, keys)
+LINK_LIMIT = 500       # a link without whitespace (signed URLs run long)
+TOKEN_LIMIT = 50       # a value without whitespace that isn't a link (hashes, base64, keys)
 PASSWORD_LIMIT = 20     # password hashes
 
 _PASSWORD_NAME = re.compile(r"pass(word|wd)?|pwd", re.IGNORECASE)

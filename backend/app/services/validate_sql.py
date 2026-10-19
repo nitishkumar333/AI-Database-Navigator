@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlglot import exp
@@ -34,15 +34,18 @@ _FORBIDDEN_NODES = tuple(
     if hasattr(exp, name)
 )
  
-# Functions that can sleep, touch the filesystem, run arbitrary SQL, or
-# change server/session state.
+# Functions that can sleep, touch the filesystem, run arbitrary SQL, change
+# server/session state, or reveal the server (settings, other sessions'
+# queries, object definitions).
 _FORBIDDEN_FUNCTIONS = {
     "pg_sleep", "pg_sleep_for", "pg_sleep_until",
     "set_config", "nextval", "setval",
     "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf",
+    "current_setting", "pg_notify", "inet_server_addr", "inet_server_port",
 }
 _FORBIDDEN_FUNCTION_PREFIXES = (
     "pg_read_", "pg_ls_", "pg_advisory_", "lo_", "dblink", "query_to_",
+    "pg_stat_", "pg_get_", "pg_file", "pg_logical_", "pg_replication_",
 )
  
 def _raw_sql(sql: str):
@@ -125,10 +128,14 @@ class SafeSqlExecutor:
     """
 
     def __init__(self, engine: Engine, *, max_rows: int = 50, timeout_ms: int = 10_000,
-                 count_limit: int = 0):
+                 count_limit: int = 0,
+                 check: Optional[Callable[[exp.Expression], Optional[str]]] = None):
         """count_limit > max_rows also counts the result's rows, up to that
-        many (only max_rows of them are kept)."""
+        many (only max_rows of them are kept). `check` runs on the parsed
+        query after the read-only checks and returns an error or None (the
+        agent's guardrails: allowed tables, credential columns)."""
         self.engine = engine
+        self.check = check
         self.max_rows = max_rows
         self.timeout_ms = timeout_ms
         self.count_limit = max(count_limit, max_rows)
@@ -136,7 +143,7 @@ class SafeSqlExecutor:
     def validate(self, sql_query: str) -> ValidationResult:
         sql = refine_sql_from_markdown(sql_query).strip().rstrip(";").strip()
  
-        error = self._check_structure(sql)
+        error = self._check_structure(sql, self.check)
         if error:
             return ValidationResult(sql, False, error)
  
@@ -152,13 +159,13 @@ class SafeSqlExecutor:
         `.success`. No EXPLAIN first: executing reports a bad table or column
         just the same, without a second transaction."""
         sql = refine_sql_from_markdown(sql_query).strip().rstrip(";").strip()
-        error = self._check_structure(sql)
+        error = self._check_structure(sql, self.check)
         if error:
             return QueryResult(sql=sql, success=False, error=error)
         return self._execute(sql)
 
     @staticmethod
-    def _check_structure(sql: str) -> Optional[str]:
+    def _check_structure(sql: str, check=None) -> Optional[str]:
         """Return an error message, or None if the query passes."""
         if not sql:
             return "Empty SQL query."
@@ -193,7 +200,7 @@ class SafeSqlExecutor:
             if name in _FORBIDDEN_FUNCTIONS or name.startswith(_FORBIDDEN_FUNCTION_PREFIXES):
                 return f"Function '{name}' is not allowed."
  
-        return None
+        return check(tree) if check is not None else None
 
     def _check_against_schema(self, validation_query: str) -> Optional[str]:
         try:
