@@ -138,7 +138,7 @@ export default function ChatPage() {
 
     setConversationStatus("", conversation.id);
     finishQuery(conversation.id, query_id);
-    addSuggestionToConversation(conversation.id, query_id, selectedConnectionId, selectedKnowledgeBaseId);
+    addSuggestionToConversation(conversation.id, query_id);
   };
 
   useEffect(() => {

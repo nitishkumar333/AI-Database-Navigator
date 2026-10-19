@@ -40,6 +40,7 @@ _CASCADE_FKS = [
 def _migrate() -> None:
     """Idempotent schema fixes for databases created by older versions."""
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS suggestions JSON"))
         for table, name in _CASCADE_FKS:
             rule = conn.execute(text(
                 "SELECT confdeltype FROM pg_constraint WHERE conname = :n"), {"n": name}).scalar()

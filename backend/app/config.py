@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Empty = the agent's own provider / model; set either to use a cheaper one.
     REPLY_LLM_PROVIDER: str = ""
     REPLY_LLM_MODEL: str = ""
+    # Model that writes the prompt suggestions (/api/suggestions). Empty = the
+    # agent's own provider / model.
+    SUGGESTIONS_LLM_PROVIDER: str = ""
+    SUGGESTIONS_LLM_MODEL: str = ""
     # "production": full agent loop (SQL tool -> natural-language answer).
     # "evaluation": stop as soon as an answer is submitted (submit_answer),
     #               skipping the final answer-writing LLM call (saves tokens in evals).

@@ -23,6 +23,7 @@ type ConversationDetail = {
   name?: string;
   created_at?: string | null;
   messages?: StoredMessage[];
+  suggestions?: string[] | null; // latest follow-up suggestions
 };
 
 type StoredMessage = {
@@ -67,9 +68,7 @@ export const ConversationContext = createContext<{
   finishQuery: (conversationId: string, queryId: string) => void;
   addSuggestionToConversation: (
     conversationId: string,
-    queryId: string,
-    connectionId?: number | null,
-    knowledgeBaseId?: number | null
+    queryId: string
   ) => void;
 }>({
   conversations: [],
@@ -162,6 +161,22 @@ const rebuildConversation = (detail: ConversationDetail): Conversation => {
       index: queryIndex,
     };
   });
+
+  // The conversation's latest suggestions, shown after its last question;
+  // a conversation without saved ones gets the defaults.
+  const last = Object.values(queries).at(-1);
+  if (last) {
+    last.messages.push({
+      type: "suggestion",
+      id: uuidv4(),
+      conversation_id: detail.id,
+      query_id: last.id,
+      payload: {
+        error: "",
+        suggestions: detail.suggestions?.length ? detail.suggestions : FALLBACK_SUGGESTIONS,
+      },
+    });
+  }
 
   return {
     id: detail.id,
@@ -455,42 +470,13 @@ export const ConversationProvider = ({
 
   const addSuggestionToConversation = async (
     conversationId: string,
-    queryId: string,
-    connectionId?: number | null,
-    knowledgeBaseId?: number | null
+    queryId: string
   ) => {
     try {
-      if (!connectionId) return;
-
-      // Build conversation history from the current conversation's queries
-      const conversation = conversations.find((c) => c.id === conversationId);
-      const conversationHistory: { role: string; content: string }[] = [];
-      if (conversation) {
-        const sortedQueries = Object.values(conversation.queries)
-          .sort((a, b) => a.index - b.index)
-          .slice(-5);
-        for (const q of sortedQueries) {
-          if (q.query) {
-            conversationHistory.push({ role: "user", content: q.query });
-          }
-          // Find assistant text responses in messages
-          for (const msg of q.messages) {
-            if (msg.type !== "text" || !("objects" in msg.payload)) continue;
-            const text = (msg.payload.objects[0] as { text?: string } | undefined)?.text;
-            if (text) {
-              conversationHistory.push({ role: "assistant", content: text });
-            }
-          }
-        }
-      }
-
+      // The backend reads the conversation's last turns from the database.
       const response = await apiFetch("/api/suggestions/conversation", {
         method: "POST",
-        body: {
-          connection_id: connectionId,
-          knowledge_base_id: knowledgeBaseId || null,
-          conversation_history: conversationHistory,
-        },
+        body: { conversation_id: conversationId },
       });
 
       let suggestions = FALLBACK_SUGGESTIONS;

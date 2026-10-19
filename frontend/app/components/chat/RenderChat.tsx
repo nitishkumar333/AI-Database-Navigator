@@ -29,7 +29,7 @@ interface RenderChatProps {
 }
 
 const ResultItemDisplay: React.FC<{ payload: ResultPayload }> = ({ payload }) => (
-  <div className="w-full flex flex-col justify-start items-start gap-3">
+  <div className="w-full flex flex-col justify-start items-start gap-5">
     <div className="w-full mt-2">
       <CodeView code={payload.code} />
     </div>

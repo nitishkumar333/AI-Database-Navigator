@@ -2,17 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from langchain_google_genai import ChatGoogleGenerativeAI
+from functools import lru_cache
 from app.database import get_db
 from app.models.user import User
 from app.models.connection import DBConnection
 from app.models.knowledge import KnowledgeBase
+from app.models.conversation import Conversation, ConversationMessage
+import json
 from app.utils.security import get_current_user
-from app.utils.db_manager import get_user_engine, get_all_table_names
-from app.services.schema_index.service import build_schema_context
+from app.utils.db_manager import get_user_engine, get_schema_context as basic_schema_context
 from app.services.redis_client import redis_client
 from app.utils.prompts import initial_suggestions_prompt, conversation_suggestions_prompt
 from app.config import get_settings
+from app.services.llm_factory import create_chat_model
 
 settings = get_settings()
 router = APIRouter(prefix="/api/suggestions", tags=["Suggestions"])
@@ -25,9 +27,7 @@ class InitialSuggestionsRequest(BaseModel):
 
 
 class ConversationSuggestionsRequest(BaseModel):
-    connection_id: int
-    knowledge_base_id: Optional[int] = None
-    conversation_history: List[dict] = []  # [{role: "user"|"assistant", content: "..."}]
+    conversation_id: str  # its last turns are read from the database; the suggestions are saved with it
 
 
 class SuggestionsResponse(BaseModel):
@@ -49,32 +49,36 @@ _DEFAULT_SUGGESTIONS = [
     "What columns are available?",
 ]
 
+@lru_cache(maxsize=1)
+def _suggestions_llm():
+    """The suggestions model (SUGGESTIONS_LLM_*, else the agent's), created once."""
+    llm = create_chat_model(settings.SUGGESTIONS_LLM_PROVIDER or None,
+                            settings.SUGGESTIONS_LLM_MODEL or None)
+    return llm.with_structured_output(SuggestionList)
+
+
 def _get_schema_for_request(
     connection_id: int,
-    knowledge_base_id: Optional[int],
+    knowledge_base_id: int,
     current_user: User,
     db: Session,
-) -> str:
-    """Resolve connection + optional KB to a schema context string."""
+) -> Optional[str]:
+    """Basic schema context (columns only, no profile) for the knowledge base's
+    tables; None when the KB is not found or lists no tables (the caller then
+    returns the defaults)."""
     conn = db.query(DBConnection).filter(
         DBConnection.id == connection_id,
         DBConnection.user_id == current_user.id,
     ).first()
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    engine = get_user_engine(conn)
-    all_tables = get_all_table_names(engine)
-    context_tables = all_tables
-    if knowledge_base_id:
-        kb = db.query(KnowledgeBase).filter(
-            KnowledgeBase.id == knowledge_base_id,
-            KnowledgeBase.connection_id == connection_id,
-        ).first()
-        if kb and kb.tables:
-            filtered = [t for t in kb.tables if t in all_tables]
-            if filtered:
-                context_tables = filtered
-    return build_schema_context(db, conn, engine, context_tables)
+    kb = db.query(KnowledgeBase).filter(
+        KnowledgeBase.id == knowledge_base_id,
+        KnowledgeBase.connection_id == connection_id,
+    ).first()
+    if not kb or not kb.tables:
+        return None
+    return basic_schema_context(get_user_engine(conn), list(kb.tables))
 
 @router.post("/initial", response_model=SuggestionsResponse)
 def get_initial_suggestions(
@@ -83,9 +87,11 @@ def get_initial_suggestions(
     current_user: User = Depends(get_current_user),
 ):
     """Generate initial prompt suggestions based on the knowledge base schema."""
+    if not req.knowledge_base_id:
+        return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
     try:
-        cache_key = f"initial_suggestions:user:{current_user.id}:connection:{req.connection_id}:kb:{req.knowledge_base_id or 'all'}"
-        
+        cache_key = f"initial_suggestions:user:{current_user.id}:connection:{req.connection_id}:kb:{req.knowledge_base_id}"
+
         if not req.force_refresh:
             cached_suggestions = redis_client.get(cache_key)
             if cached_suggestions:
@@ -94,17 +100,13 @@ def get_initial_suggestions(
         schema_context = _get_schema_for_request(
             req.connection_id, req.knowledge_base_id, current_user, db
         )
+        if schema_context is None:
+            return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
         prompt = initial_suggestions_prompt(schema_context)
-        llm = ChatGoogleGenerativeAI(
-            model=getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite"),
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0,
-        )
-        structured_llm = llm.with_structured_output(SuggestionList)
-        result: SuggestionList = structured_llm.invoke(prompt)
-        suggestions = result.suggestions[:4] if result.suggestions else _DEFAULT_SUGGESTIONS
+        result: SuggestionList = _suggestions_llm().invoke(prompt)
+        suggestions = result.suggestions if result.suggestions else _DEFAULT_SUGGESTIONS
         
-        redis_client.set(cache_key, suggestions, ex=3600)
+        redis_client.set(cache_key, suggestions, ex=7200)
         
         return SuggestionsResponse(suggestions=suggestions)
     except HTTPException:
@@ -113,36 +115,74 @@ def get_initial_suggestions(
         print(f"Error generating initial suggestions: {e}")
         return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
 
+def _save_suggestions(db: Session, user: User, req: ConversationSuggestionsRequest,
+                      suggestions: List[str]) -> None:
+    """Stores the conversation's latest suggestions, so a reloaded conversation
+    shows them. Never raises: they were already generated."""
+    try:
+        db.query(Conversation).filter(
+            Conversation.id == req.conversation_id,
+            Conversation.user_id == user.id,
+        ).update({Conversation.suggestions: suggestions}, synchronize_session=False)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving conversation suggestions: {e}")
+
+
+_HISTORY_TURNS = 3       # last turns sent to the suggestions model
+_HISTORY_TEXT_CHARS = 300  # per question / reply
+_HISTORY_SQL_CHARS = 600
+
+
+def _clip(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    return text if len(text) <= limit else text[:limit] + "..."
+
+
+def _recent_turns(db: Session, user: User, conversation_id: str) -> str:
+    """The conversation's last turns as text: user question, SQL and AI reply.
+    Empty when the conversation isn't the user's or has no messages."""
+    messages = (
+        db.query(ConversationMessage)
+        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == user.id)
+        .order_by(ConversationMessage.id.desc())
+        .limit(_HISTORY_TURNS * 2)
+        .all()
+    )
+    lines = []
+    for m in reversed(messages):
+        if m.role == "user":
+            lines.append(f"User: {_clip(m.content, _HISTORY_TEXT_CHARS)}")
+            continue
+        try:
+            sql = json.loads(m.metadata_json or "{}").get("generated_sql") or ""
+        except ValueError:
+            sql = ""
+        if sql:
+            lines.append(f"SQL: {_clip(sql, _HISTORY_SQL_CHARS)}")
+        lines.append(f"AI: {_clip(m.content, _HISTORY_TEXT_CHARS)}")
+    return "\n".join(lines)
+
+
 @router.post("/conversation", response_model=SuggestionsResponse)
 def get_conversation_suggestions(
     req: ConversationSuggestionsRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate follow-up suggestions based on schema + conversation history."""
+    """Generate follow-up suggestions from the conversation's last turns only
+    (question, SQL, reply); no schema."""
     try:
-        schema_context = _get_schema_for_request(
-            req.connection_id, req.knowledge_base_id, current_user, db
-        )
-
-        # Build conversation history string (last 5 exchanges max)
-        history_lines = []
-        for entry in req.conversation_history[-5:]:
-            role = entry.get("role", "user").capitalize()
-            content = entry.get("content", "")
-            if len(content) > 200:
-                content = content[:200] + "..."
-            history_lines.append(f"{role}: {content}")
-        history_text = "\n".join(history_lines) if history_lines else "No previous conversation."
-        prompt = conversation_suggestions_prompt(schema_context, history_text)
-        llm = ChatGoogleGenerativeAI(
-            model=getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite"),
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0,
-        )
-        structured_llm = llm.with_structured_output(SuggestionList)
-        result: SuggestionList = structured_llm.invoke(prompt)
-        suggestions = result.suggestions[:3] if result.suggestions else _DEFAULT_SUGGESTIONS
+        history_text = _recent_turns(db, current_user, req.conversation_id)
+        if not history_text:
+            return SuggestionsResponse(suggestions=_DEFAULT_SUGGESTIONS)
+        prompt = conversation_suggestions_prompt(history_text)
+        result: SuggestionList = _suggestions_llm().invoke(prompt)
+        suggestions = result.suggestions if result.suggestions else _DEFAULT_SUGGESTIONS
+        if result.suggestions:
+            _save_suggestions(db, current_user, req, suggestions)
         return SuggestionsResponse(suggestions=suggestions)
     except HTTPException:
         raise

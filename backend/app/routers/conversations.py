@@ -56,6 +56,7 @@ class ConversationDetailResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     messages: List[MessageResponse] = []
+    suggestions: Optional[List[str]] = None  # latest follow-up suggestions
 
     class Config:
         from_attributes = True
@@ -169,6 +170,7 @@ def get_conversation(
         name=conv.name,
         created_at=str(conv.created_at) if conv.created_at else None,
         updated_at=str(conv.updated_at) if conv.updated_at else None,
+        suggestions=conv.suggestions,
         messages=[
             MessageResponse(
                 id=m.id,

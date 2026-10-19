@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import JSON, Column, Integer, String, DateTime, ForeignKey, Text
 from datetime import datetime, timezone
 from app.database import Base
 
@@ -9,6 +9,7 @@ class Conversation(Base):
     id = Column(String, primary_key=True, index=True)  # UUID from frontend
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, default="New Conversation")
+    suggestions = Column(JSON, nullable=True)  # latest follow-up suggestions (list of str)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))

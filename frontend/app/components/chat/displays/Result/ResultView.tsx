@@ -76,7 +76,7 @@ const ResultView: React.FC<{ result: ResultData }> = ({ result }) => {
   const partial = result.truncated || (total !== null && total > result.rows.length);
 
   return (
-    <div className="w-full flex flex-col gap-3">
+    <div className="w-full flex flex-col gap-5">
       {views.length > 1 && (
         <div
           role="tablist"
