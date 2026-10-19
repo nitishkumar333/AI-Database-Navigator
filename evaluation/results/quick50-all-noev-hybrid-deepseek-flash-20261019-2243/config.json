@@ -1,5 +1,5 @@
 {
-  "run_name": "quick50-all-noev-hybrid-deepseek-flash-20261019-1756",
+  "run_name": "quick50-all-noev-hybrid-deepseek-flash-20261019-2243",
   "provider": "deepseek",
   "model": "deepseek-flash",
   "thinking": false,
@@ -12,6 +12,6 @@
   "schema_prompt": "auto",
   "full_schema_max_chars": 32000,
   "float_precision": 4,
-  "started_at": "2026-10-19T17:56:00",
+  "started_at": "2026-10-19T22:43:29",
   "retrieval": "hybrid (jina-embeddings-v5-text-small, 1024d)"
 }

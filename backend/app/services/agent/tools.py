@@ -12,6 +12,7 @@ for the caller.
 from __future__ import annotations
 
 import difflib
+import functools
 import logging
 import threading
 import weakref
@@ -24,6 +25,7 @@ from langsmith import traceable
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.services.agent import guardrails
 from app.services.agent.state import AgentContext
 from app.services.display import (
     LINK_LIMIT, PASSWORD_LIMIT, TEXT_LIMIT, TOKEN_LIMIT, TRIM_MARK, DisplayHint, describe_result,
@@ -311,6 +313,11 @@ def find_values(ctx: AgentContext, text: str, column: str | None = None) -> tupl
     else:
         targets = [(t, c) for t in view.tables() for c in t.columns
                    if type_family(c.data_type) == "text"]
+    # Never look up (and so show) stored passwords, tokens or keys.
+    targets = [(t, c) for t, c in targets if not guardrails.is_credential_column(c.name)]
+    if column and not targets:
+        return (f"Error: '{column}' holds credentials; its values can't be searched.",
+                {"kind": FIND_VALUES, "success": False})
 
     low = needle.lower()
     found: dict[tuple[str, str], list[str]] = {}
@@ -396,12 +403,25 @@ def _ilike(engine: Engine, table: str, column: str, needle: str) -> list[str]:
 # run_sql / submit_answer
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _executor(ctx: AgentContext, rows: int, count_limit: int) -> SafeSqlExecutor:
+    """Read-only executor that also enforces the turn's guardrails (only the
+    conversation's tables, credential columns never selected)."""
+    return SafeSqlExecutor(ctx.engine, max_rows=rows, count_limit=count_limit,
+                           timeout_ms=ctx.sql_timeout_ms,
+                           check=functools.partial(guardrails.check_sql, schema=ctx.schema))
+
+
 def _llm_content(result, max_rows: int | None = None) -> str:
-    """The result for the model (its first `max_rows` rows), after cutting
-    long values in place: the artifact's rows, stored and sent to the client,
-    are the same cut rows."""
+    """The result for the model (its first `max_rows` rows), after redacting
+    credentials and cutting long values in place: the artifact's rows, stored
+    and sent to the client, are the same rows."""
+    result.rows, redacted = guardrails.redact_rows(result.rows)
     result.rows, trimmed = trim_rows(result.rows)
     content = result.to_llm_string(max_rows=max_rows)
+    if redacted:
+        cols = ", ".join(sql_ident(c) for c in redacted)
+        content += (f"\nValues shown as '{guardrails.REDACTED}' in {cols} are credentials or "
+                    "secrets, hidden by policy. Don't try to read them in other ways.")
     if trimmed:
         cols = ", ".join(sql_ident(c) for c in trimmed)
         content += (
@@ -415,8 +435,7 @@ def _llm_content(result, max_rows: int | None = None) -> str:
 
 
 def run_sql(ctx: AgentContext, sql: str, purpose: str = "") -> tuple[str, dict]:
-    executor = SafeSqlExecutor(ctx.engine, max_rows=ctx.explore_rows,
-                               count_limit=_EXPLORE_COUNT_LIMIT, timeout_ms=ctx.sql_timeout_ms)
+    executor = _executor(ctx, ctx.explore_rows, _EXPLORE_COUNT_LIMIT)
     with sql_slot(ctx.engine):
         result = executor.run(sql)
     if not result.success:
@@ -430,8 +449,7 @@ def run_sql(ctx: AgentContext, sql: str, purpose: str = "") -> tuple[str, dict]:
 def submit_answer(ctx: AgentContext, sql: str, assumptions: str = "", display: str = "auto",
                   x: str = "", y: list[str] | str | None = None,
                   series: str = "") -> tuple[str, dict]:
-    executor = SafeSqlExecutor(ctx.engine, max_rows=ctx.answer_rows,
-                               count_limit=_ANSWER_COUNT_LIMIT, timeout_ms=ctx.sql_timeout_ms)
+    executor = _executor(ctx, ctx.answer_rows, _ANSWER_COUNT_LIMIT)
     with sql_slot(ctx.engine):
         result = executor.run(sql)
     if not result.success:

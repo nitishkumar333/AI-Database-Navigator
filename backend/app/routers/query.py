@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 import json
 from app.database import get_db
@@ -12,6 +12,7 @@ from app.models.query_history import QueryHistory
 from app.models.conversation import Conversation, ConversationConnection, ConversationMessage
 from app.utils.security import get_current_user
 from app.utils.db_manager import get_user_engine
+from app.services.agent.guardrails import sanitize_question
 from app.services.display import json_rows
 from app.services.sql_agent import SQLAgent
 from app.utils.db_manager import get_all_table_names
@@ -34,6 +35,13 @@ class ChatRequest(BaseModel):
     knowledge_base_id: int | None = None
     conversation_id: str | None = None
     query_id: str | None = None
+
+    @field_validator("question")
+    @classmethod
+    def clean_question(cls, value: str) -> str:
+        """Control and zero-width characters removed before the question is
+        stored (Postgres rejects NUL) or checked by the agent's guardrails."""
+        return sanitize_question(value)
 
 
 def _get_connection(conn_id: int, user: User, db: Session) -> DBConnection:

@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # AGENT_HISTORY_MAX_CHARS. The current turn is always sent in full.
     AGENT_HISTORY_FULL_TURNS: int = 2
     AGENT_HISTORY_MAX_CHARS: int = 24_000       # ~6k tokens
+    # Deterministic guardrails (services/agent/guardrails.py), no LLM calls.
+    # Questions longer than this are refused before the agent runs. With
+    # GUARDRAILS_ENABLED, prompt-injection phrasing and requests to change data
+    # are refused too. Table scope, system catalogs and credential redaction
+    # are always enforced.
+    GUARDRAILS_ENABLED: bool = True
+    GUARDRAIL_MAX_QUESTION_CHARS: int = 4_000
     ENCRYPTION_KEY: str = ""  # Fernet key, auto-generated if empty
 
     # Schema profiling (services/schema_index). Profiling reads catalogs and

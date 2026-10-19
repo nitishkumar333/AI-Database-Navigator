@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 
 from app.config import get_settings
-from app.services.agent import trace_log
+from app.services.agent import guardrails, trace_log
 from app.services.agent.graph import RECURSION_LIMIT, get_graph, is_rate_limit, turn_start
 from app.services.agent.state import AgentContext, Budget, HistoryLimits
 from app.services.agent.tools import DESCRIBE_TABLES, RUN_SQL, SUBMIT_ANSWER
@@ -204,6 +204,18 @@ class SQLAgent:
         Without a conversation_id a unique thread is created so callers never
         accidentally share state.
         """
+        user_input = guardrails.sanitize_question(user_input)
+        blocked = guardrails.check_question(user_input,
+                                            max_chars=settings.GUARDRAIL_MAX_QUESTION_CHARS,
+                                            heuristics=settings.GUARDRAILS_ENABLED)
+        if blocked is not None:
+            # Refused before any LLM call, and kept out of the conversation's
+            # thread so the model never reads it in a later turn.
+            trace_log.guardrail(uuid4().hex[:6], "question",
+                                f"{blocked.code} | question={user_input[:300]!r}")
+            return {**_failure(user_input, blocked.message, blocked.message),
+                    "blocked": blocked.code}
+
         thread_id = thread_id_for(user_id, conn_id, conversation_id or uuid4().hex)
         # Failed turns are noted in the thread, so a later "try again" has the question.
         # Only conversations are continued; evaluation keeps no checkpoint.

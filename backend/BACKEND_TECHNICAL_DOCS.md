@@ -750,6 +750,7 @@ GET  /api/auth/onboarding-status { onboarding_complete: true }
 | DB credential storage | Fernet symmetric encryption — reversible (needed for connection) |
 | SQL injection prevention | sql_guard.sanitize_table_name() + SafeSqlExecutor AST validation (sqlglot) + EXPLAIN validation |
 | Data mutation prevention | Multi-layer defense: AST tree check blocks all DML/DDL/locking nodes & functions; DB transaction enforcement via SET TRANSACTION READ ONLY; execution bounded by statement_timeout |
+| Agent guardrails (`services/agent/guardrails.py`, deterministic, no LLM calls) | Question: control/zero-width chars stripped, length cap (`GUARDRAIL_MAX_QUESTION_CHARS`), prompt-injection and data-changing requests refused before the agent runs (`GUARDRAILS_ENABLED`). SQL: only the conversation's tables (knowledge-base scope), no system catalogs/other schemas, no server-introspection functions, credential columns never selected. Results: credential columns and secret-looking values (password hashes, JWTs, API keys) redacted before the model or user sees them; credential columns kept out of profiles and `find_values`. Reply: a reply repeating the system prompt is replaced |
 | Rate limiting | Sliding window on both IP and user ID |
 | CORS | Configured in main.py; currently allows wildcard — tighten for production |
 

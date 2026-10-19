@@ -45,7 +45,7 @@ import sqlglot
 from sqlglot import exp
 
 from app.config import get_settings
-from app.services.agent import prompts, trace_log
+from app.services.agent import guardrails, prompts, trace_log
 from app.services.agent.history import History, build_history
 from app.services.agent.state import AgentContext, AgentState, Budget
 from app.services.agent.tools import (
@@ -246,7 +246,7 @@ def _agent(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
                                         "discarding the reply and asking for submit_answer")
         return _force_submit(ctx, state, models, system, history, prompts.UNSUBMITTED_REASON,
                              number + 1, discarded=response)
-    return {"messages": [response]}
+    return {"messages": [_guard_reply(ctx, response)]}
 
 
 def _write_reply(ctx: AgentContext, state: AgentState) -> dict:
@@ -271,7 +271,16 @@ def _write_reply(ctx: AgentContext, state: AgentState) -> dict:
     except Exception:
         # The answer is already computed; a failed reply must not fail the turn.
         response = AIMessage(content=prompts.REPLY_FALLBACK)
-    return {"messages": [response]}
+    return {"messages": [_guard_reply(ctx, response)]}
+
+
+def _guard_reply(ctx: AgentContext, response: AIMessage) -> AIMessage:
+    """A reply to the user that repeats the agent's instructions is replaced
+    (before it is checkpointed, so later turns don't see it either)."""
+    if response.tool_calls or not guardrails.leaks_prompt(guardrails.text_of(response.content)):
+        return response
+    trace_log.guardrail(ctx.turn_id, "reply", "repeated the system prompt; replaced")
+    return response.model_copy(update={"content": guardrails.LEAK_REPLY})
 
 
 def _force_submit(ctx: AgentContext, state: AgentState, models: _BoundModels, system: str,
